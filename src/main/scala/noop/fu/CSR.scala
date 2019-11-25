@@ -230,7 +230,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val mie = RegInit(0.U(XLEN.W))
   val mipWire = WireInit(0.U.asTypeOf(new Interrupt))
   val mipReg  = RegInit(0.U.asTypeOf(new Interrupt).asUInt)
-  val mipFixMask = "h777".U
+  val mipFixMask = "h77f".U
   val mip = (mipWire.asUInt | mipReg).asTypeOf(new Interrupt)
 
   def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
