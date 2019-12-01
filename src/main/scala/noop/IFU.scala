@@ -8,7 +8,7 @@ import utils._
 import bus.simplebus._
 
 trait HasResetVector {
-  val resetVector = 0x80000000L//TODO: set reset vec
+  val resetVector = 0x40000000L//TODO: set reset vec
 }
 
 class IFU extends NOOPModule with HasResetVector {
@@ -25,7 +25,7 @@ class IFU extends NOOPModule with HasResetVector {
   })
 
   // pc
-  val pc = RegInit(resetVector.U(AddrBits.W))
+  val pc = RegInit(resetVector.U(VAddrBits.W))
   val pcUpdate = io.redirect.valid || io.imem.req.fire()
   val snpc = Mux(pc(1), pc + 2.U, pc + 4.U)  // sequential next pc
 
