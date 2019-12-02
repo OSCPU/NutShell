@@ -24,8 +24,12 @@ trait HasNOOPParameter {
   val DataBytes = DataBits / 8
 }
 
-abstract class NOOPModule extends Module with HasNOOPParameter with HasExceptionNO
-abstract class NOOPBundle extends Bundle with HasNOOPParameter
+trait HasNOOPConst {
+  val CacheReadWidth = 8
+}
+
+abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO
+abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst 
 
 case class NOOPConfig (
   FPGAPlatform: Boolean = true,

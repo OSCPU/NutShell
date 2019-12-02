@@ -44,7 +44,8 @@ class BPU1 extends NOOPModule {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
     val out = new RedirectIO
     val flush = Input(Bool())
-    val brIdx = Output(UInt(3.W))
+    val brIdx = Output(UInt(4.W))
+    val instValid = Output(UInt(4.W))
     val lateJump = Output(Bool())
   })
 
@@ -193,6 +194,7 @@ class BPU1 extends NOOPModule {
   // io.out.target := Mux(lateJumpLatch && !flush, lateJumpTarget, Mux(btbRead._type === BTBtype.R, rasTarget, btbRead.target))
   // io.out.brIdx  := btbRead.brIdx & Fill(3, io.out.valid)
   io.brIdx  := btbRead.brIdx & Cat(true.B, lateJump, Fill(2, io.out.valid))
+  io.instValid := Fill(4, 1.U) //TODO
   io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B && rasTarget=/=0.U) //TODO: add rasTarget=/=0.U, need fix
   // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump || lateJumpLatch && !flush && !lateJump
   // Note: 

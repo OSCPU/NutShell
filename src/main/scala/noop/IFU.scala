@@ -27,48 +27,75 @@ class IFU extends NOOPModule with HasResetVector {
 
   // pc
   val pc = RegInit(resetVector.U(VAddrBits.W))
+  val pcInstValid = RegInit("b1111".U)
   val pcUpdate = io.redirect.valid || io.imem.req.fire()
-  val snpc = Mux(pc(1), pc + 2.U, pc + 4.U)  // sequential next pc
+  val snpc = pc + CacheReadWidth.U  // IFU will always ask icache to fetch next instline 
+  // Note: we define instline as 8 Byte aligned data from icache 
 
   val bp1 = Module(new BPU1)
 
-  //
+  // cross instline inst branch predict logic "lateJump"
+  // 
+  // if "lateJump", icache will need to fetch next instline, then fetch redirect addr
+  // "latejump" mechanism is used to speed up such code:
+  // ```
+  // 000c BranchCondition (32 bit inst)
+  // ```
+  // in this case, full inst is needed by BRU to get the right branch result, 
+  // so we need to fetch the next inst line to get the higher bits of a 32bit branch inst
+  // but in order to use BP result to avoid pipeline flush,
+  // the next inst provided by icache should be predicted npc, instead of sequential npc
   val lateJump = bp1.io.lateJump
   val lateJumpLatch = RegInit(false.B) 
   when(pcUpdate || bp1.io.flush) {
     lateJumpLatch := Mux(bp1.io.flush, false.B, lateJump && !lateJumpLatch)
   }
   val lateJumpTarget = RegEnable(bp1.io.out.target, lateJump)
-  val lateJumpForceSeq = lateJump && bp1.io.out.valid
-  val lateJumpForceTgt = lateJumpLatch && !bp1.io.flush
 
   // predicted next pc
   val pnpc = Mux(lateJump, snpc, bp1.io.out.target)
-  val pbrIdx = bp1.io.brIdx
-  val npc = Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
-  val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(bp1.io.out.valid, false.B, true.B))))
-  // Debug(){
-  //   printf("[NPC] %x %x %x %x %x %x\n",lateJumpLatch, lateJumpTarget, lateJump, bp1.io.out.valid, pnpc, snpc)
-  // }
+ 
 
-  // val npc = Mux(io.redirect.valid, io.redirect.target, Mux(io.redirectRVC.valid, io.redirectRVC.target, snpc))
-  val brIdx = Wire(UInt(4.W)) 
-  // brIdx(0) -> branch at pc offset 0 (mod 4)
-  // brIdx(1) -> branch at pc offset 2 (mod 4)
-  // brIdx(2) -> branch at pc offset 6 (mod 8), and this inst is not rvc inst
-  brIdx := Cat(npcIsSeq, Mux(io.redirect.valid, 0.U, pbrIdx))
+  // instValid: which part of an instline contains an valid inst
+  // e.g. 1100 means inst(s) in instline(63,32) is/are valid
+  val npcInstValid = Wire(UInt(4.W))
+  val defaultInstValid = Wire(UInt(4.W))
+  val predictInstValid = Wire(UInt(4.W))
+  val lateJumpInstValid = Wire(UInt(4.W))
+  val redirectInstValid = Wire(UInt(4.W))
+  defaultInstValid := Fill(4, 1.U)
+  predictInstValid := bp1.io.instValid //TODO
+  lateJumpInstValid := Fill(4, 1.U) //TODO
+  redirectInstValid := Fill(4, 1.U) //TODO
+  npcInstValid := Mux(io.redirect.valid, redirectInstValid, Mux(lateJumpLatch, lateJumpInstValid, Mux(bp1.io.out.valid, predictInstValid, defaultInstValid)))
+  // TODO: PC to InstValid Vec
+  // TODO: PC to BrIdx Vec
+
+  val npc = Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
+  val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(bp1.io.out.valid, false.B, true.B)))) //for debug only
+
+  // branch position index, 4 bit vector
+  // e.g. brIdx 0010 means a branch is predicted/assigned at pc (offset 2)
+  val brIdx = Wire(UInt(4.W))
+  // predicted branch position index, 4 bit vector
+  val pbrIdx = bp1.io.brIdx 
+  // redirect branch position index, 4 bit vector
+  val redirectBrIdx = bp1.io.brIdx // TODO
+  brIdx := Mux(io.redirect.valid, redirectBrIdx, pbrIdx)
+  
   //TODO: BP will be disabled shortly after a redirect request
 
   bp1.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
   bp1.io.in.pc.bits := npc  // predict one cycle early
-  // bp1.io.flush := io.redirect.valid 
-  bp1.io.flush := io.redirect.valid
+  bp1.io.flush := io.redirect.valid // redirect means BPU may need to be updated
+
   //val bp2 = Module(new BPU2)
   //bp2.io.in.bits := io.out.bits
   //bp2.io.in.valid := io.imem.resp.fire()
 
   when (pcUpdate) { 
-    pc := npc 
+    pc := npc
+    pcInstValid := npcInstValid
     // printf("[IF1] pc=%x\n", pc)
   }
 
