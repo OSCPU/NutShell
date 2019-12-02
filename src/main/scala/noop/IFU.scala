@@ -7,8 +7,9 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 import bus.simplebus._
 
-trait HasResetVector {
-  val resetVector = 0x40000000L//TODO: set reset vec
+trait HasResetVector{
+  val resetFromSpiFlash = false
+  val resetVector = if(resetFromSpiFlash){0x40000000L}else{0x80000000L}
 }
 
 class IFU extends NOOPModule with HasResetVector {
