@@ -26,6 +26,7 @@ trait HasNOOPParameter {
 
 trait HasNOOPConst {
   val CacheReadWidth = 8
+  val FrontendBundleWidth = 39*2 + 64 + 9 // TODO: this const depends on VAddrBits
 }
 
 abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO
@@ -106,10 +107,10 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
   val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
 
-  val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = VAddrBits*2 + 4, totalEntry = 4))
+  val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = FrontendBundleWidth, totalEntry = 4))
   ifu.io.ipf := itlb.io.ipf
   io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
-    CacheConfig(ro = true, name = "icache", userBits = VAddrBits*2 + 4))
+    CacheConfig(ro = true, name = "icache", userBits = FrontendBundleWidth))
   
   val dtlb = TLB(in = exu.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = exu.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
   dmemXbar.io.in(0) <> dtlb.io.out

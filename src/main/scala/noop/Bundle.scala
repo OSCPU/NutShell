@@ -45,6 +45,7 @@ class CtrlFlowIO extends NOOPBundle {
   val exceptionVec = Output(Vec(16, Bool()))
   val intrVec = Output(Vec(12, Bool()))
   val brIdx = Output(UInt(4.W))
+  val instValid = Output(UInt(4.W))
 }
 
 class DecodeIO extends NOOPBundle {
@@ -118,4 +119,14 @@ class TLBExuIO extends NOOPBundle {
     this.sfence.asid  := src2(8,0)
     this.satp := satp
   }
+}
+
+class FrontendBundle extends NOOPBundle {
+  val pc = UInt(VAddrBits.W)
+  val npc = UInt(VAddrBits.W)
+  // val instr = UInt(64.W)
+  // val pnpcVec = Vec(4, UInt(VAddrBits.W))
+  val brIdx = UInt(4.W)
+  val instValid = UInt(4.W)
+  // val icachePF = Bool()
 }

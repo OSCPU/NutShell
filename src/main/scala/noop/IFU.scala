@@ -15,7 +15,7 @@ trait HasResetVector{
 class IFU extends NOOPModule with HasResetVector {
   val io = IO(new Bundle {
 
-    val imem = new SimpleBusUC(userBits = VAddrBits*2 + 4, addrBits = VAddrBits)
+    val imem = new SimpleBusUC(userBits = FrontendBundleWidth, addrBits = VAddrBits)
     // val pc = Input(UInt(VAddrBits.W))
     val out = Decoupled(new CtrlFlowIO)
 
@@ -27,6 +27,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   // pc
   val pc = RegInit(resetVector.U(VAddrBits.W))
+  val pcBrIdx = RegInit("b0000".U)
   val pcInstValid = RegInit("b1111".U)
   val pcUpdate = io.redirect.valid || io.imem.req.fire()
   val snpc = pc + CacheReadWidth.U  // IFU will always ask icache to fetch next instline 
@@ -63,13 +64,17 @@ class IFU extends NOOPModule with HasResetVector {
   val predictInstValid = Wire(UInt(4.W))
   val lateJumpInstValid = Wire(UInt(4.W))
   val redirectInstValid = Wire(UInt(4.W))
+  def genInstValid(pc: UInt) = LookupTree(pc(2,1), List(
+    "b00".U -> "b1111".U,
+    "b01".U -> "b1110".U,
+    "b10".U -> "b1100".U,
+    "b11".U -> "b1000".U
+  ))
   defaultInstValid := Fill(4, 1.U)
   predictInstValid := bp1.io.instValid //TODO
-  lateJumpInstValid := Fill(4, 1.U) //TODO
-  redirectInstValid := Fill(4, 1.U) //TODO
+  lateJumpInstValid := genInstValid(lateJumpTarget)
+  redirectInstValid := genInstValid(io.redirect.target)
   npcInstValid := Mux(io.redirect.valid, redirectInstValid, Mux(lateJumpLatch, lateJumpInstValid, Mux(bp1.io.out.valid, predictInstValid, defaultInstValid)))
-  // TODO: PC to InstValid Vec
-  // TODO: PC to BrIdx Vec
 
   val npc = Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
   val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(bp1.io.out.valid, false.B, true.B)))) //for debug only
@@ -79,8 +84,14 @@ class IFU extends NOOPModule with HasResetVector {
   val brIdx = Wire(UInt(4.W))
   // predicted branch position index, 4 bit vector
   val pbrIdx = bp1.io.brIdx 
+  def genBrIdx(pc: UInt) = LookupTree(pc(2,1), List(
+  "b00".U -> "b0001".U,
+  "b01".U -> "b0010".U,
+  "b10".U -> "b0100".U,
+  "b11".U -> "b1000".U
+))
   // redirect branch position index, 4 bit vector
-  val redirectBrIdx = bp1.io.brIdx // TODO
+  val redirectBrIdx = genBrIdx(io.redirect.target)
   brIdx := Mux(io.redirect.valid, redirectBrIdx, pbrIdx)
   
   //TODO: BP will be disabled shortly after a redirect request
@@ -96,6 +107,7 @@ class IFU extends NOOPModule with HasResetVector {
   when (pcUpdate) { 
     pc := npc
     pcInstValid := npcInstValid
+    pcBrIdx := brIdx
     // printf("[IF1] pc=%x\n", pc)
   }
 
@@ -109,8 +121,13 @@ class IFU extends NOOPModule with HasResetVector {
   io.flushVec := Mux(io.redirect.valid, "b1111".U, 0.U)
   io.bpFlush := false.B
 
+  val userBundle = Wire(new FrontendBundle)
+  userBundle.pc := pc
+  userBundle.npc := npc
+  userBundle.instValid := pcInstValid
+  userBundle.brIdx := pcBrIdx
   io.imem.req.bits.apply(addr = Cat(pc(VAddrBits-1,1),0.U(1.W)), //cache will treat it as Cat(pc(63,3),0.U(3.W))
-    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = Cat(brIdx(3,0), npc(VAddrBits-1, 0), pc(VAddrBits-1, 0)))
+    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = userBundle.asUInt)
   io.imem.req.valid := io.out.ready
   //TODO: add ctrlFlow.exceptionVec
   io.imem.resp.ready := io.out.ready || io.flushVec(0)
@@ -134,6 +151,7 @@ class IFU extends NOOPModule with HasResetVector {
     io.out.bits.pc := x(VAddrBits-1,0)
     io.out.bits.pnpc := x(VAddrBits*2-1,VAddrBits)
     io.out.bits.brIdx := x(VAddrBits*2 + 3, VAddrBits*2)
+    io.out.bits.instValid := x(VAddrBits*2 + 7, VAddrBits*2 + 4)
   }
   io.out.bits.exceptionVec(instrPageFault) := io.ipf
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
