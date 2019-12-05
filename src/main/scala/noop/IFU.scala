@@ -56,43 +56,33 @@ class IFU extends NOOPModule with HasResetVector {
   // predicted next pc
   val pnpc = Mux(lateJump, snpc, bp1.io.out.target)
  
+  // next pc
+  val npc = Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
+  // val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(bp1.io.out.valid, false.B, true.B)))) //for debug only
 
   // instValid: which part of an instline contains an valid inst
   // e.g. 1100 means inst(s) in instline(63,32) is/are valid
   val npcInstValid = Wire(UInt(4.W))
-  val defaultInstValid = Wire(UInt(4.W))
-  val predictInstValid = Wire(UInt(4.W))
-  val lateJumpInstValid = Wire(UInt(4.W))
-  val redirectInstValid = Wire(UInt(4.W))
   def genInstValid(pc: UInt) = LookupTree(pc(2,1), List(
     "b00".U -> "b1111".U,
     "b01".U -> "b1110".U,
     "b10".U -> "b1100".U,
     "b11".U -> "b1000".U
   ))
-  defaultInstValid := Fill(4, 1.U)
-  predictInstValid := bp1.io.instValid //TODO
-  lateJumpInstValid := genInstValid(lateJumpTarget)
-  redirectInstValid := genInstValid(io.redirect.target)
-  npcInstValid := Mux(io.redirect.valid, redirectInstValid, Mux(lateJumpLatch, lateJumpInstValid, Mux(bp1.io.out.valid, predictInstValid, defaultInstValid)))
-
-  val npc = Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
-  val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(bp1.io.out.valid, false.B, true.B)))) //for debug only
+  npcInstValid := Mux(lateJump, "b0001".U, genInstValid(npc))
 
   // branch position index, 4 bit vector
   // e.g. brIdx 0010 means a branch is predicted/assigned at pc (offset 2)
   val brIdx = Wire(UInt(4.W))
   // predicted branch position index, 4 bit vector
-  val pbrIdx = bp1.io.brIdx 
+  val pbrIdx = bp1.io.brIdx.asUInt
   def genBrIdx(pc: UInt) = LookupTree(pc(2,1), List(
   "b00".U -> "b0001".U,
   "b01".U -> "b0010".U,
   "b10".U -> "b0100".U,
   "b11".U -> "b1000".U
 ))
-  // redirect branch position index, 4 bit vector
-  val redirectBrIdx = genBrIdx(io.redirect.target)
-  brIdx := Mux(io.redirect.valid, redirectBrIdx, pbrIdx)
+  brIdx := Mux(io.redirect.valid, genBrIdx(io.redirect.target), Mux(lateJumpLatch, genBrIdx(lateJumpTarget), pbrIdx))
   
   //TODO: BP will be disabled shortly after a redirect request
 
@@ -137,7 +127,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   Debug(){
     when(io.imem.req.fire()){
-      printf("[IFI] pc=%x user=%x %x %x %x \n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pbrIdx, brIdx)
+      printf("[IFI] pc=%x user=%x %x %x %x \n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pbrIdx.asUInt, brIdx)
     }
     when (io.out.fire()) {
           printf("[IFO] pc=%x inst=%x\n", io.out.bits.pc, io.out.bits.instr)
