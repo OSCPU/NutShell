@@ -44,7 +44,7 @@ class CtrlFlowIO extends NOOPBundle {
   val redirect = new RedirectIO
   val exceptionVec = Output(Vec(16, Bool()))
   val intrVec = Output(Vec(12, Bool()))
-  val brIdx = Output(UInt(4.W))
+  val brIdx = Output(Bool()) // for debug only
   val instValid = Output(UInt(4.W))
 }
 
@@ -121,12 +121,11 @@ class TLBExuIO extends NOOPBundle {
   }
 }
 
-class FrontendBundle extends NOOPBundle {
-  val pc = UInt(VAddrBits.W)
-  val npc = UInt(VAddrBits.W)
-  // val instr = UInt(64.W)
-  // val pnpcVec = Vec(4, UInt(VAddrBits.W))
-  val brIdx = UInt(4.W)
-  val instValid = UInt(4.W)
-  // val icachePF = Bool()
+class FrontendIO extends NOOPBundle {
+  val pc = Output(UInt(VAddrBits.W)) // real PC will be regenerated in IBF 
+  val npc = Output(Vec(4, UInt(VAddrBits.W)))
+  val instr = Output(UInt(64.W))
+  val brIdx = Output(UInt(4.W))
+  val instValid = Output(UInt(4.W))
+  val icachePF = Output(Bool())
 }

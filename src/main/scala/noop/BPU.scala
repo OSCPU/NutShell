@@ -166,6 +166,8 @@ class BPU1 extends NOOPModule {
   (0 to 3).map(i => io.brIdx(i) := btbHit && Mux(btbRead(i)._type(0) === BTBtype.B, phtTaken(i), true.B))
   io.out.target := DontCare
   io.out.valid := io.brIdx.asUInt.orR
+  // TODO: lazyJump, out.valid
+  
   // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump || lateJumpLatch && !flush && !lateJump
   // Note: 
   // btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump : normal branch predict
