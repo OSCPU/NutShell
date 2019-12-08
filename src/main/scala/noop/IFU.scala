@@ -15,9 +15,9 @@ trait HasResetVector{
 class IFU extends NOOPModule with HasResetVector {
   val io = IO(new Bundle {
 
-    val imem = new SimpleBusUC(userBits = FrontendBundleWidth, addrBits = VAddrBits)
+    val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
     // val pc = Input(UInt(VAddrBits.W))
-    val out = Decoupled(new CtrlFlowIO)
+    val out = Decoupled(new FrontendIO)
 
     val redirect = Flipped(new RedirectIO)
     val flushVec = Output(UInt(4.W))
@@ -27,7 +27,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   // pc
   val pc = RegInit(resetVector.U(VAddrBits.W))
-  val pcBrIdx = RegInit("b0000".U)
+  val pcBrIdx = RegInit(0.U(4.W))
   val pcInstValid = RegInit("b1111".U)
   val pcUpdate = io.redirect.valid || io.imem.req.fire()
   val snpc = pc + CacheReadWidth.U  // IFU will always ask icache to fetch next instline 
@@ -57,7 +57,8 @@ class IFU extends NOOPModule with HasResetVector {
   val pnpc = Mux(lateJump, snpc, bp1.io.out.target)
  
   // next pc
-  val npc = Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
+  val npc = Wire(UInt(VAddrBits.W))
+  npc := Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
   // val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(bp1.io.out.valid, false.B, true.B)))) //for debug only
 
   // instValid: which part of an instline contains an valid inst
@@ -111,13 +112,8 @@ class IFU extends NOOPModule with HasResetVector {
   io.flushVec := Mux(io.redirect.valid, "b1111".U, 0.U)
   io.bpFlush := false.B
 
-  val userBundle = Wire(new FrontendBundle)
-  userBundle.pc := pc
-  userBundle.npc := npc
-  userBundle.instValid := pcInstValid
-  userBundle.brIdx := pcBrIdx
   io.imem.req.bits.apply(addr = Cat(pc(VAddrBits-1,1),0.U(1.W)), //cache will treat it as Cat(pc(63,3),0.U(3.W))
-    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = userBundle.asUInt)
+    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = Cat(pcInstValid, pcBrIdx, npc, pc))
   io.imem.req.valid := io.out.ready
   //TODO: add ctrlFlow.exceptionVec
   io.imem.resp.ready := io.out.ready || io.flushVec(0)
@@ -125,12 +121,12 @@ class IFU extends NOOPModule with HasResetVector {
   io.out.bits := DontCare
     //inst path only uses 32bit inst, get the right inst according to pc(2)
 
-  Debug(){
+  Debug(true){
     when(io.imem.req.fire()){
-      printf("[IFI] pc=%x user=%x %x %x %x \n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pbrIdx.asUInt, brIdx)
+      printf("[IFI] pc=%x user=%x redirect %x pcInstValid %b pcBrIdx %b npc %x pc %x\n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pcInstValid.asUInt, pcBrIdx.asUInt, npc, pc)
     }
     when (io.out.fire()) {
-          printf("[IFO] pc=%x inst=%x\n", io.out.bits.pc, io.out.bits.instr)
+          printf("[IFO] pc=%x user=%x inst=%x npc=%x bridx %b valid %b \n", io.out.bits.pc, io.imem.resp.bits.user.get, io.out.bits.instr, io.out.bits.pnpc, io.out.bits.brIdx.asUInt, io.out.bits.instValid.asUInt)
     }
   }
 
@@ -143,7 +139,8 @@ class IFU extends NOOPModule with HasResetVector {
     io.out.bits.brIdx := x(VAddrBits*2 + 3, VAddrBits*2)
     io.out.bits.instValid := x(VAddrBits*2 + 7, VAddrBits*2 + 4)
   }
-  io.out.bits.exceptionVec(instrPageFault) := io.ipf
+  io.out.bits.icachePF := io.ipf
+  assert(!io.out.bits.icachePF)
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
 
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire()), "perfCntCondMimemStall")

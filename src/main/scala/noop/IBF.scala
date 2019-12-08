@@ -17,7 +17,6 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   val io = IO(new Bundle {
     // val in = Flipped(Decoupled(new CtrlFlowIO))
     val in = Flipped(Decoupled(new FrontendIO))
-    val out = Decoupled(new CtrlFlowIO)
     val out1 = Decoupled(new CtrlFlowIO)
     val out2 = Decoupled(new CtrlFlowIO)
     val flush = Input(Bool())
@@ -38,12 +37,12 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   val ringBufferAllowin = (0 to 3).map(i => !validRingMeta(ringBufferHead+i.U)).foldRight(true.B)((sum,i)=>sum&i)
 
   //ibuf decode
-  val instr = io.in.instr
+  val instr = io.in.bits.instr
   val instrVec = Wire(Vec(4, UInt(16.W)))
   val isRVC = Wire(Vec(4, Bool()))
-  val instValid = io.in.instValid
-  val brIdx = io.in.brIdx
-  val icachePF = io.in.icachePF
+  val instValid = io.in.bits.instValid
+  val brIdx = io.in.bits.brIdx
+  val icachePF = io.in.bits.icachePF
   instrVec := instr.asTypeOf(Vec(4, UInt(16.W)))
   (0 to 3).map(i => isRVC(i.U) := instrVec(i.U)(1,0) =/= "b11".U)
   
@@ -57,35 +56,37 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
 
   // NOTE: needEnqueue is always of fmt "0?1?0?"
   // therefore we first shift input data, then enqueue
-  val enqueueSize = List.tabulate(4)(i => needEnqueue(i).asUInt).foldRight(0.U)((sum, i)=>sum+i) // count(true) in needEnqueue
+  // val enqueueSize = List.tabulate(4)(i => needEnqueue(i).asUInt).foldRight(0.U)((sum, i)=>sum+&i) // count(true) in needEnqueue
+  val enqueueSize = needEnqueue(0).asUInt()+&needEnqueue(1).asUInt()+&needEnqueue(2).asUInt()+&needEnqueue(3).asUInt() // count(true) in needEnqueue
   val shiftSize = Mux(needEnqueue(0), 0.U, Mux(needEnqueue(1), 1.U, Mux(needEnqueue(2), 2.U, 3.U))) // count 0 in low addr in needEnqueue
   val enqueueFire = (0 to 3).map(i => enqueueSize >= (i+1).U)
 
   val ibufWen = io.in.fire() // i.e. ringBufferAllowin && io.in.valid
   def ibufWrite(targetSlot: Int, shiftSize: UInt){
       ringInstBuffer(targetSlot.U + ringBufferHead) := instrVec(shiftSize + targetSlot.U)
-      pcRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.pc(shiftSize + targetSlot.U)
-      npcRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.npc(shiftSize + targetSlot.U)
+      pcRingMeta(targetSlot.U + ringBufferHead) := Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + targetSlot.U, 0.U(1.W))
+      npcRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.pnpc
       validRingMeta(targetSlot.U + ringBufferHead) := true.B
       branchRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.brIdx(shiftSize + targetSlot.U)
       ipfRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.icachePF(shiftSize + targetSlot.U)
   }
   when(ibufWen){
-    when(enqueueFire(0)){ibufWrite(0, enqueueSrc(0))}
-    when(enqueueFire(1)){ibufWrite(1, enqueueSrc(1))}
-    when(enqueueFire(2)){ibufWrite(2, enqueueSrc(2))}
-    when(enqueueFire(3)){ibufWrite(3, enqueueSrc(3))}
+    when(enqueueFire(0)){ibufWrite(0, shiftSize)}
+    when(enqueueFire(1)){ibufWrite(1, shiftSize)}
+    when(enqueueFire(2)){ibufWrite(2, shiftSize)}
+    when(enqueueFire(3)){ibufWrite(3, shiftSize)}
     ringBufferHead := ringBufferHead + enqueueSize
-    Debug(){
-      printf("[IBUF] ibuf enqueue: \n")
-      when(enqueueFire(0)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(enqueueSrc(0)), io.in,bits.pc(enqueueSrc(0)), io.in,bits.npc(enqueueSrc(0)), io.in.bits.brIdx(enqueueSrc(0)), io.in.bits.icachePF(enqueueSrc(0)), enqueueSrc(0))}
-      when(enqueueFire(1)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(enqueueSrc(1)), io.in,bits.pc(enqueueSrc(1)), io.in,bits.npc(enqueueSrc(1)), io.in.bits.brIdx(enqueueSrc(1)), io.in.bits.icachePF(enqueueSrc(1)), enqueueSrc(1))}
-      when(enqueueFire(2)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(enqueueSrc(2)), io.in,bits.pc(enqueueSrc(2)), io.in,bits.npc(enqueueSrc(2)), io.in.bits.brIdx(enqueueSrc(2)), io.in.bits.icachePF(enqueueSrc(2)), enqueueSrc(2))}
-      when(enqueueFire(3)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(enqueueSrc(3)), io.in,bits.pc(enqueueSrc(3)), io.in,bits.npc(enqueueSrc(3)), io.in.bits.brIdx(enqueueSrc(3)), io.in.bits.icachePF(enqueueSrc(3)), enqueueSrc(3))}
+    Debug(true){
+      printf("[IBUF] ibuf enqueue at time %d :\n", GTimer())
+      printf("[IBUF] instValid %b brIdx %b isRVC %b needEnqueue %b enqueueSize %x shiftSize %x\n", instValid.asUInt,brIdx.asUInt,isRVC.asUInt,needEnqueue.asUInt,enqueueSize.asUInt,shiftSize.asUInt)
+      when(enqueueFire(0)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+0.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 0.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+0.U), io.in.bits.icachePF(shiftSize+0.U), shiftSize+0.U)}
+      when(enqueueFire(1)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+1.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 1.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+1.U), io.in.bits.icachePF(shiftSize+1.U), shiftSize+1.U)}
+      when(enqueueFire(2)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+2.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 2.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+2.U), io.in.bits.icachePF(shiftSize+2.U), shiftSize+2.U)}
+      when(enqueueFire(3)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+3.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 3.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+3.U), io.in.bits.icachePF(shiftSize+3.U), shiftSize+3.U)}
     }
   }
 
-  io.in.ready := ringBufferAllowin // || used to be !io.in.valid, do not know what's for
+  io.in.ready := ringBufferAllowin || !io.in.valid// used to be !io.in.valid, do not know what's for
 
   //ibuf dequeue
   //there are 2 dequeue sockets
@@ -96,34 +97,40 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   val dequeueIsRVC = Wire(Vec(4, Bool()))
   (0 to 3).map(i => dequeueInstrVec(i.U) := ringInstBuffer(i.U + ringBufferTail))
   (0 to 3).map(i => dequeueIsValid(i.U) := validRingMeta(i.U + ringBufferTail))
-  (0 to 3).map(i => dequeueIsRVC(i.U) := dequeueInstrVec(1,0)=/="b11".U)
+  (0 to 3).map(i => dequeueIsRVC(i.U) := dequeueInstrVec(i.U)(1,0)=/="b11".U)
 
   //dequeue socket 1
   io.out1.bits := DontCare
   io.out1.bits.redirect.valid := false.B
   io.out1.bits.pc := pcRingMeta(ringBufferTail)
-  io.out1.bits.pnpc := npcRingMeta(ringBufferTail)
+  io.out1.bits.pnpc := Mux(io.out1.bits.brIdx, npcRingMeta(ringBufferTail), io.out1.bits.pc + Mux(dequeueIsRVC(0), 2.U, 4.U))
   io.out1.bits.instr := Cat(ringInstBuffer(ringBufferTail+1.U), ringInstBuffer(ringBufferTail))
   io.out1.bits.brIdx := branchRingMeta(ringBufferTail)
 
   io.out1.valid := dequeueIsValid(0) && (dequeueIsRVC(0) || dequeueIsValid(1))
   io.out1.bits.exceptionVec.map(_ => false.B)
   io.out1.bits.exceptionVec(instrPageFault) := ipfRingMeta(ringBufferTail)
-  val dequeueSize1 = Mux(io.out1.fire(), 0.U, Mux(dequeueIsRVC(0), 1.U, 2.U)) // socket 2 will use dequeueSize1 to get its inst
+  val dequeueSize1 = Mux(io.out1.fire(), Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
+  Debug(true){
+    when(io.out1.fire()){printf("[IBUF] dequeue1: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out1.bits.instr, io.out1.bits.pc, io.out1.bits.pnpc, io.out1.bits.brIdx, io.out1.bits.exceptionVec(instrPageFault), GTimer())}
+  }
 
   //dequeue socket 2
   val inst2_StartIndex = ringBufferTail + dequeueSize1
   io.out2.bits := DontCare
   io.out2.bits.redirect.valid := false.B
   io.out2.bits.pc := pcRingMeta(inst2_StartIndex)
-  io.out2.bits.pnpc := npcRingMeta(inst2_StartIndex)
+  io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(ringBufferTail+inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(inst2_StartIndex), 2.U, 4.U))
   io.out2.bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out2.bits.brIdx := branchRingMeta(inst2_StartIndex)
 
   io.out2.valid := dequeueIsValid(dequeueSize1) && (dequeueIsRVC(dequeueSize1) || dequeueIsValid(dequeueSize1 + 1.U))
   io.out2.bits.exceptionVec.map(_ => false.B)
   io.out2.bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex)
-  val dequeueSize2 = Mux(io.out2.fire(), 0.U, Mux(dequeueIsRVC(inst2_StartIndex), 1.U, 2.U)) // socket 2 will use dequeueSize1 to get its inst
+  val dequeueSize2 = Mux(io.out2.fire(), Mux(dequeueIsRVC(inst2_StartIndex), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
+  Debug(true){
+    when(io.out2.fire()){printf("[IBUF] dequeue2: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out2.bits.instr, io.out2.bits.pc, io.out2.bits.pnpc, io.out2.bits.brIdx, io.out2.bits.exceptionVec(instrPageFault), GTimer())}
+  }
 
   val dequeueSize = dequeueSize1 + dequeueSize2
 
@@ -135,10 +142,19 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
     when(dequeueSize >= 3.U){validRingMeta(2.U + ringBufferTail) := false.B}
     when(dequeueSize >= 4.U){validRingMeta(3.U + ringBufferTail) := false.B}
     ringBufferTail := ringBufferTail + dequeueSize;
+    Debug(){
+      printf("[IBUF] ibuf dequeue %x*16 bits\n", dequeueSize)
+    }
+  }
+
+  //flush control
+  when(io.flush){
+    ringBufferHead := 0.U
+    ringBufferTail := 0.U
   }
 
   //redirect at ibuf is no longer necessary
   io.redirect.target := DontCare
-  io.redirect.valid := false
+  io.redirect.valid := false.B
 
 }

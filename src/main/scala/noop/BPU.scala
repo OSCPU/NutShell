@@ -164,8 +164,14 @@ class BPU1 extends NOOPModule {
 
   (0 to 3).map(i => io.target(i) := Mux(btbRead(i)._type(0) === BTBtype.R, rasTarget, btbRead(i).target))
   (0 to 3).map(i => io.brIdx(i) := btbHit && Mux(btbRead(i)._type(0) === BTBtype.B, phtTaken(i), true.B))
-  io.out.target := DontCare
+  io.out.target := PriorityMux(io.brIdx, io.target)
   io.out.valid := io.brIdx.asUInt.orR
+  Debug()
+  {
+    when(io.out.valid){
+      printf("[BPU] io.brIdx.asUInt %b\n", io.brIdx.asUInt)
+    }
+  }
   // TODO: lazyJump, out.valid
   
   // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump || lateJumpLatch && !flush && !lateJump

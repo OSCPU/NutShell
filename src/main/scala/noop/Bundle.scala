@@ -123,9 +123,10 @@ class TLBExuIO extends NOOPBundle {
 
 class FrontendIO extends NOOPBundle {
   val pc = Output(UInt(VAddrBits.W)) // real PC will be regenerated in IBF 
-  val npc = Output(Vec(4, UInt(VAddrBits.W)))
-  val instr = Output(UInt(64.W))
+  val pnpc = Output(UInt(VAddrBits.W))
   val brIdx = Output(UInt(4.W))
   val instValid = Output(UInt(4.W))
+  //above will be used as user bits in icache
   val icachePF = Output(Bool())
+  val instr = Output(UInt(64.W))
 }

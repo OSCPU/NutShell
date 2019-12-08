@@ -27,14 +27,14 @@ trait HasNOOPParameter {
 
 trait HasNOOPConst {
   val CacheReadWidth = 8
-  val FrontendBundleWidth = 39*2 + 64 + 9 // TODO: this const depends on VAddrBits
+  val ICacheUserBundleWidth = 39*2 + 9 // TODO: this const depends on VAddrBits
 }
 
 abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO
 abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst 
 
 case class NOOPConfig (
-  FPGAPlatform: Boolean = true,
+  FPGAPlatform: Boolean = false,
   EnableDebug: Boolean = false
 )
 
@@ -69,8 +69,11 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   }
 
   pipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
-  PipelineConnect(ibf.io.out, idu.io.in, idu.io.out.fire(), ifu.io.flushVec(1))
-  PipelineConnect(idu.io.out, isu.io.in, isu.io.out.fire(), ifu.io.flushVec(1))
+  // PipelineConnect(ibf.io.out, idu.io.in, idu.io.out.fire(), ifu.io.flushVec(1))
+  ibf.io.out1 <> idu.io.in1
+  ibf.io.out2 <> idu.io.in2
+  idu.io.out2.ready := false.B
+  PipelineConnect(idu.io.out1, isu.io.in, isu.io.out.fire(), ifu.io.flushVec(1))
   PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire(), ifu.io.flushVec(2))
   PipelineConnect(exu.io.out, wbu.io.in, true.B, ifu.io.flushVec(3))
   ibf.io.flush := ifu.io.flushVec(1)
@@ -82,11 +85,11 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     printf("------------------------ TIMER: %d ------------------------\n", GTimer())
     printf("flush = %b, ifu:(%d,%d), ibf:(%d,%d), idu:(%d,%d), isu:(%d,%d), exu:(%d,%d), wbu: (%d,%d)\n",
       ifu.io.flushVec.asUInt, ifu.io.out.valid, ifu.io.out.ready,
-      ibf.io.in.valid, ibf.io.in.ready, idu.io.in.valid, idu.io.in.ready, isu.io.in.valid, isu.io.in.ready,
+      ibf.io.in.valid, ibf.io.in.ready, idu.io.in1.valid, idu.io.in1.ready, isu.io.in.valid, isu.io.in.ready,
       exu.io.in.valid, exu.io.in.ready, wbu.io.in.valid, wbu.io.in.ready)
-    when (ifu.io.out.valid) { printf("IFU: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", ifu.io.out.bits.pc, ifu.io.out.bits.instr, ifu.io.out.bits.pnpc)} ; 
-    when (ibf.io.in.valid) { printf("ID1: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", ibf.io.in.bits.pc, ibf.io.in.bits.instr, ibf.io.in.bits.pnpc) }
-    when (idu.io.in.valid) { printf("ID2: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in.bits.pc, idu.io.in.bits.instr, idu.io.in.bits.pnpc) }
+    when (ifu.io.out.valid) { printf("IFU: pc = 0x%x, instr = 0x%x\n", ifu.io.out.bits.pc, ifu.io.out.bits.instr)} ; 
+    when (ibf.io.in.valid) { printf("IBF: pc = 0x%x, instr = 0x%x\n", ibf.io.in.bits.pc, ibf.io.in.bits.instr)}
+    when (idu.io.in1.valid) { printf("IDU: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in1.bits.pc, idu.io.in1.bits.instr, idu.io.in1.bits.pnpc) }
     when (isu.io.in.valid)  { printf("ISU: pc = 0x%x, pnpc = 0x%x\n", isu.io.in.bits.cf.pc, isu.io.in.bits.cf.pnpc)} ;
     when (exu.io.in.valid)  { printf("EXU: pc = 0x%x, pnpc = 0x%x\n", exu.io.in.bits.cf.pc, exu.io.in.bits.cf.pnpc)} ;
     when (wbu.io.in.valid)  { printf("WBU: pc = 0x%x rfWen:%d rfDest:%d rfData:%x Futype:%x\n", wbu.io.in.bits.decode.cf.pc, wbu.io.in.bits.decode.ctrl.rfWen, wbu.io.in.bits.decode.ctrl.rfDest, wbu.io.wb.rfData, wbu.io.in.bits.decode.ctrl.fuType )}
@@ -108,10 +111,10 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
   val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
 
-  val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = FrontendBundleWidth, totalEntry = 4))
+  val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
   ifu.io.ipf := itlb.io.ipf
   io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
-    CacheConfig(ro = true, name = "icache", userBits = FrontendBundleWidth))
+    CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
   
   val dtlb = TLB(in = exu.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = exu.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
   dmemXbar.io.in(0) <> dtlb.io.out
