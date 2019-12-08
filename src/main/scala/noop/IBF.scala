@@ -49,13 +49,11 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   
   //ibuf enqueue
   //if valid & ringBufferAllowin, enqueue
-  //TODO: fix brIdx
   val needEnqueue = Wire(Vec(4, Bool()))
   needEnqueue(0) := instValid(0)
   needEnqueue(1) := instValid(1) && !(brIdx(0) && isRVC(0))
   needEnqueue(2) := instValid(2) && !(brIdx(0)) && !(brIdx(1) && isRVC(1))
   needEnqueue(3) := instValid(3) && !(brIdx(0)) && !(brIdx(1)) && !(brIdx(2) && isRVC(2))
-  // NOTE: brIdx(i) is always false if instValid(i) === false
 
   // NOTE: needEnqueue is always of fmt "0?1?0?"
   // therefore we first shift input data, then enqueue
