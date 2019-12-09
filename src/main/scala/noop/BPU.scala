@@ -162,8 +162,17 @@ class BPU1 extends NOOPModule {
     }
   }
 
+  def genInstValid(pc: UInt) = LookupTree(pc(2,1), List(
+    "b00".U -> "b1111".U,
+    "b01".U -> "b1110".U,
+    "b10".U -> "b1100".U,
+    "b11".U -> "b1000".U
+  ))
+
+  val pcLatchValid = genInstValid(pcLatch)
+
   (0 to 3).map(i => io.target(i) := Mux(btbRead(i)._type(0) === BTBtype.R, rasTarget, btbRead(i).target))
-  (0 to 3).map(i => io.brIdx(i) := btbHit && Mux(btbRead(i)._type(0) === BTBtype.B, phtTaken(i), true.B))
+  (0 to 3).map(i => io.brIdx(i) := btbHit && pcLatchValid(i).asBool && Mux(btbRead(i)._type(0) === BTBtype.B, phtTaken(i), true.B))
   io.out.target := PriorityMux(io.brIdx, io.target)
   io.out.valid := io.brIdx.asUInt.orR
   Debug()
