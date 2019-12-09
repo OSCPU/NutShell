@@ -27,10 +27,10 @@ class IFU extends NOOPModule with HasResetVector {
 
   // pc
   val pc = RegInit(resetVector.U(VAddrBits.W))
-  val pcBrIdx = RegInit(0.U(4.W))
+  // val pcBrIdx = RegInit(0.U(4.W))
   val pcInstValid = RegInit("b1111".U)
   val pcUpdate = io.redirect.valid || io.imem.req.fire()
-  val snpc = pc + CacheReadWidth.U  // IFU will always ask icache to fetch next instline 
+  val snpc = Cat(pc(VAddrBits-1, 3), 0.U(3.W)) + CacheReadWidth.U  // IFU will always ask icache to fetch next instline 
   // Note: we define instline as 8 Byte aligned data from icache 
 
   val bp1 = Module(new BPU1)
@@ -70,7 +70,7 @@ class IFU extends NOOPModule with HasResetVector {
     "b10".U -> "b1100".U,
     "b11".U -> "b1000".U
   ))
-  npcInstValid := Mux(lateJump, "b0001".U, genInstValid(npc))
+  npcInstValid := Mux(lateJumpLatch && !io.redirect.valid, "b0001".U, genInstValid(npc))
 
   // branch position index, 4 bit vector
   // e.g. brIdx 0010 means a branch is predicted/assigned at pc (offset 2)
@@ -83,7 +83,7 @@ class IFU extends NOOPModule with HasResetVector {
   "b10".U -> "b0100".U,
   "b11".U -> "b1000".U
 ))
-  brIdx := Mux(io.redirect.valid, genBrIdx(io.redirect.target), Mux(lateJumpLatch, genBrIdx(lateJumpTarget), pbrIdx))
+  brIdx := Mux(io.redirect.valid, 0.U, Mux(lateJumpLatch, genBrIdx(lateJumpTarget), pbrIdx))
   
   //TODO: BP will be disabled shortly after a redirect request
 
@@ -98,13 +98,13 @@ class IFU extends NOOPModule with HasResetVector {
   when (pcUpdate) { 
     pc := npc
     pcInstValid := npcInstValid
-    pcBrIdx := brIdx
+    // pcBrIdx := brIdx // just for debug
     // printf("[IF1] pc=%x\n", pc)
   }
 
   Debug(){
     when(pcUpdate) {
-      printf("[IFUPC] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpn:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,bp1.io.out.valid,pnpc)
+      printf("[] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpn:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,bp1.io.out.valid,pnpc)
       //printf(p"[IFUIN] redirect: ${io.redirect} \n")
     }
   }
@@ -113,7 +113,7 @@ class IFU extends NOOPModule with HasResetVector {
   io.bpFlush := false.B
 
   io.imem.req.bits.apply(addr = Cat(pc(VAddrBits-1,1),0.U(1.W)), //cache will treat it as Cat(pc(63,3),0.U(3.W))
-    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = Cat(pcInstValid, pcBrIdx, npc, pc))
+    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = Cat(pcInstValid, brIdx & pcInstValid, npc, pc))
   io.imem.req.valid := io.out.ready
   //TODO: add ctrlFlow.exceptionVec
   io.imem.resp.ready := io.out.ready || io.flushVec(0)
@@ -121,9 +121,9 @@ class IFU extends NOOPModule with HasResetVector {
   io.out.bits := DontCare
     //inst path only uses 32bit inst, get the right inst according to pc(2)
 
-  Debug(true){
+  Debug(){
     when(io.imem.req.fire()){
-      printf("[IFI] pc=%x user=%x redirect %x pcInstValid %b pcBrIdx %b npc %x pc %x\n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pcInstValid.asUInt, pcBrIdx.asUInt, npc, pc)
+      printf("[IFI] pc=%x user=%x redirect %x pcInstValid %b brIdx %b npc %x pc %x\n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pcInstValid.asUInt, (pcInstValid & brIdx).asUInt, npc, pc)
     }
     when (io.out.fire()) {
           printf("[IFO] pc=%x user=%x inst=%x npc=%x bridx %b valid %b \n", io.out.bits.pc, io.imem.resp.bits.user.get, io.out.bits.instr, io.out.bits.pnpc, io.out.bits.brIdx.asUInt, io.out.bits.instValid.asUInt)

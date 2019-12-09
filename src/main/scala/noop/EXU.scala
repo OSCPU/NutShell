@@ -73,10 +73,10 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
     Mux(mou.io.redirect.valid, mou.io.redirect,
       Mux(csr.io.redirect.valid, csr.io.redirect, alu.io.redirect))
   Debug(){
-    //when(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid){
-      printf("[REDIRECT] inValid:%d mou %x csr %x alu %x \n", io.in.valid, mou.io.redirect.valid, csr.io.redirect.valid, alu.io.redirect.valid)
+    when(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid){
+      printf("[REDIRECT] mou %x csr %x alu %x \n", mou.io.redirect.valid, csr.io.redirect.valid, alu.io.redirect.valid)
       printf("[REDIRECT] flush: %d mou %x csr %x alu %x\n", io.flush, mou.io.redirect.target, csr.io.redirect.target, alu.io.redirect.target)
-    //}
+    }
   }
 
   // FIXME: should handle io.out.ready == false

@@ -41,7 +41,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   val instrVec = Wire(Vec(4, UInt(16.W)))
   val isRVC = Wire(Vec(4, Bool()))
   val instValid = io.in.bits.instValid
-  val brIdx = io.in.bits.brIdx
+  val brIdx = io.in.bits.brIdx // NOTE: brIdx == false.B if !instValid
   val icachePF = io.in.bits.icachePF
   instrVec := instr.asTypeOf(Vec(4, UInt(16.W)))
   (0 to 3).map(i => isRVC(i.U) := instrVec(i.U)(1,0) =/= "b11".U)
@@ -76,13 +76,13 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
     when(enqueueFire(2)){ibufWrite(2, shiftSize)}
     when(enqueueFire(3)){ibufWrite(3, shiftSize)}
     ringBufferHead := ringBufferHead + enqueueSize
-    Debug(true){
+    Debug(){
       printf("[IBUF] ibuf enqueue at time %d :\n", GTimer())
       printf("[IBUF] instValid %b brIdx %b isRVC %b needEnqueue %b enqueueSize %x shiftSize %x\n", instValid.asUInt,brIdx.asUInt,isRVC.asUInt,needEnqueue.asUInt,enqueueSize.asUInt,shiftSize.asUInt)
-      when(enqueueFire(0)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+0.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 0.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+0.U), io.in.bits.icachePF(shiftSize+0.U), shiftSize+0.U)}
-      when(enqueueFire(1)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+1.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 1.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+1.U), io.in.bits.icachePF(shiftSize+1.U), shiftSize+1.U)}
-      when(enqueueFire(2)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+2.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 2.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+2.U), io.in.bits.icachePF(shiftSize+2.U), shiftSize+2.U)}
-      when(enqueueFire(3)){printf("[IBUF] inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+3.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 3.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+3.U), io.in.bits.icachePF(shiftSize+3.U), shiftSize+3.U)}
+      when(enqueueFire(0)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+0.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 0.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+0.U), io.in.bits.icachePF(shiftSize+0.U), shiftSize+0.U)}
+      when(enqueueFire(1)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+1.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 1.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+1.U), io.in.bits.icachePF(shiftSize+1.U), shiftSize+1.U)}
+      when(enqueueFire(2)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+2.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 2.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+2.U), io.in.bits.icachePF(shiftSize+2.U), shiftSize+2.U)}
+      when(enqueueFire(3)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+3.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 3.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+3.U), io.in.bits.icachePF(shiftSize+3.U), shiftSize+3.U)}
     }
   }
 
@@ -107,12 +107,13 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out1.bits.instr := Cat(ringInstBuffer(ringBufferTail+1.U), ringInstBuffer(ringBufferTail))
   io.out1.bits.brIdx := branchRingMeta(ringBufferTail)
 
-  io.out1.valid := dequeueIsValid(0) && (dequeueIsRVC(0) || dequeueIsValid(1))
+  io.out1.valid := dequeueIsValid(0) && (dequeueIsRVC(0) || dequeueIsValid(1)) && !io.flush
   io.out1.bits.exceptionVec.map(_ => false.B)
   io.out1.bits.exceptionVec(instrPageFault) := ipfRingMeta(ringBufferTail)
   val dequeueSize1 = Mux(io.out1.fire(), Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
-  Debug(true){
-    when(io.out1.fire()){printf("[IBUF] dequeue1: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out1.bits.instr, io.out1.bits.pc, io.out1.bits.pnpc, io.out1.bits.brIdx, io.out1.bits.exceptionVec(instrPageFault), GTimer())}
+  Debug(){
+    when(io.out1.fire()){printf("[IBUF] dequeue: bufferhead %x buffertail %x time %d\n", ringBufferHead, ringBufferTail, GTimer())}
+    when(io.out1.fire()){printf("[IBUF]     dequeue1: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out1.bits.instr, io.out1.bits.pc, io.out1.bits.pnpc, io.out1.bits.brIdx, io.out1.bits.exceptionVec(instrPageFault), GTimer())}
   }
 
   //dequeue socket 2
@@ -124,12 +125,12 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out2.bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out2.bits.brIdx := branchRingMeta(inst2_StartIndex)
 
-  io.out2.valid := dequeueIsValid(dequeueSize1) && (dequeueIsRVC(dequeueSize1) || dequeueIsValid(dequeueSize1 + 1.U))
+  io.out2.valid := dequeueIsValid(dequeueSize1) && (dequeueIsRVC(dequeueSize1) || dequeueIsValid(dequeueSize1 + 1.U)) && !io.flush
   io.out2.bits.exceptionVec.map(_ => false.B)
   io.out2.bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex)
   val dequeueSize2 = Mux(io.out2.fire(), Mux(dequeueIsRVC(inst2_StartIndex), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
-  Debug(true){
-    when(io.out2.fire()){printf("[IBUF] dequeue2: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out2.bits.instr, io.out2.bits.pc, io.out2.bits.pnpc, io.out2.bits.brIdx, io.out2.bits.exceptionVec(instrPageFault), GTimer())}
+  Debug(){
+    when(io.out2.fire()){printf("[IBUF]     dequeue2: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out2.bits.instr, io.out2.bits.pc, io.out2.bits.pnpc, io.out2.bits.brIdx, io.out2.bits.exceptionVec(instrPageFault), GTimer())}
   }
 
   val dequeueSize = dequeueSize1 + dequeueSize2
@@ -151,6 +152,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   when(io.flush){
     ringBufferHead := 0.U
     ringBufferTail := 0.U
+    List.tabulate(ibufSize)(i => validRingMeta(i) := 0.U) // set valid to 0
   }
 
   //redirect at ibuf is no longer necessary
