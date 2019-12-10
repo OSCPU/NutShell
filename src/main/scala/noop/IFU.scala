@@ -76,7 +76,7 @@ class IFU extends NOOPModule with HasResetVector {
   // e.g. brIdx 0010 means a branch is predicted/assigned at pc (offset 2)
   val brIdx = Wire(UInt(4.W))
   // predicted branch position index, 4 bit vector
-  val pbrIdx = bp1.io.brIdx.asUInt
+  val pbrIdx = bp1.io.brIdx.asUInt | (lateJump << 3)
   def genBrIdx(pc: UInt) = LookupTree(pc(2,1), List(
   "b00".U -> "b0001".U,
   "b01".U -> "b0010".U,
@@ -104,7 +104,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   Debug(){
     when(pcUpdate) {
-      printf("[] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpn:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,bp1.io.out.valid,pnpc)
+      printf("[IFUIN] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpn:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,bp1.io.out.valid,pnpc)
       //printf(p"[IFUIN] redirect: ${io.redirect} \n")
     }
   }
@@ -140,7 +140,7 @@ class IFU extends NOOPModule with HasResetVector {
     io.out.bits.instValid := x(VAddrBits*2 + 7, VAddrBits*2 + 4)
   }
   io.out.bits.icachePF := io.ipf
-  assert(!io.out.bits.icachePF)
+  // assert(!io.out.bits.icachePF)
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
 
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire()), "perfCntCondMimemStall")
