@@ -1,6 +1,6 @@
 ARCH = ARCH=riscv64-noop
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
-SINGLETEST = ALL=min3
+SINGLETEST = ALL=recursion
 
 # ------------------------------------------------------------------
 # bulid CPU and run dummy test
