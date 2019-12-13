@@ -6,7 +6,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-class IDU2 extends NOOPModule with HasInstrType {
+class Decoder extends NOOPModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
@@ -17,7 +17,7 @@ class IDU2 extends NOOPModule with HasInstrType {
   val instr = io.in.bits.instr(31, 0)
   val decodeList = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val instrType :: fuType :: fuOpType :: Nil = // insert Instructions.DecodeDefault when interrupt comes
-    Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr, intr, dec)}
+    Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault), intr, dec)}
   // val instrType :: fuType :: fuOpType :: Nil = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val isRVC = instr(1,0) =/= "b11".U
   val rvcImmType :: rvcSrc1Type :: rvcSrc2Type :: rvcDestType :: Nil =
@@ -143,6 +143,24 @@ class IDU2 extends NOOPModule with HasInstrType {
   io.out.bits.ctrl.isNoopTrap := (instr === NOOPTrap.TRAP) && io.in.valid
 }
 
-// Note  
-// C.LWSP is only valid when rd̸=x0; the code points with rd=x0 are reserved
-// C.LDSP is only valid when rd̸=x0; the code points with rd=x0 are reserved.
+class IDU extends NOOPModule with HasInstrType {
+  val io = IO(new Bundle {
+    val in1 = Flipped(Decoupled(new CtrlFlowIO))
+    val in2 = Flipped(Decoupled(new CtrlFlowIO))
+    val out1 = Decoupled(new DecodeIO)
+    val out2 = Decoupled(new DecodeIO)
+    val flush = Input(Bool())
+  })
+  val decoder1  = Module(new Decoder)
+  val decoder2  = Module(new Decoder)
+  io.in1 <> decoder1.io.in
+  io.in2 <> decoder2.io.in
+  io.out1 <> decoder1.io.out
+  io.out2 <> decoder2.io.out
+  decoder1.io.flush := io.flush 
+  decoder2.io.flush := io.flush
+  if(EnableMultiIssue){
+    io.in2.ready := false.B
+    decoder2.io.in.valid := false.B
+  }
+}

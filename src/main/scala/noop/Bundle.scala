@@ -44,7 +44,8 @@ class CtrlFlowIO extends NOOPBundle {
   val redirect = new RedirectIO
   val exceptionVec = Output(Vec(16, Bool()))
   val intrVec = Output(Vec(12, Bool()))
-  val brIdx = Output(UInt(4.W))
+  val brIdx = Output(Bool()) // for debug only
+  val instValid = Output(UInt(4.W))
 }
 
 class DecodeIO extends NOOPBundle {
@@ -118,4 +119,14 @@ class TLBExuIO extends NOOPBundle {
     this.sfence.asid  := src2(8,0)
     this.satp := satp
   }
+}
+
+class FrontendIO extends NOOPBundle {
+  val pc = Output(UInt(VAddrBits.W)) // real PC will be regenerated in IBF 
+  val pnpc = Output(UInt(VAddrBits.W))
+  val brIdx = Output(UInt(4.W))
+  val instValid = Output(UInt(4.W))
+  //above will be used as user bits in icache
+  val icachePF = Output(Bool())
+  val instr = Output(UInt(64.W))
 }
