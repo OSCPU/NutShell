@@ -68,7 +68,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
       npcRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.pnpc
       validRingMeta(targetSlot.U + ringBufferHead) := true.B
       branchRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.brIdx(shiftSize + targetSlot.U)
-      ipfRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.icachePF(shiftSize + targetSlot.U)
+      ipfRingMeta(targetSlot.U + ringBufferHead) := io.in.bits.icachePF
   }
   when(ibufWen){
     when(enqueueFire(0)){ibufWrite(0, shiftSize)}
@@ -79,10 +79,10 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
     Debug(){
       printf("[IBUF] ibuf enqueue at time %d :\n", GTimer())
       printf("[IBUF] instValid %b brIdx %b isRVC %b needEnqueue %b enqueueSize %x shiftSize %x\n", instValid.asUInt,brIdx.asUInt,isRVC.asUInt,needEnqueue.asUInt,enqueueSize.asUInt,shiftSize.asUInt)
-      when(enqueueFire(0)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+0.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 0.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+0.U), io.in.bits.icachePF(shiftSize+0.U), shiftSize+0.U)}
-      when(enqueueFire(1)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+1.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 1.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+1.U), io.in.bits.icachePF(shiftSize+1.U), shiftSize+1.U)}
-      when(enqueueFire(2)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+2.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 2.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+2.U), io.in.bits.icachePF(shiftSize+2.U), shiftSize+2.U)}
-      when(enqueueFire(3)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+3.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 3.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+3.U), io.in.bits.icachePF(shiftSize+3.U), shiftSize+3.U)}
+      when(enqueueFire(0)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+0.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 0.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+0.U), io.in.bits.icachePF, shiftSize+0.U)}
+      when(enqueueFire(1)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+1.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 1.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+1.U), io.in.bits.icachePF, shiftSize+1.U)}
+      when(enqueueFire(2)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+2.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 2.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+2.U), io.in.bits.icachePF, shiftSize+2.U)}
+      when(enqueueFire(3)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+3.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 3.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+3.U), io.in.bits.icachePF, shiftSize+3.U)}
     }
   }
 
