@@ -36,7 +36,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   val lsuOut = lsu.access(valid = fuValids(FuType.lsu), src1 = src1, src2 = io.in.bits.data.imm, func = fuOpType, dtlbPF = lsuTlbPF)
   lsu.io.wdata := src2
   lsu.io.instr := io.in.bits.cf.instr
-  io.out.bits.isMMIO := lsu.io.isMMIO
+  io.out.bits.isMMIO := lsu.io.isMMIO || (AddressSpace.isMMIO(io.in.bits.cf.pc) && io.out.valid)
   io.dmem <> lsu.io.dmem
   lsu.io.out.ready := true.B
 
@@ -47,6 +47,8 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   val csr = Module(new CSR)
   val csrOut = csr.access(valid = fuValids(FuType.csr), src1 = src1, src2 = src2, func = fuOpType)
   csr.io.cfIn := io.in.bits.cf
+  csr.io.cfIn.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
+  csr.io.cfIn.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
   csr.io.instrValid := io.in.valid && !io.flush
   io.out.bits.intrNO := csr.io.intrNO
   csr.io.out.ready := true.B
@@ -62,7 +64,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   
   io.out.bits.decode := DontCare
   (io.out.bits.decode.ctrl, io.in.bits.ctrl) match { case (o, i) =>
-    o.rfWen := i.rfWen && (!lsuTlbPF || !fuValids(FuType.lsu)) && !(csr.io.wenFix && fuValids(FuType.csr))
+    o.rfWen := i.rfWen && (!lsuTlbPF && !lsu.io.loadAddrMisaligned && !lsu.io.storeAddrMisaligned || !fuValids(FuType.lsu)) && !(csr.io.wenFix && fuValids(FuType.csr))
     o.rfDest := i.rfDest
     o.fuType := i.fuType
   }

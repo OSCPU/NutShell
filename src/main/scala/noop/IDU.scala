@@ -6,10 +6,11 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-class Decoder extends NOOPModule with HasInstrType {
+class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
+    val isWFI = Output(Bool()) // require NOOPSim to advance mtime when wfi to reduce the idle time in Linux
     val flush = Input(Bool())
   })
 
@@ -141,9 +142,11 @@ class Decoder extends NOOPModule with HasInstrType {
   io.out.bits.cf.exceptionVec(instrPageFault) := io.in.bits.exceptionVec(instrPageFault)
 
   io.out.bits.ctrl.isNoopTrap := (instr === NOOPTrap.TRAP) && io.in.valid
+  io.isWFI := (instr === Priviledged.WFI) && io.in.valid
+
 }
 
-class IDU extends NOOPModule with HasInstrType {
+class IDU(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   val io = IO(new Bundle {
     val in1 = Flipped(Decoupled(new CtrlFlowIO))
     val in2 = Flipped(Decoupled(new CtrlFlowIO))
@@ -162,5 +165,9 @@ class IDU extends NOOPModule with HasInstrType {
   if(EnableMultiIssue){
     io.in2.ready := false.B
     decoder2.io.in.valid := false.B
+  }
+
+  if (!p.FPGAPlatform) {
+    BoringUtils.addSource(decoder1.io.isWFI | decoder2.io.isWFI, "isWFI")
   }
 }
