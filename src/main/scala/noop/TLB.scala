@@ -145,7 +145,7 @@ sealed trait HasTlbConst extends Sv39Const{
   val IndexBits = log2Up(Sets)
   val TagBits = vpnLen - IndexBits
 
-  val debug = true //&& tlbname == "dtlb"
+  val debug = false //&& tlbname == "dtlb"
 
   def vaddrTlbBundle = new Bundle {
     val tag = UInt(TagBits.W)
