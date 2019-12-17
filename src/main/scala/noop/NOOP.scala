@@ -71,8 +71,9 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   // PipelineConnect(ibf.io.out, idu.io.in, idu.io.out.fire(), ifu.io.flushVec(1))
   ibf.io.out1 <> idu.io.in1
   ibf.io.out2 <> idu.io.in2
-  idu.io.out2.ready := false.B
-  PipelineConnect(idu.io.out1, isu.io.in, isu.io.out.fire(), ifu.io.flushVec(1))
+  val dummyIsuIn = Wire(Flipped(Decoupled(new DecodeIO)))
+  dummyIsuIn.ready := false.B
+  PipelineVector2Connect(idu.io.out1, idu.io.out2, isu.io.in, dummyIsuIn, ifu.io.flushVec(1), 16)
   PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire(), ifu.io.flushVec(2))
   PipelineConnect(exu.io.out, wbu.io.in, true.B, ifu.io.flushVec(3))
   ibf.io.flush := ifu.io.flushVec(1)
@@ -88,7 +89,8 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
       exu.io.in.valid, exu.io.in.ready, wbu.io.in.valid, wbu.io.in.ready)
     when (ifu.io.out.valid) { printf("IFU: pc = 0x%x, instr = 0x%x\n", ifu.io.out.bits.pc, ifu.io.out.bits.instr)} ; 
     when (ibf.io.in.valid) { printf("IBF: pc = 0x%x, instr = 0x%x\n", ibf.io.in.bits.pc, ibf.io.in.bits.instr)}
-    when (idu.io.in1.valid) { printf("IDU: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in1.bits.pc, idu.io.in1.bits.instr, idu.io.in1.bits.pnpc) }
+    when (idu.io.in1.valid) { printf("IDU1: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in1.bits.pc, idu.io.in1.bits.instr, idu.io.in1.bits.pnpc) }
+    when (idu.io.in2.valid) { printf("IDU2: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in2.bits.pc, idu.io.in2.bits.instr, idu.io.in2.bits.pnpc) }
     when (isu.io.in.valid)  { printf("ISU: pc = 0x%x, pnpc = 0x%x\n", isu.io.in.bits.cf.pc, isu.io.in.bits.cf.pnpc)} ;
     when (exu.io.in.valid)  { printf("EXU: pc = 0x%x, pnpc = 0x%x\n", exu.io.in.bits.cf.pc, exu.io.in.bits.cf.pnpc)} ;
     when (wbu.io.in.valid)  { printf("WBU: pc = 0x%x rfWen:%d rfDest:%d rfData:%x Futype:%x\n", wbu.io.in.bits.decode.cf.pc, wbu.io.in.bits.decode.ctrl.rfWen, wbu.io.in.bits.decode.ctrl.rfDest, wbu.io.wb.rfData, wbu.io.in.bits.decode.ctrl.fuType )}

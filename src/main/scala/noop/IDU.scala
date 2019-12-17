@@ -162,7 +162,7 @@ class IDU(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   io.out2 <> decoder2.io.out
   decoder1.io.flush := io.flush 
   decoder2.io.flush := io.flush
-  if(EnableMultiIssue){
+  if(!EnableMultiIssue){
     io.in2.ready := false.B
     decoder2.io.in.valid := false.B
   }
