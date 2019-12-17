@@ -7,7 +7,7 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 
 trait HasIBUFConst{
-  val multiIssue = true
+  // val multiIssue = true
   val instUnitWidth = 16 //bit
   val ibufBitSize = 256 //bit
   val ibufSize = ibufBitSize / instUnitWidth
@@ -15,12 +15,10 @@ trait HasIBUFConst{
 
 class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   val io = IO(new Bundle {
-    // val in = Flipped(Decoupled(new CtrlFlowIO))
     val in = Flipped(Decoupled(new FrontendIO))
     val out1 = Decoupled(new CtrlFlowIO)
     val out2 = Decoupled(new CtrlFlowIO)
     val flush = Input(Bool())
-    val redirect = new RedirectIO
   })
 
   //ibuf reg
@@ -122,20 +120,24 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out2.bits := DontCare
   io.out2.bits.redirect.valid := false.B
   io.out2.bits.pc := pcRingMeta(inst2_StartIndex)
-  io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(ringBufferTail+inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(inst2_StartIndex), 2.U, 4.U))
+  io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(ringBufferTail+inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
   io.out2.bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out2.bits.brIdx := branchRingMeta(inst2_StartIndex)
-  io.out2.bits.crossPageIPFFix := !ipfRingMeta(inst2_StartIndex) && !dequeueIsRVC(inst2_StartIndex) && ipfRingMeta(inst2_StartIndex + 1.U)
+  io.out2.bits.crossPageIPFFix := !ipfRingMeta(inst2_StartIndex) && !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
 
-  io.out2.valid := dequeueIsValid(dequeueSize1) && (dequeueIsRVC(dequeueSize1) || dequeueIsValid(dequeueSize1 + 1.U)) && !io.flush
+  if(EnableMultiIssue){
+    io.out2.valid := dequeueIsValid(dequeueSize1) && (dequeueIsRVC(dequeueSize1) || dequeueIsValid(dequeueSize1 + 1.U)) && !io.flush
+  }else{
+    io.out2.valid := false.B
+  }
   io.out2.bits.exceptionVec.map(_ => false.B)
-  io.out2.bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex) || !dequeueIsRVC(inst2_StartIndex) && ipfRingMeta(inst2_StartIndex + 1.U)
-  val dequeueSize2 = Mux(io.out2.fire(), Mux(dequeueIsRVC(inst2_StartIndex), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
+  io.out2.bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex) || !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
+  val dequeueSize2 = Mux(io.out2.fire(), Mux(dequeueIsRVC(dequeueSize1), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
   Debug(){
     when(io.out2.fire()){printf("[IBUF]     dequeue2: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out2.bits.instr, io.out2.bits.pc, io.out2.bits.pnpc, io.out2.bits.brIdx, io.out2.bits.exceptionVec(instrPageFault), GTimer())}
   }
 
-  val dequeueSize = dequeueSize1 + dequeueSize2
+  val dequeueSize = dequeueSize1 +& dequeueSize2
 
   //dequeue control
   val dequeueFire = dequeueSize > 0.U
@@ -158,7 +160,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   }
 
   //redirect at ibuf is no longer necessary
-  io.redirect.target := DontCare
-  io.redirect.valid := false.B
+  // io.redirect.target := DontCare
+  // io.redirect.valid := false.B
 
 }
