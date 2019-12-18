@@ -158,8 +158,8 @@ class BPU1 extends NOOPModule {
 
   val pcLatchValid = genInstValid(pcLatch)
 
-  (0 to 3).map(i => io.target(i) := Mux(btbRead(i)._type(0) === BTBtype.R, rasTarget, btbRead(i).target))
-  (0 to 3).map(i => io.brIdx(i) := btbHit(i) && pcLatchValid(i).asBool && Mux(btbRead(i)._type(0) === BTBtype.B, phtTaken(i), true.B) && btbRead(i).valid)
+  (0 to 3).map(i => io.target(i) := Mux(btbRead(i)._type === BTBtype.R, rasTarget, btbRead(i).target))
+  (0 to 3).map(i => io.brIdx(i) := btbHit(i) && pcLatchValid(i).asBool && Mux(btbRead(i)._type === BTBtype.B, phtTaken(i), true.B) && btbRead(i).valid)
   io.out.target := PriorityMux(io.brIdx, io.target)
   io.out.valid := io.brIdx.asUInt.orR
   Debug()
@@ -168,7 +168,7 @@ class BPU1 extends NOOPModule {
       printf("[BPU] pc %x io.brIdx.asUInt %b phtTaken %x %x %x %x valid %x %x %x %x\n", pcLatch, io.brIdx.asUInt, phtTaken(0), phtTaken(1), phtTaken(2), phtTaken(3), btbRead(0).valid, btbRead(1).valid, btbRead(2).valid, btbRead(3).valid)
     }
   }
-  
+
   // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump || lateJumpLatch && !flush && !lateJump
   // Note: 
   // btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump : normal branch predict
