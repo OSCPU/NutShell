@@ -51,7 +51,7 @@ class IFU extends NOOPModule with HasResetVector {
   when(pcUpdate || bp1.io.flush) {
     lateJumpLatch := Mux(bp1.io.flush, false.B, lateJump && !lateJumpLatch)
   }
-  val lateJumpTarget = RegEnable(bp1.io.out.target, lateJump)
+  val lateJumpTarget = RegEnable(bp1.io.out.target, lateJump && pcUpdate) // ???
 
   // predicted next pc
   val pnpc = Mux(lateJump, snpc, bp1.io.out.target)
@@ -70,7 +70,7 @@ class IFU extends NOOPModule with HasResetVector {
     "b10".U -> "b1100".U,
     "b11".U -> "b1000".U
   ))
-  npcInstValid := Mux(lateJumpLatch && !io.redirect.valid, "b0001".U, genInstValid(npc))
+  npcInstValid := Mux(lateJump && !lateJumpLatch && !io.redirect.valid, "b0001".U, genInstValid(npc))
 
   // branch position index, 4 bit vector
   // e.g. brIdx 0010 means a branch is predicted/assigned at pc (offset 2)
@@ -83,7 +83,7 @@ class IFU extends NOOPModule with HasResetVector {
   "b10".U -> "b0100".U,
   "b11".U -> "b1000".U
 ))
-  brIdx := Mux(io.redirect.valid, 0.U, Mux(lateJumpLatch, genBrIdx(lateJumpTarget), pbrIdx))
+  brIdx := Mux(io.redirect.valid, 0.U, Mux(lateJumpLatch, 0.U, pbrIdx))
   
   //TODO: BP will be disabled shortly after a redirect request
 
@@ -104,7 +104,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   Debug(){
     when(pcUpdate) {
-      printf("[IFUIN] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpn:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,bp1.io.out.valid,pnpc)
+      printf("[IFUIN] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpc:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,bp1.io.out.valid,bp1.io.out.target)
       //printf(p"[IFUIN] redirect: ${io.redirect} \n")
     }
   }
@@ -113,7 +113,7 @@ class IFU extends NOOPModule with HasResetVector {
   io.bpFlush := false.B
 
   io.imem.req.bits.apply(addr = Cat(pc(VAddrBits-1,1),0.U(1.W)), //cache will treat it as Cat(pc(63,3),0.U(3.W))
-    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = Cat(pcInstValid, brIdx & pcInstValid, npc, pc))
+    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = Cat(pcInstValid, brIdx & pcInstValid, Mux(lateJump, bp1.io.out.target, npc), pc))
   io.imem.req.valid := io.out.ready
   //TODO: add ctrlFlow.exceptionVec
   io.imem.resp.ready := io.out.ready || io.flushVec(0)
@@ -123,7 +123,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   Debug(){
     when(io.imem.req.fire()){
-      printf("[IFI] pc=%x user=%x redirect %x pcInstValid %b brIdx %b npc %x pc %x\n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pcInstValid.asUInt, (pcInstValid & brIdx).asUInt, npc, pc)
+      printf("[IFI] pc=%x user=%x redirect %x pcInstValid %b brIdx %b npc %x pc %x pnpc %x\n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pcInstValid.asUInt, (pcInstValid & brIdx).asUInt, npc, pc, bp1.io.out.target)
     }
     when (io.out.fire()) {
           printf("[IFO] pc=%x user=%x inst=%x npc=%x bridx %b valid %b ipf %x\n", io.out.bits.pc, io.imem.resp.bits.user.get, io.out.bits.instr, io.out.bits.pnpc, io.out.bits.brIdx.asUInt, io.out.bits.instValid.asUInt, io.ipf)
