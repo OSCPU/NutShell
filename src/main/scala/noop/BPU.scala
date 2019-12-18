@@ -89,7 +89,7 @@ class BPU1 extends NOOPModule {
   val btbHit = Wire(Vec(4, Bool()))
   (0 to 3).map(i => btbHit(i) := btbRead(i).valid && btbRead(i).tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb(i).io.r.req.fire(), init = false.B))
   // btbHit will ignore pc(2,0). pc(2,0) is used to build brIdx
-  val lateJump = btbRead(3).lateJump && btbHit(3)
+  val lateJump = btbRead(3).lateJump && btbHit(3) && !io.brIdx(0) && !io.brIdx(1) && !io.brIdx(2)
   io.lateJump := lateJump
   // val lateJumpLatch = RegNext(lateJump)
   // val lateJumpTarget = RegEnable(btbRead.target, lateJump)
@@ -165,7 +165,7 @@ class BPU1 extends NOOPModule {
   Debug()
   {
     when(io.out.valid){
-      printf("[BPU] io.brIdx.asUInt %b phtTaken %x %x %x %x valid %x %x %x %x\n", io.brIdx.asUInt, phtTaken(0), phtTaken(1), phtTaken(2), phtTaken(3), btbRead(0).valid, btbRead(1).valid, btbRead(2).valid, btbRead(3).valid)
+      printf("[BPU] pc %x io.brIdx.asUInt %b phtTaken %x %x %x %x valid %x %x %x %x\n", pcLatch, io.brIdx.asUInt, phtTaken(0), phtTaken(1), phtTaken(2), phtTaken(3), btbRead(0).valid, btbRead(1).valid, btbRead(2).valid, btbRead(3).valid)
     }
   }
   

@@ -120,7 +120,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out2.bits := DontCare
   io.out2.bits.redirect.valid := false.B
   io.out2.bits.pc := pcRingMeta(inst2_StartIndex)
-  io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(ringBufferTail+inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
+  io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
   io.out2.bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out2.bits.brIdx := branchRingMeta(inst2_StartIndex)
   io.out2.bits.crossPageIPFFix := !ipfRingMeta(inst2_StartIndex) && !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
