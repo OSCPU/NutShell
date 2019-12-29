@@ -22,6 +22,8 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   val src3 = io.in.bits(1).data.src1
   val src4 = io.in.bits(1).data.src2
 
+  val pipeline2valid = io.in.valid && !io.flush && io.in.bits(1).pipeline2
+
   val (fuType, fuOpType) = (io.in.bits(0).ctrl.fuType, io.in.bits(0).ctrl.fuOpType)
 
   val fuValids = Wire(Vec(FuType.num, Bool()))
@@ -120,7 +122,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   io.forward(0).wb.rfData := Mux(alu.io.out.fire(), aluOut, lsuOut)
   io.forward(0).fuType := io.in.bits(0).ctrl.fuType
 
-  io.forward(1).valid := io.in.valid
+  io.forward(1).valid := pipeline2valid
   io.forward(1).wb.rfWen := io.in.bits(1).ctrl.rfWen
   io.forward(1).wb.rfDest := io.in.bits(1).ctrl.rfDest
   io.forward(1).wb.rfData := alu2Out
