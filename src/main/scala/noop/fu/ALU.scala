@@ -54,7 +54,7 @@ class ALUIO extends FunctionUnitIO {
   val offset = Input(UInt(XLEN.W))
 }
 
-class ALU extends NOOPModule {
+class ALU(hasBru: Boolean = false) extends NOOPModule {
   val io = IO(new ALUIO)
 
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
@@ -151,24 +151,26 @@ class ALU extends NOOPModule {
   bpuUpdateReq.btbType := LookupTree(func, RV32I_BRUInstr.bruFuncTobtbTypeTable)
   bpuUpdateReq.isRVC := isRVC
 
-  BoringUtils.addSource(RegNext(bpuUpdateReq), "bpuUpdateReq")
-
-  val right = valid && isBru && !predictWrong
-  val wrong = valid && isBru && predictWrong
-  BoringUtils.addSource(right && isBranch, "MbpBRight")
-  BoringUtils.addSource(wrong && isBranch, "MbpBWrong")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && isRVC, "Custom1")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && !isRVC, "Custom2")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && isRVC, "Custom3")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && !isRVC, "Custom4")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && isRVC, "Custom5")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && !isRVC, "Custom6")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && isRVC, "Custom7")
-  BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && !isRVC, "Custom8")
-  BoringUtils.addSource(right && (func === ALUOpType.jal || func === ALUOpType.call), "MbpJRight")
-  BoringUtils.addSource(wrong && (func === ALUOpType.jal || func === ALUOpType.call), "MbpJWrong")
-  BoringUtils.addSource(right && func === ALUOpType.jalr, "MbpIRight")
-  BoringUtils.addSource(wrong && func === ALUOpType.jalr, "MbpIWrong")
-  BoringUtils.addSource(right && func === ALUOpType.ret, "MbpRRight")
-  BoringUtils.addSource(wrong && func === ALUOpType.ret, "MbpRWrong")
+  if(hasBru){
+    BoringUtils.addSource(RegNext(bpuUpdateReq), "bpuUpdateReq")
+  
+    val right = valid && isBru && !predictWrong
+    val wrong = valid && isBru && predictWrong
+    BoringUtils.addSource(right && isBranch, "MbpBRight")
+    BoringUtils.addSource(wrong && isBranch, "MbpBWrong")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && isRVC, "Custom1")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && !isRVC, "Custom2")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && isRVC, "Custom3")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && !isRVC, "Custom4")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && isRVC, "Custom5")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && !isRVC, "Custom6")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && isRVC, "Custom7")
+    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && !isRVC, "Custom8")
+    BoringUtils.addSource(right && (func === ALUOpType.jal || func === ALUOpType.call), "MbpJRight")
+    BoringUtils.addSource(wrong && (func === ALUOpType.jal || func === ALUOpType.call), "MbpJWrong")
+    BoringUtils.addSource(right && func === ALUOpType.jalr, "MbpIRight")
+    BoringUtils.addSource(wrong && func === ALUOpType.jalr, "MbpIWrong")
+    BoringUtils.addSource(right && func === ALUOpType.ret, "MbpRRight")
+    BoringUtils.addSource(wrong && func === ALUOpType.ret, "MbpRWrong")
+  }
 }
