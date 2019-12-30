@@ -47,7 +47,7 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   val rfDest2 = io.in(1).bits.ctrl.rfDest
 
   def isDepend(rfSrc: UInt, rfDest: UInt, wen: Bool): Bool = (rfSrc =/= 0.U) && (rfSrc === rfDest) && wen
-  def isDepend2(rfSrc: UInt, rfDest1: UInt, wen1: Bool, rfDest2: UInt, wen2: Bool): Bool = (rfSrc =/= 0.U) && ((rfSrc1 === rfDest1) && wen1 || (rfSrc2 === rfDest2) && wen2)
+  def isDepend2(rfSrc: UInt, rfDest1: UInt, wen1: Bool, rfDest2: UInt, wen2: Bool): Bool = (rfSrc =/= 0.U) && ((rfSrc === rfDest1) && wen1 || (rfSrc === rfDest2) && wen2)
 
   val forwardRfWen = List(
     io.forward(0).wb.rfWen && io.forward(0).valid,
@@ -55,6 +55,8 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   )
   val dontForward1 = (io.forward(0).fuType =/= FuType.alu) && (io.forward(0).fuType =/= FuType.lsu)
   val dontForward2 = (io.forward(1).fuType =/= FuType.alu) && (io.forward(1).fuType =/= FuType.lsu)
+  val src3DependIS = isDepend(rfSrc3, rfDest1, io.in(0).bits.ctrl.rfWen)
+  val src4DependIS = isDepend(rfSrc4, rfDest1, io.in(0).bits.ctrl.rfWen)
   val src1DependEX = isDepend2(rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
   val src2DependEX = isDepend2(rfSrc2, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
   val src3DependEX = isDepend2(rfSrc3, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
@@ -73,16 +75,46 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   val src3Forward = src3DependWB && Mux(dontForward2, !src3DependEX, true.B)
   val src4Forward = src4DependWB && Mux(dontForward2, !src4DependEX, true.B)
 
-  val out1ForwardDataEX = Mux(isDepend(rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
-  val out1ForwardDataWB = Mux(isDepend(rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0)), io.wb(0).rfData, io.wb(1).rfData)
-  val out2ForwardDataEX = Mux(isDepend(rfSrc3, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
-  val out2ForwardDataWB = Mux(isDepend(rfSrc3, io.forward(0).wb.rfDest, forwardRfWen(0)), io.wb(0).rfData, io.wb(1).rfData)
+  Debug()
+  {
+    printf("[ISU] src1DependEX: %x %x %x %x %x\n", rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
+    printf("[ISU] src1DependWB: %x %x %x %x %x\n", rfSrc1, io.wb(0).rfDest, io.wb(0).rfWen, io.wb(1).rfDest, io.wb(1).rfWen)
+    printf("[ISU] ForwardControl: time %x DIS %x %x DEX %x %x %x %x DWB %x %x %x %x FNC %x %x %x %x F %x %x %x %x\n", GTimer(),
+      src3DependIS,
+      src4DependIS,
+      src1DependEX,
+      src2DependEX,
+      src3DependEX,
+      src4DependEX,
+      src1DependWB,
+      src2DependWB,
+      src3DependWB,
+      src4DependWB,
+      src1ForwardNextCycle,
+      src2ForwardNextCycle,
+      src3ForwardNextCycle,
+      src4ForwardNextCycle,
+      src1Forward,
+      src2Forward,
+      src3Forward,
+      src4Forward
+    )
+  }
+
+  val out1_1ForwardDataEX = Mux(isDepend(rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
+  val out1_2ForwardDataEX = Mux(isDepend(rfSrc2, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
+  val out2_1ForwardDataEX = Mux(isDepend(rfSrc3, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
+  val out2_2ForwardDataEX = Mux(isDepend(rfSrc4, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
+  val out1_1ForwardDataWB = Mux(isDepend(rfSrc1, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
+  val out1_2ForwardDataWB = Mux(isDepend(rfSrc2, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
+  val out2_1ForwardDataWB = Mux(isDepend(rfSrc3, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
+  val out2_2ForwardDataWB = Mux(isDepend(rfSrc4, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
 
   val sb = new ScoreBoard
   val src1Ready = !sb.isBusy(rfSrc1) || src1ForwardNextCycle || src1Forward
   val src2Ready = !sb.isBusy(rfSrc2) || src2ForwardNextCycle || src2Forward
-  val src3Ready = !sb.isBusy(rfSrc3) || src3ForwardNextCycle || src3Forward
-  val src4Ready = !sb.isBusy(rfSrc4) || src4ForwardNextCycle || src4Forward
+  val src3Ready = (!sb.isBusy(rfSrc3) || src3ForwardNextCycle || src3Forward) && !src3DependIS
+  val src4Ready = (!sb.isBusy(rfSrc4) || src4ForwardNextCycle || src4Forward) && !src4DependIS
   io.out.valid := io.in(0).valid && src1Ready && src2Ready
 
   def isBru(func: UInt) = func(4)
@@ -95,18 +127,21 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
 
 
   val rf = new RegFile
-
+  Debug()
+  {
+    printf("[ISU] ForwardDat: %x %x %x %x %x %x\n", out1_1ForwardDataEX, out1_1ForwardDataWB, rf.read(rfSrc1), out1_2ForwardDataEX, out1_2ForwardDataWB, rf.read(rfSrc2))
+  }
   // out1
   io.out.bits(0).data.src1 := Mux1H(List(
     (io.in(0).bits.ctrl.src1Type === SrcType.pc) -> SignExt(io.in(0).bits.cf.pc, AddrBits),
-    src1ForwardNextCycle -> out1ForwardDataEX, //io.forward.wb.rfData,
-    (src1Forward && !src1ForwardNextCycle) -> out1ForwardDataWB, //io.wb.rfData,
+    src1ForwardNextCycle -> out1_1ForwardDataEX, //io.forward.wb.rfData,
+    (src1Forward && !src1ForwardNextCycle) -> out1_1ForwardDataWB, //io.wb.rfData,
     ((io.in(0).bits.ctrl.src1Type =/= SrcType.pc) && !src1ForwardNextCycle && !src1Forward) -> rf.read(rfSrc1)
   ))
   io.out.bits(0).data.src2 := Mux1H(List(
     (io.in(0).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(0).bits.data.imm,
-    src2ForwardNextCycle -> out1ForwardDataEX, //io.forward.wb.rfData,
-    (src2Forward && !src2ForwardNextCycle) -> out1ForwardDataWB, //io.wb.rfData,
+    src2ForwardNextCycle -> out1_2ForwardDataEX, //io.forward.wb.rfData,
+    (src2Forward && !src2ForwardNextCycle) -> out1_2ForwardDataWB, //io.wb.rfData,
     ((io.in(0).bits.ctrl.src2Type === SrcType.reg) && !src2ForwardNextCycle && !src2Forward) -> rf.read(rfSrc2)
   ))
   io.out.bits(0).data.imm  := io.in(0).bits.data.imm
@@ -119,14 +154,14 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   // out2
   io.out.bits(1).data.src1 := Mux1H(List(
     (io.in(1).bits.ctrl.src1Type === SrcType.pc) -> SignExt(io.in(1).bits.cf.pc, AddrBits),
-    src3ForwardNextCycle -> out2ForwardDataEX,
-    (src3Forward && !src3ForwardNextCycle) -> out2ForwardDataWB,
+    src3ForwardNextCycle -> out2_1ForwardDataEX,
+    (src3Forward && !src3ForwardNextCycle) -> out2_1ForwardDataWB,
     ((io.in(1).bits.ctrl.src1Type =/= SrcType.pc) && !src3ForwardNextCycle && !src3Forward) -> rf.read(rfSrc3)
   ))
   io.out.bits(1).data.src2 := Mux1H(List(
     (io.in(1).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(1).bits.data.imm,
-    src2ForwardNextCycle -> out2ForwardDataEX,
-    (src2Forward && !src2ForwardNextCycle) -> out2ForwardDataWB,
+    src2ForwardNextCycle -> out2_2ForwardDataEX,
+    (src2Forward && !src2ForwardNextCycle) -> out2_2ForwardDataWB,
     ((io.in(1).bits.ctrl.src2Type === SrcType.reg) && !src4ForwardNextCycle && !src4Forward) -> rf.read(rfSrc4)
   ))
   io.out.bits(1).data.imm  := io.in(1).bits.data.imm
@@ -155,6 +190,11 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
     io.in(1).ready := io.out.fire() && io.out.bits(1).pipeline2
   }else{
     io.in(1).ready := false.B
+  }
+
+  Debug(){
+    when(io.out.fire()){printf("[ISU] issue1: pc %x npc %x instr %x src1 %x src2 %x imm %x\n", io.out.bits(0).cf.pc, io.out.bits(0).cf.pnpc, io.out.bits(0).cf.instr, io.out.bits(0).data.src1, io.out.bits(0).data.src2, io.out.bits(0).data.imm)}
+    when(io.out.fire() && io.out.bits(1).pipeline2){printf("[ISU] issue2: pc %x npc %x instr %x src1 %x src2 %x imm %x\n", io.out.bits(1).cf.pc, io.out.bits(1).cf.pnpc, io.out.bits(1).cf.instr, io.out.bits(1).data.src1, io.out.bits(1).data.src2, io.out.bits(1).data.imm)}
   }
 
   // read after write
