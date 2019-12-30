@@ -13,6 +13,7 @@ import device.AXI4RAM
 class DiffTestIO extends Bundle {
   val r = Output(Vec(32, UInt(64.W)))
   val commit = Output(Bool())
+  val isMultiCommit = Output(Bool())
   val thisPC = Output(UInt(64.W))
   val thisINST = Output(UInt(32.W))
   val isMMIO = Output(Bool())
@@ -54,6 +55,7 @@ class NOOPSimTop extends Module {
 
   val difftest = WireInit(0.U.asTypeOf(new DiffTestIO))
   BoringUtils.addSink(difftest.commit, "difftestCommit")
+  BoringUtils.addSink(difftest.isMultiCommit, "difftestMultiCommit")
   BoringUtils.addSink(difftest.thisPC, "difftestThisPC")
   BoringUtils.addSink(difftest.thisINST, "difftestThisINST")
   BoringUtils.addSink(difftest.isMMIO, "difftestIsMMIO")

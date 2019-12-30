@@ -80,7 +80,9 @@ static const char *reg_name[DIFFTEST_NR_REG] = {
 };
 
 int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
-  int isMMIO, int isRVC, uint64_t intrNO, int priviledgeMode) {
+  int isMMIO, int isRVC, uint64_t intrNO, int priviledgeMode, 
+  int isMultiCommit
+  ) {
 
   #define DEBUG_RETIRE_TRACE_SIZE 16
 
@@ -92,6 +94,18 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   static uint64_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static int pc_retire_pointer = 7;
+
+  if (intrNO) {
+    ref_difftest_raise_intr(intrNO);
+  } else {
+    ref_difftest_exec(1);
+  }
+
+  if(isMultiCommit){    
+    ref_difftest_exec(1);
+    ref_difftest_getregs(&ref_r);
+    return 0;
+  }
 
   if (isMMIO) {
     // printf("diff pc: %x isRVC %x\n", this_pc, isRVC);
@@ -106,11 +120,6 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     return 0;
   }
 
-  if (intrNO) {
-    ref_difftest_raise_intr(intrNO);
-  } else {
-    ref_difftest_exec(1);
-  }
 
   ref_difftest_getregs(&ref_r);
 

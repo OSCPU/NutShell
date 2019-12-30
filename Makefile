@@ -63,6 +63,7 @@ VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   --output-split-cfuncs 5000 \
   -I$(abspath $(BUILD_DIR)) \
   --x-assign unique -O3 -CFLAGS "$(EMU_CXXFLAGS)" \
+  --debug --trace \
   -LDFLAGS "$(EMU_LDFLAGS)"
 
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(SIM_TOP).mk

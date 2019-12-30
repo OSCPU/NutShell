@@ -23,7 +23,7 @@ trait HasNOOPParameter {
   val DataBits = XLEN
   val DataBytes = DataBits / 8
   val EnableMultiIssue = true
-  val EnableSuperScalarExec = false
+  val EnableSuperScalarExec = true
 }
 
 trait HasNOOPConst {
@@ -36,7 +36,7 @@ abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst
 
 case class NOOPConfig (
   FPGAPlatform: Boolean = false,
-  EnableDebug: Boolean = false
+  EnableDebug: Boolean = true
 )
 
 object AddressSpace {
