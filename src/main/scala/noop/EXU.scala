@@ -88,6 +88,8 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   io.out.bits(0).decode.cf.instr := io.in.bits(0).cf.instr
   io.out.bits(1).decode.cf.instr := io.in.bits(1).cf.instr
 
+  io.out.bits(1).decode.pipeline2 := io.in.bits(1).pipeline2
+
   io.out.bits(0).decode.cf.redirect <>
     Mux(mou.io.redirect.valid, mou.io.redirect,
       Mux(csr.io.redirect.valid, csr.io.redirect, alu.io.redirect))
