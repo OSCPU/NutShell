@@ -118,9 +118,10 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   io.out.valid := io.in(0).valid && src1Ready && src2Ready
 
   def isBru(func: UInt) = func(4)
+  val inst2IsALUInst = io.in(1).bits.ctrl.fuType === FuType.alu && !isBru(io.in(1).bits.ctrl.fuOpType) && io.in(1).valid
   if(EnableSuperScalarExec){
     // in simple sequential multi issue mode, only alu inst can go through the 2nd pipeline
-    io.out.bits(1).pipeline2 := io.in(1).valid && src3Ready && src4Ready && io.in(1).bits.ctrl.fuType === FuType.alu && !isBru(io.in(1).bits.ctrl.fuOpType)
+    io.out.bits(1).pipeline2 := io.in(1).valid && src3Ready && src4Ready && inst2IsALUInst
   }else{
     io.out.bits(1).pipeline2 := false.B
   }
@@ -200,8 +201,14 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   // read after write
   BoringUtils.addSource(io.in(0).valid && !io.out.valid, "perfCntCondMrawStall")
   BoringUtils.addSource(io.out.valid && !io.out.fire(), "perfCntCondMexuBusy")
-  BoringUtils.addSource(io.out.fire(), "ISUIssue")
-  BoringUtils.addSource(io.out.fire() && io.out.bits(1).pipeline2, "ISU2Issue")
+  BoringUtils.addSource(io.out.fire(), "perfCntCondISUIssue")
+  // io.in(1).valid && src3Ready && src4Ready && io.in(1).bits.ctrl.fuType === FuType.alu && !isBru(io.in(1).bits.ctrl.fuOpType)
+  BoringUtils.addSource(io.out.fire() && !io.out.bits(1).pipeline2, "perfCntCondISU1Issue")
+  BoringUtils.addSource(io.out.fire() && io.out.bits(1).pipeline2, "perfCntCondISU2Issue")
+  BoringUtils.addSource(io.out.fire() && (!src3Ready || !src4Ready) && inst2IsALUInst, "perfCntCondSrc2NotReady")
+  BoringUtils.addSource(io.out.fire() && (src3DependIS || src4DependIS) && inst2IsALUInst, "perfCntCondDst2Conflict")
+  BoringUtils.addSource(io.out.fire() && !inst2IsALUInst, "perfCntCondInst2NotALU")
+  BoringUtils.addSource(io.out.fire() && !io.in(1).valid, "perfCntCondInst2NotReady")
 
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")

@@ -30,7 +30,8 @@ class WBU(implicit val p: NOOPConfig) extends NOOPModule{
   }
 
   BoringUtils.addSource(io.in.valid, "perfCntCondMinstret")
-  BoringUtils.addSource(commitPipeline2, "perfCntMultiCommit")
+  BoringUtils.addSource(commitPipeline2, "perfCntCondMultiCommit")
+  
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(RegNext(io.in.valid), "difftestCommit")
     BoringUtils.addSource(RegNext(commitPipeline2), "difftestMultiCommit")
