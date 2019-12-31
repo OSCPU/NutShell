@@ -35,7 +35,7 @@ abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst
 abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst 
 
 case class NOOPConfig (
-  FPGAPlatform: Boolean = false,
+  FPGAPlatform: Boolean = true,
   EnableDebug: Boolean = true
 )
 
