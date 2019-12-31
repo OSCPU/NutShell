@@ -101,14 +101,14 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
     )
   }
 
-  val out1_1ForwardDataEX = Mux(isDepend(rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
-  val out1_2ForwardDataEX = Mux(isDepend(rfSrc2, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
-  val out2_1ForwardDataEX = Mux(isDepend(rfSrc3, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
-  val out2_2ForwardDataEX = Mux(isDepend(rfSrc4, io.forward(0).wb.rfDest, forwardRfWen(0)), io.forward(0).wb.rfData, io.forward(1).wb.rfData)
-  val out1_1ForwardDataWB = Mux(isDepend(rfSrc1, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
-  val out1_2ForwardDataWB = Mux(isDepend(rfSrc2, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
-  val out2_1ForwardDataWB = Mux(isDepend(rfSrc3, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
-  val out2_2ForwardDataWB = Mux(isDepend(rfSrc4, io.wb(0).rfDest, io.wb(0).rfWen), io.wb(0).rfData, io.wb(1).rfData)
+  val out1_1ForwardDataEX = Mux(isDepend(rfSrc1, io.forward(1).wb.rfDest, forwardRfWen(1)), io.forward(1).wb.rfData, io.forward(0).wb.rfData)
+  val out1_2ForwardDataEX = Mux(isDepend(rfSrc2, io.forward(1).wb.rfDest, forwardRfWen(1)), io.forward(1).wb.rfData, io.forward(0).wb.rfData)
+  val out2_1ForwardDataEX = Mux(isDepend(rfSrc3, io.forward(1).wb.rfDest, forwardRfWen(1)), io.forward(1).wb.rfData, io.forward(0).wb.rfData)
+  val out2_2ForwardDataEX = Mux(isDepend(rfSrc4, io.forward(1).wb.rfDest, forwardRfWen(1)), io.forward(1).wb.rfData, io.forward(0).wb.rfData)
+  val out1_1ForwardDataWB = Mux(isDepend(rfSrc1, io.wb(1).rfDest, io.wb(1).rfWen), io.wb(1).rfData, io.wb(0).rfData)
+  val out1_2ForwardDataWB = Mux(isDepend(rfSrc2, io.wb(1).rfDest, io.wb(1).rfWen), io.wb(1).rfData, io.wb(0).rfData)
+  val out2_1ForwardDataWB = Mux(isDepend(rfSrc3, io.wb(1).rfDest, io.wb(1).rfWen), io.wb(1).rfData, io.wb(0).rfData)
+  val out2_2ForwardDataWB = Mux(isDepend(rfSrc4, io.wb(1).rfDest, io.wb(1).rfWen), io.wb(1).rfData, io.wb(0).rfData)
 
   val sb = new ScoreBoard
   val src1Ready = !sb.isBusy(rfSrc1) || src1ForwardNextCycle || src1Forward
@@ -161,8 +161,8 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   ))
   io.out.bits(1).data.src2 := Mux1H(List(
     (io.in(1).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(1).bits.data.imm,
-    src2ForwardNextCycle -> out2_2ForwardDataEX,
-    (src2Forward && !src2ForwardNextCycle) -> out2_2ForwardDataWB,
+    src4ForwardNextCycle -> out2_2ForwardDataEX,
+    (src4Forward && !src4ForwardNextCycle) -> out2_2ForwardDataWB,
     ((io.in(1).bits.ctrl.src2Type === SrcType.reg) && !src4ForwardNextCycle && !src4Forward) -> rf.read(rfSrc4)
   ))
   io.out.bits(1).data.imm  := io.in(1).bits.data.imm
