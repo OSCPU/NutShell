@@ -95,18 +95,6 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static int pc_retire_pointer = 7;
 
-  if (intrNO) {
-    ref_difftest_raise_intr(intrNO);
-  } else {
-    ref_difftest_exec(1);
-  }
-
-  if(isMultiCommit){    
-    ref_difftest_exec(1);
-    ref_difftest_getregs(&ref_r);
-    return 0;
-  }
-
   if (isMMIO) {
     // printf("diff pc: %x isRVC %x\n", this_pc, isRVC);
     // MMIO accessing should not be a branch or jump, just +2/+4 to get the next pc
@@ -117,9 +105,22 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
     pc_retire_queue[pc_retire_pointer] = this_pc;
     inst_retire_queue[pc_retire_pointer] = this_inst;
+    assert(!isMultiCommit);
     return 0;
   }
 
+
+  if (intrNO) {
+    ref_difftest_raise_intr(intrNO);
+  } else {
+    ref_difftest_exec(1);
+  }
+
+  if(isMultiCommit){    
+    ref_difftest_exec(1);
+    ref_difftest_getregs(&ref_r);
+    // exec 1 more cycle
+  }
 
   ref_difftest_getregs(&ref_r);
 
