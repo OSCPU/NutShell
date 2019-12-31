@@ -54,7 +54,7 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
     io.forward(1).wb.rfWen && io.forward(1).valid
   )
   val dontForward1 = (io.forward(0).fuType =/= FuType.alu) && (io.forward(0).fuType =/= FuType.lsu)
-  val dontForward2 = (io.forward(1).fuType =/= FuType.alu) && (io.forward(1).fuType =/= FuType.lsu)
+  val dontForward2 = (io.forward(0).fuType =/= FuType.alu) && (io.forward(0).fuType =/= FuType.lsu)
   val src3DependIS = isDepend(rfSrc3, rfDest1, io.in(0).bits.ctrl.rfWen)
   val src4DependIS = isDepend(rfSrc4, rfDest1, io.in(0).bits.ctrl.rfWen)
   val src1DependEX = isDepend2(rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
