@@ -745,6 +745,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   )
 	val perfCntCond = List.fill(0x80)(WireInit(false.B))
   (perfCnts zip perfCntCond).map { case (c, e) => { when (e) { c := c + 1.U } } }
+  when(perfCntCond(0xb2b & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
 
   BoringUtils.addSource(WireInit(true.B), "perfCntCondMcycle")
   perfCntList.map { case (name, (addr, boringId)) => {
