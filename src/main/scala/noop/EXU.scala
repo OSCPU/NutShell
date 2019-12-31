@@ -114,7 +114,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   io.out.bits(0).commits(FuType.mdu) := mduOut
   io.out.bits(0).commits(FuType.mou) := 0.U
 
-  io.out.bits(1).commits(FuType.alu) := aluOut
+  io.out.bits(1).commits(FuType.alu) := alu2Out
 
   io.in.ready := !io.in.valid || io.out.fire()
 
