@@ -12,10 +12,11 @@ class WBU(implicit val p: NOOPConfig) extends NOOPModule{
     val redirect = new RedirectIO
   })
 
+  val commitPipeline2 = io.in.valid && io.in.bits(1).decode.pipeline2 && !io.redirect.valid
   io.wb(0).rfWen := io.in.bits(0).decode.ctrl.rfWen && io.in.valid
   io.wb(0).rfDest := io.in.bits(0).decode.ctrl.rfDest
   io.wb(0).rfData := io.in.bits(0).commits(io.in.bits(0).decode.ctrl.fuType)
-  io.wb(1).rfWen := io.in.bits(1).decode.ctrl.rfWen && io.in.valid && io.in.bits(1).decode.pipeline2
+  io.wb(1).rfWen := io.in.bits(1).decode.ctrl.rfWen && commitPipeline2
   io.wb(1).rfDest := io.in.bits(1).decode.ctrl.rfDest
   io.wb(1).rfData := io.in.bits(1).commits(io.in.bits(1).decode.ctrl.fuType)
   io.in.ready := true.B
@@ -29,9 +30,10 @@ class WBU(implicit val p: NOOPConfig) extends NOOPModule{
   }
 
   BoringUtils.addSource(io.in.valid, "perfCntCondMinstret")
+  BoringUtils.addSource(commitPipeline2, "perfCntMultiCommit")
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(RegNext(io.in.valid), "difftestCommit")
-    BoringUtils.addSource(RegNext(io.in.valid && io.in.bits(1).decode.pipeline2), "difftestMultiCommit")
+    BoringUtils.addSource(RegNext(commitPipeline2), "difftestMultiCommit")
     BoringUtils.addSource(RegNext(SignExt(io.in.bits(0).decode.cf.pc, AddrBits)), "difftestThisPC")
     BoringUtils.addSource(RegNext(io.in.bits(0).decode.cf.instr), "difftestThisINST")
     BoringUtils.addSource(RegNext(io.in.bits(0).isMMIO), "difftestIsMMIO")
