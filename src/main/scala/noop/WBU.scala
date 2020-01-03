@@ -24,7 +24,7 @@ class WBU(implicit val p: NOOPConfig) extends NOOPModule{
   io.redirect := io.in.bits(0).decode.cf.redirect
   io.redirect.valid := io.in.bits(0).decode.cf.redirect.valid && io.in.valid
 
-  Debug(true){
+  Debug(){
     when (io.in.valid) { printf("[COMMIT1] TIMER: %d WBU: pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", GTimer(), io.in.bits(0).decode.cf.pc, io.in.bits(0).decode.cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, io.in.bits(0).isMMIO, io.in.bits(0).intrNO) }
     when (io.in.valid && io.in.bits(1).decode.pipeline2) { printf("[COMMIT2] TIMER: %d WBU: pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", GTimer(), io.in.bits(1).decode.cf.pc, io.in.bits(1).decode.cf.instr, io.wb(1).rfWen, io.wb(1).rfDest, io.wb(1).rfData, io.in.bits(1).isMMIO, io.in.bits(1).intrNO) }
   }
@@ -39,6 +39,7 @@ class WBU(implicit val p: NOOPConfig) extends NOOPModule{
     BoringUtils.addSource(RegNext(io.in.bits(0).decode.cf.instr), "difftestThisINST")
     BoringUtils.addSource(RegNext(io.in.bits(0).isMMIO), "difftestIsMMIO")
     BoringUtils.addSource(RegNext(io.in.bits(0).decode.cf.instr(1,0)=/="b11".U), "difftestIsRVC")
+    BoringUtils.addSource(RegNext(io.in.bits(1).decode.cf.instr(1,0)=/="b11".U), "difftestIsRVC2")
     BoringUtils.addSource(RegNext(io.in.bits(0).intrNO), "difftestIntrNO")
   } else {
     BoringUtils.addSource(io.in.valid, "ilaWBUvalid")
