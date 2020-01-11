@@ -733,10 +733,19 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     "Custom6"     -> (0xb20, "Custom6"             ),
     "Custom7"     -> (0xb21, "Custom7"             ),
     "Custom8"     -> (0xb22, "Custom8"             ),
-    "Ml2cacheHit" -> (0xb23, "perfCntCondMl2cacheHit")
+    "Ml2cacheHit" -> (0xb23, "perfCntCondMl2cacheHit"),
+    "ISUIssue"    -> (0xb24, "perfCntCondISUIssue"),
+    "ISU1Issue"   -> (0xb25, "perfCntCondISU1Issue"),
+    "ISU2Issue"   -> (0xb26, "perfCntCondISU2Issue"),
+    "Src2NotReady"-> (0xb27, "perfCntCondSrc2NotReady"),
+    "Dst2Conflict"-> (0xb28, "perfCntCondDst2Conflict"),
+    "Inst2NotALU" -> (0xb29, "perfCntCondInst2NotALU"),
+    "Inst2NoReady"-> (0xb2a, "perfCntCondInst2NotReady"),
+    "MultiCommit" -> (0xb2b, "perfCntCondMultiCommit")
   )
 	val perfCntCond = List.fill(0x80)(WireInit(false.B))
   (perfCnts zip perfCntCond).map { case (c, e) => { when (e) { c := c + 1.U } } }
+  when(perfCntCond(0xb2b & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
 
   BoringUtils.addSource(WireInit(true.B), "perfCntCondMcycle")
   perfCntList.map { case (name, (addr, boringId)) => {

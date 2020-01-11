@@ -80,7 +80,9 @@ static const char *reg_name[DIFFTEST_NR_REG] = {
 };
 
 int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
-  int isMMIO, int isRVC, uint64_t intrNO, int priviledgeMode) {
+  int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, 
+  int isMultiCommit
+  ) {
 
   #define DEBUG_RETIRE_TRACE_SIZE 16
 
@@ -92,12 +94,18 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   static uint64_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static int pc_retire_pointer = 7;
+  #ifdef NO_DIFFTEST
+  return 0;
+  #endif
 
   if (isMMIO) {
     // printf("diff pc: %x isRVC %x\n", this_pc, isRVC);
     // MMIO accessing should not be a branch or jump, just +2/+4 to get the next pc
-    reg_scala[DIFFTEST_THIS_PC] += isRVC ? 2 : 4;
-    nemu_this_pc += isRVC ? 2 : 4;
+    int pc_skip = 0;
+    pc_skip += isRVC ? 2 : 4;
+    pc_skip += isMultiCommit ? (isRVC2 ? 2 : 4) : 0;
+    reg_scala[DIFFTEST_THIS_PC] += pc_skip;
+    nemu_this_pc += pc_skip;
     // to skip the checking of an instruction, just copy the reg state to reference design
     ref_difftest_setregs(reg_scala);
     pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
@@ -106,10 +114,16 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     return 0;
   }
 
+
   if (intrNO) {
     ref_difftest_raise_intr(intrNO);
   } else {
     ref_difftest_exec(1);
+  }
+
+  if(isMultiCommit){    
+    ref_difftest_exec(1);
+    // exec 1 more cycle
   }
 
   ref_difftest_getregs(&ref_r);
