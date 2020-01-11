@@ -7,10 +7,10 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 
 object PipelineVector2Connect {
-  def apply[T <: Data](in1: DecoupledIO[T], in2: DecoupledIO[T], out1: DecoupledIO[T], out2: DecoupledIO[T], flush: Bool, bufferSize: Int) = {
+  def apply[T <: Data](gen: T, in1: DecoupledIO[T], in2: DecoupledIO[T], out1: DecoupledIO[T], out2: DecoupledIO[T], flush: Bool, bufferSize: Int) = {
 
     //ring buffer
-    val dataBuffer = RegInit(VecInit(Seq.fill(bufferSize)(0.U.asTypeOf(new DecodeIO))))
+    val dataBuffer = RegInit(VecInit(Seq.fill(bufferSize)(0.U.asTypeOf(gen))))
     val ringBufferHead = RegInit(0.U(log2Up(bufferSize).W))
     val ringBufferTail = RegInit(0.U(log2Up(bufferSize).W))
     val ringBufferEmpty = ringBufferHead === ringBufferTail
