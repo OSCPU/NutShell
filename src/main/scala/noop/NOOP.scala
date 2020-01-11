@@ -69,12 +69,8 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   }
 
   pipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
-  // PipelineConnect(ibf.io.out, idu.io.in, idu.io.out.fire(), ifu.io.flushVec(1))
-  ibf.io.out1 <> idu.io.in1
-  ibf.io.out2 <> idu.io.in2
-  // val dummyIsuIn = Wire(Flipped(Decoupled(new DecodeIO)))
-  // dummyIsuIn.ready := false.B
-  PipelineVector2Connect(idu.io.out1, idu.io.out2, isu.io.in(0), isu.io.in(1), ifu.io.flushVec(1), 16)
+  PipelineVector2Connect(new CtrlFlowIO, ibf.io.out1, ibf.io.out2, idu.io.in1, idu.io.in2, ifu.io.flushVec(1), 8)
+  PipelineVector2Connect(new DecodeIO, idu.io.out1, idu.io.out2, isu.io.in(0), isu.io.in(1), ifu.io.flushVec(1), 16)
   PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire(), ifu.io.flushVec(2))
   PipelineConnect(exu.io.out, wbu.io.in, true.B, ifu.io.flushVec(3))
   ibf.io.flush := ifu.io.flushVec(1)
