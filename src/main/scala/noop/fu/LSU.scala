@@ -148,7 +148,7 @@ class LSU extends NOOPModule {
     BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
 
     // LSU control FSM state
-    val s_idle :: s_load :: s_lr :: s_sc :: s_amo_l :: s_amo_a :: s_amo_s :: Nil = Enum(7)
+    val s_idle :: s_exec :: s_load :: s_lr :: s_sc :: s_amo_l :: s_amo_a :: s_amo_s :: Nil = Enum(8)
 
     // LSU control FSM
     val state = RegInit(s_idle)
@@ -159,17 +159,21 @@ class LSU extends NOOPModule {
     atomALU.io.src2 := io.wdata
     atomALU.io.func := func
     atomALU.io.isWordOp := atomWidthW
+
+    val addr = RegNext(src1 + src2, state === s_idle)
     
     // StoreQueue
     // TODO: inst fence needs storeQueue to be finished
-    val enableStoreQueue = EnableStoreQueue // StoreQueue is disabled for page fault detection
-    val storeQueue = Module(new Queue(new StoreQueueEntry, 4))
-    storeQueue.io.enq.valid := state === s_idle && storeReq
-    storeQueue.io.enq.bits.src1 := src1
-    storeQueue.io.enq.bits.src2 := src2
-    storeQueue.io.enq.bits.wdata := io.wdata
-    storeQueue.io.enq.bits.func := func
-    storeQueue.io.deq.ready := lsExecUnit.io.out.fire()
+    // val enableStoreQueue = EnableStoreQueue // StoreQueue is disabled for page fault detection
+    // if(enableStoreQueue){
+    //   val storeQueue = Module(new Queue(new StoreQueueEntry, 4))
+    //   storeQueue.io.enq.valid := state === s_idle && storeReq
+    //   storeQueue.io.enq.bits.src1 := src1
+    //   storeQueue.io.enq.bits.src2 := src2
+    //   storeQueue.io.enq.bits.wdata := io.wdata
+    //   storeQueue.io.enq.bits.func := func
+    //   storeQueue.io.deq.ready := lsExecUnit.io.out.fire()
+    // }
     
     lsExecUnit.io.in.valid     := false.B
     lsExecUnit.io.out.ready    := DontCare
@@ -181,59 +185,66 @@ class LSU extends NOOPModule {
     io.in.ready                := false.B
 
     switch (state) {
-      is(s_idle){
-        if(enableStoreQueue){
-          lsExecUnit.io.in.valid     := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.valid, io.in.valid)
-          lsExecUnit.io.out.ready    := io.out.ready 
-          lsExecUnit.io.in.bits.src1 := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.src1, src1)
-          lsExecUnit.io.in.bits.src2 := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.src2, src2)
-          lsExecUnit.io.in.bits.func := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.func, func)
-          lsExecUnit.io.wdata        := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.wdata, io.wdata)
-          io.in.ready                := Mux(storeReq, storeQueue.io.enq.ready, false.B) || scInvalid
-          io.out.valid               := Mux(storeReq, storeQueue.io.enq.ready, false.B) || scInvalid
-        }else{
-          lsExecUnit.io.in.valid     := io.in.valid && !atomReq
-          lsExecUnit.io.out.ready    := io.out.ready 
-          lsExecUnit.io.in.bits.src1 := src1
-          lsExecUnit.io.in.bits.src2 := src2
-          lsExecUnit.io.in.bits.func := func
-          lsExecUnit.io.wdata        := io.wdata
-          io.in.ready                := lsExecUnit.io.out.fire() || scInvalid
-          io.out.valid               := lsExecUnit.io.out.valid  || scInvalid
-        }
+      is(s_idle){ // calculate address 
+        lsExecUnit.io.in.valid     := false.B
+        lsExecUnit.io.out.ready    := DontCare 
+        lsExecUnit.io.in.bits.src1 := DontCare
+        lsExecUnit.io.in.bits.src2 := DontCare
+        lsExecUnit.io.in.bits.func := DontCare
+        lsExecUnit.io.wdata        := DontCare
+        io.in.ready                := false.B || scInvalid
+        io.out.valid               := false.B || scInvalid
+        when(valid){state := s_exec}
 
-        // when(storeReq){
+        // val IndependentAddrCalcState = true
+        // if(!IndependentAddrCalcState){
+        //   lsExecUnit.io.in.valid     := io.in.valid
+        //   lsExecUnit.io.out.ready    := io.out.ready 
+        //   lsExecUnit.io.in.bits.src1 := src1 + src2
+        //   lsExecUnit.io.in.bits.src2 := DontCare
+        //   lsExecUnit.io.in.bits.func := func
+        //   lsExecUnit.io.wdata        := io.wdata
+        //   io.in.ready                := lsExecUnit.io.out.fire() 
+        //   io.out.valid               := lsExecUnit.io.out.valid  
         //   state := s_idle
         // }
-        if(enableStoreQueue){
-          when(loadReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_load)}
-          when(amoReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_amo_l)}
-          when(lrReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_lr)}
-          when(scReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_sc)}
-        }else{
-          when(amoReq){state := s_amo_l}
-          when(lrReq){state := s_lr}
-          when(scReq){state := Mux(scInvalid, s_idle, s_sc)}
-        }
+
+        when(amoReq){state := s_amo_l}
+        when(lrReq){state := s_lr}
+        when(scReq){state := Mux(scInvalid, s_idle, s_sc)}
+        
+      } 
+
+      is(s_exec){
+        lsExecUnit.io.in.valid     := io.in.valid
+        lsExecUnit.io.out.ready    := io.out.ready 
+        lsExecUnit.io.in.bits.src1 := addr
+        lsExecUnit.io.in.bits.src2 := DontCare
+        lsExecUnit.io.in.bits.func := func
+        lsExecUnit.io.wdata        := io.wdata
+        io.in.ready                := lsExecUnit.io.out.fire() 
+        io.out.valid               := lsExecUnit.io.out.valid  
+        assert(!atomReq || !amoReq || !lrReq || !scReq)
+        when(io.out.fire()){state := s_idle}
       }
 
-      is(s_load){
-        lsExecUnit.io.in.valid     := true.B
-        lsExecUnit.io.out.ready    := io.out.ready 
-        lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := src2
-        lsExecUnit.io.in.bits.func := func
-        lsExecUnit.io.wdata        := DontCare
-        io.in.ready                := lsExecUnit.io.out.fire()
-        io.out.valid               := lsExecUnit.io.out.valid
-        when(lsExecUnit.io.out.fire()){state := s_idle}//load finished
-      }
+      // is(s_load){
+      //   lsExecUnit.io.in.valid     := true.B
+      //   lsExecUnit.io.out.ready    := io.out.ready 
+      //   lsExecUnit.io.in.bits.src1 := src1
+      //   lsExecUnit.io.in.bits.src2 := src2
+      //   lsExecUnit.io.in.bits.func := func
+      //   lsExecUnit.io.wdata        := DontCare
+      //   io.in.ready                := lsExecUnit.io.out.fire()
+      //   io.out.valid               := lsExecUnit.io.out.valid
+      //   when(lsExecUnit.io.out.fire()){state := s_idle}//load finished
+      // }
 
       is(s_amo_l){
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := true.B 
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.ld, LSUOpType.lw)
         lsExecUnit.io.wdata        := DontCare
         io.in.ready                := false.B
@@ -264,7 +275,7 @@ class LSU extends NOOPModule {
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.sd, LSUOpType.sw)
         lsExecUnit.io.wdata        := atomMemReg
         io.in.ready                := lsExecUnit.io.out.fire()
@@ -278,7 +289,7 @@ class LSU extends NOOPModule {
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.ld, LSUOpType.lw)
         lsExecUnit.io.wdata        := DontCare
         io.in.ready                := lsExecUnit.io.out.fire()
@@ -292,7 +303,7 @@ class LSU extends NOOPModule {
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.sd, LSUOpType.sw)
         lsExecUnit.io.wdata        := io.wdata
         io.in.ready                := lsExecUnit.io.out.fire()
@@ -337,11 +348,10 @@ class LSU extends NOOPModule {
 class LSExecUnit extends NOOPModule {
   val io = IO(new LSUIO)
 
-  val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
-  def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt = {
+  val (valid, addr, func) = (io.in.valid, io.in.bits.src1, io.in.bits.func)
+  def access(valid: Bool, addr: UInt, func: UInt): UInt = {
     this.valid := valid
-    this.src1 := src1
-    this.src2 := src2
+    this.addr := addr
     this.func := func
     io.out.bits
   }
@@ -364,7 +374,6 @@ class LSExecUnit extends NOOPModule {
   }
 
   val dmem = io.dmem
-  val addr = src1 + src2
   val addrLatch = RegNext(addr)
   val isStore = valid && LSUOpType.isStore(func)
   val partialLoad = !isStore && (func =/= LSUOpType.ld)
