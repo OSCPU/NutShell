@@ -101,7 +101,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out1.bits := DontCare
   io.out1.bits.redirect.valid := false.B
   io.out1.bits.pc := pcRingMeta(ringBufferTail)
-  io.out1.bits.pnpc := Mux(io.out1.bits.brIdx, npcRingMeta(ringBufferTail), io.out1.bits.pc + Mux(dequeueIsRVC(0), 2.U, 4.U))
+  io.out1.bits.pnpc := npcRingMeta(ringBufferTail)
   io.out1.bits.instr := Cat(ringInstBuffer(ringBufferTail+1.U), ringInstBuffer(ringBufferTail))
   io.out1.bits.brIdx := branchRingMeta(ringBufferTail)
   io.out1.bits.crossPageIPFFix := !ipfRingMeta(ringBufferTail) && !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
@@ -120,7 +120,8 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out2.bits := DontCare
   io.out2.bits.redirect.valid := false.B
   io.out2.bits.pc := pcRingMeta(inst2_StartIndex)
-  io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
+  // io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
+  io.out2.bits.pnpc := npcRingMeta(inst2_StartIndex)
   io.out2.bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out2.bits.brIdx := branchRingMeta(inst2_StartIndex)
   io.out2.bits.crossPageIPFFix := !ipfRingMeta(inst2_StartIndex) && !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)

@@ -44,7 +44,7 @@ class CtrlFlowIO extends NOOPBundle {
   val redirect = new RedirectIO
   val exceptionVec = Output(Vec(16, Bool()))
   val intrVec = Output(Vec(12, Bool()))
-  val brIdx = Output(Bool()) // for debug only
+  val brIdx = Output(Bool())
   val instValid = Output(UInt(4.W))
   val crossPageIPFFix = Output(Bool())
 }

@@ -568,7 +568,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val retTarget = Wire(UInt(VAddrBits.W))
   val trapTarget = Wire(UInt(VAddrBits.W))
   io.redirect.valid := (valid && func === CSROpType.jmp) || raiseExceptionIntr || resetSatp
-  io.redirect.target := Mux(resetSatp, io.cfIn.pnpc, Mux(raiseExceptionIntr, trapTarget, retTarget))
+  io.redirect.target := Mux(resetSatp, io.cfIn.pc + 4.U, Mux(raiseExceptionIntr, trapTarget, retTarget))
 
   Debug(){
     when(raiseExceptionIntr){
