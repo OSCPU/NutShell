@@ -7,32 +7,33 @@ import utils._
 import bus.simplebus._
 
 object LSUOpType {
-  def lb   = "b000000".U
-  def lh   = "b000001".U
-  def lw   = "b000010".U
-  def ld   = "b000011".U
-  def lbu  = "b000100".U
-  def lhu  = "b000101".U
-  def lwu  = "b000110".U
-  def sb   = "b001000".U
-  def sh   = "b001001".U
-  def sw   = "b001010".U
-  def sd   = "b001011".U
+  def lb   = "b0000000".U
+  def lh   = "b0000001".U
+  def lw   = "b0000010".U
+  def ld   = "b0000011".U
+  def lbu  = "b0000100".U
+  def lhu  = "b0000101".U
+  def lwu  = "b0000110".U
+  def sb   = "b0001000".U
+  def sh   = "b0001001".U
+  def sw   = "b0001010".U
+  def sd   = "b0001011".U
 
-  def lr      = "b100000".U
-  def sc      = "b100001".U
-  def amoswap = "b100010".U
-  def amoadd  = "b100011".U
-  def amoxor  = "b100100".U
-  def amoand  = "b100101".U
-  def amoor   = "b100110".U
-  def amomin  = "b110111".U
-  def amomax  = "b110000".U
-  def amominu = "b110001".U
-  def amomaxu = "b110010".U
+  def lr      = "b0100000".U
+  def sc      = "b0100001".U
+  def amoswap = "b0100010".U
+  def amoadd  = "b1100011".U
+  def amoxor  = "b0100100".U
+  def amoand  = "b0100101".U
+  def amoor   = "b0100110".U
+  def amomin  = "b0110111".U
+  def amomax  = "b0110000".U
+  def amominu = "b0110001".U
+  def amomaxu = "b0110010".U
   
-  def isStore(func: UInt): Bool = func(3)
+  def isAdd(func: UInt) = func(6)
   def isAtom(func: UInt): Bool = func(5)
+  def isStore(func: UInt): Bool = func(3)
   def isLoad(func: UInt): Bool = !isStore(func) & !isAtom(func)
   def isLR(func: UInt): Bool = func === lr
   def isSC(func: UInt): Bool = func === sc
@@ -63,7 +64,7 @@ class AtomALU extends NOOPModule {
   val io = IO(new NOOPBundle{
     val src1 = Input(UInt(XLEN.W))
     val src2 = Input(UInt(XLEN.W))
-    val func = Input(UInt(6.W))
+    val func = Input(UInt(7.W))
     val isWordOp = Input(Bool())
     val result = Output(UInt(XLEN.W))
   })
@@ -73,7 +74,7 @@ class AtomALU extends NOOPModule {
   val src1 = io.src1
   val src2 = io.src2
   val func = io.func
-  val isAdderSub = (func =/= LSUOpType.amoadd) 
+  val isAdderSub = !LSUOpType.isAdd(func) 
   val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
   val xorRes = src1 ^ src2
   val sltu = !adderRes(XLEN)
@@ -81,7 +82,7 @@ class AtomALU extends NOOPModule {
 
   val res = LookupTreeDefault(func(5, 0), adderRes, List(
     LSUOpType.amoswap -> src2,
-    LSUOpType.amoadd  -> adderRes,
+    // LSUOpType.amoadd  -> adderRes,
     LSUOpType.amoxor  -> xorRes,
     LSUOpType.amoand  -> (src1 & src2),
     LSUOpType.amoor   -> (src1 | src2),
@@ -216,7 +217,7 @@ class LSU extends NOOPModule {
       } 
 
       is(s_exec){
-        lsExecUnit.io.in.valid     := io.in.valid
+        lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready 
         lsExecUnit.io.in.bits.src1 := addr
         lsExecUnit.io.in.bits.src2 := DontCare

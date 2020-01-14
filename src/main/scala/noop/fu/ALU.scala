@@ -7,41 +7,41 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 
 object ALUOpType {
-  def add  = "b000000".U
-  def sll  = "b000001".U
-  def slt  = "b000010".U
-  def sltu = "b000011".U
-  def xor  = "b000100".U
-  def srl  = "b000101".U
-  def or   = "b000110".U
-  def and  = "b000111".U
-  def sub  = "b001000".U
-  def sra  = "b001101".U
+  def add  = "b1000000".U
+  def sll  = "b0000001".U
+  def slt  = "b0000010".U
+  def sltu = "b0000011".U
+  def xor  = "b0000100".U
+  def srl  = "b0000101".U
+  def or   = "b0000110".U
+  def and  = "b0000111".U
+  def sub  = "b0001000".U
+  def sra  = "b0001101".U
 
-  def addw = "b100000".U
-  def subw = "b101000".U
-  def sllw = "b100001".U
-  def srlw = "b100101".U
-  def sraw = "b101101".U
+  def addw = "b1100000".U
+  def subw = "b0101000".U
+  def sllw = "b0100001".U
+  def srlw = "b0100101".U
+  def sraw = "b0101101".U
 
   def isWordOp(func: UInt) = func(5)
 
-  def jal  = "b011000".U
-  def jalr = "b011010".U
-  // def cjalr= "b111010".U // pc + 2 instead of 4
-  def beq  = "b010000".U
-  def bne  = "b010001".U
-  def blt  = "b010100".U
-  def bge  = "b010101".U
-  def bltu = "b010110".U
-  def bgeu = "b010111".U
+  def jal  = "b1011000".U
+  def jalr = "b1011010".U
+  def beq  = "b0010000".U
+  def bne  = "b0010001".U
+  def blt  = "b0010100".U
+  def bge  = "b0010101".U
+  def bltu = "b0010110".U
+  def bgeu = "b0010111".U
 
   // for RAS
-  def call = "b011100".U
-  def ret  = "b011110".U
+  def call = "b1011100".U
+  def ret  = "b1011110".U
 
-  def isBru(func: UInt) = func(4)//[important]
-  def pcPlus2(func: UInt) = func(5)//[important]
+  def isAdd(func: UInt) = func(6)
+  def pcPlus2(func: UInt) = func(5)
+  def isBru(func: UInt) = func(4)
   def isBranch(func: UInt) = !func(3)
   def isJump(func: UInt) = isBru(func) && !isBranch(func)
   def getBranchType(func: UInt) = func(2, 1)
@@ -66,7 +66,8 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
     io.out.bits
   }
 
-  val isAdderSub = (func =/= ALUOpType.add) && (func =/= ALUOpType.addw) && !ALUOpType.isJump(func)
+  // val isAdderSub = (func =/= ALUOpType.add) && (func =/= ALUOpType.addw) && !ALUOpType.isJump(func)
+  val isAdderSub = !ALUOpType.isAdd(func)
   val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
   val xorRes = src1 ^ src2
   val sltu = !adderRes(XLEN)
