@@ -22,7 +22,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   val src3 = io.in.bits(1).data.src1
   val src4 = io.in.bits(1).data.src2
 
-  val pipeline2valid = io.in.valid && !io.flush && io.in.bits(1).pipeline2
+  val pipeline2valid = io.in.valid && !io.flush && io.in.bits(1).pipeline2 && EnableSuperScalarExec.B
 
   val (fuType, fuOpType) = (io.in.bits(0).ctrl.fuType, io.in.bits(0).ctrl.fuOpType)
 
@@ -37,7 +37,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
 
   def isBru(func: UInt) = func(4)
   val alu2 = Module(new ALU)
-  val alu2Out = alu2.access(valid = io.in.valid && !io.flush && io.in.bits(1).pipeline2, src1 = src3, src2 = src4, func = io.in.bits(1).ctrl.fuOpType)
+  val alu2Out = alu2.access(valid = pipeline2valid, src1 = src3, src2 = src4, func = io.in.bits(1).ctrl.fuOpType)
   alu2.io.cfIn := io.in.bits(1).cf
   alu2.io.offset := io.in.bits(1).data.imm
   alu2.io.out.ready := true.B
