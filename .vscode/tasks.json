@@ -1,0 +1,20 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Smoke Test",
+            "type": "shell",
+            "command": "make smoke-test",
+            "options": {
+                "cwd": "${workspaceRoot}/debug"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+        
+    ]
+}
