@@ -43,6 +43,10 @@ object LSUOpType {
   def atomD = "011".U
 }
 
+sealed trait HasLSUConst {
+  val IndependentAddrCalcState = false
+}
+
 class LSUIO extends FunctionUnitIO {
   val wdata = Input(UInt(XLEN.W))
   val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr
@@ -95,7 +99,7 @@ class AtomALU extends NOOPModule {
   io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res)
 }
 
-class LSU extends NOOPModule {
+class LSU extends NOOPModule with HasLSUConst {
   val io = IO(new LSUIO)
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt, dtlbPF: Bool): UInt = {
@@ -161,7 +165,7 @@ class LSU extends NOOPModule {
     atomALU.io.func := func
     atomALU.io.isWordOp := atomWidthW
 
-    val addr = RegNext(src1 + src2, state === s_idle)
+    val addr = if(IndependentAddrCalcState){RegNext(src1 + src2, state === s_idle)}else{DontCare}
     
     // StoreQueue
     // TODO: inst fence needs storeQueue to be finished
@@ -197,18 +201,17 @@ class LSU extends NOOPModule {
         io.out.valid               := false.B || scInvalid
         when(valid){state := s_exec}
 
-        // val IndependentAddrCalcState = true
-        // if(!IndependentAddrCalcState){
-        //   lsExecUnit.io.in.valid     := io.in.valid
-        //   lsExecUnit.io.out.ready    := io.out.ready 
-        //   lsExecUnit.io.in.bits.src1 := src1 + src2
-        //   lsExecUnit.io.in.bits.src2 := DontCare
-        //   lsExecUnit.io.in.bits.func := func
-        //   lsExecUnit.io.wdata        := io.wdata
-        //   io.in.ready                := lsExecUnit.io.out.fire() 
-        //   io.out.valid               := lsExecUnit.io.out.valid  
-        //   state := s_idle
-        // }
+        if(!IndependentAddrCalcState){
+          lsExecUnit.io.in.valid     := io.in.valid && !atomReq
+          lsExecUnit.io.out.ready    := io.out.ready 
+          lsExecUnit.io.in.bits.src1 := src1 + src2
+          lsExecUnit.io.in.bits.src2 := DontCare
+          lsExecUnit.io.in.bits.func := func
+          lsExecUnit.io.wdata        := io.wdata
+          io.in.ready                := lsExecUnit.io.out.fire() || scInvalid
+          io.out.valid               := lsExecUnit.io.out.valid  || scInvalid
+          state := s_idle
+        }
 
         when(amoReq){state := s_amo_l}
         when(lrReq){state := s_lr}
@@ -349,7 +352,7 @@ class LSU extends NOOPModule {
 class LSExecUnit extends NOOPModule {
   val io = IO(new LSUIO)
 
-  val (valid, addr, func) = (io.in.valid, io.in.bits.src1, io.in.bits.func)
+  val (valid, addr, func) = (io.in.valid, io.in.bits.src1, io.in.bits.func) // src1 is used as address
   def access(valid: Bool, addr: UInt, func: UInt): UInt = {
     this.valid := valid
     this.addr := addr
