@@ -29,14 +29,6 @@ class RedirectIO extends NOOPBundle {
   val valid = Output(Bool())
 }
 
-// class IRIDCtrlFlowIO extends NOOPBundle {
-//   val instr = Output(UInt(64.W))
-//   val pc = Output(UInt(VAddrBits.W))
-//   val pnpc = Output(UInt(VAddrBits.W))
-//   val brIdx = Output(UInt(3.W))
-//   val redirect = new RedirectIO
-// }
-
 class CtrlFlowIO extends NOOPBundle {
   val instr = Output(UInt(64.W))
   val pc = Output(UInt(VAddrBits.W))
@@ -123,7 +115,7 @@ class TLBExuIO extends NOOPBundle {
   }
 }
 
-class FrontendIO extends NOOPBundle {
+class InstFetchIO extends NOOPBundle {
   val pc = Output(UInt(VAddrBits.W)) // real PC will be regenerated in IBF 
   val pnpc = Output(UInt(VAddrBits.W))
   val brIdx = Output(UInt(4.W))
@@ -131,4 +123,9 @@ class FrontendIO extends NOOPBundle {
   //above will be used as user bits in icache
   val icachePF = Output(Bool())
   val instr = Output(UInt(64.W))
+}
+
+class ROBTerm extends NOOPBundle {
+  val decode = new DecodeIO
+  // val valid = Output(Bool())
 }

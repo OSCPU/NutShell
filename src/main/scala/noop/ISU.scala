@@ -124,6 +124,9 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   if(EnableSuperScalarExec){
     // in simple sequential multi issue mode, only alu inst can go through the 2nd pipeline
     io.out.bits(1).pipeline2 := io.in(1).valid && src3Ready && src4Ready && inst2IsALUInst
+    if(EnableOutOfOrderExec){
+      io.out.bits(1).pipeline2 := io.in(1).valid
+    }
   }else{
     io.out.bits(1).pipeline2 := false.B
   }

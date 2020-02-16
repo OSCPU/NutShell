@@ -39,7 +39,8 @@ class BPUUpdateReq extends NOOPBundle {
   val isRVC = Output(Bool()) // for ras, save PC+2 to stack if is RVC
 }
 
-class BPU1 extends NOOPModule {
+// nextline predicter generates NPC from current NPC in 1 cycle
+class NLP extends NOOPModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
     val out = new RedirectIO 

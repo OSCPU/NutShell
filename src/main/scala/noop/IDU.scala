@@ -152,22 +152,20 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
 
 class IDU(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   val io = IO(new Bundle {
-    val in1 = Flipped(Decoupled(new CtrlFlowIO))
-    val in2 = Flipped(Decoupled(new CtrlFlowIO))
-    val out1 = Decoupled(new DecodeIO)
-    val out2 = Decoupled(new DecodeIO)
+    val in = Vec(2, Flipped(Decoupled(new CtrlFlowIO)))
+    val out = Vec(2, Decoupled(new DecodeIO))
     val flush = Input(Bool())
   })
   val decoder1  = Module(new Decoder)
   val decoder2  = Module(new Decoder)
-  io.in1 <> decoder1.io.in
-  io.in2 <> decoder2.io.in
-  io.out1 <> decoder1.io.out
-  io.out2 <> decoder2.io.out
+  io.in(0) <> decoder1.io.in
+  io.in(1) <> decoder2.io.in
+  io.out(0) <> decoder1.io.out
+  io.out(1) <> decoder2.io.out
   decoder1.io.flush := io.flush 
   decoder2.io.flush := io.flush
   if(!EnableMultiIssue){
-    io.in2.ready := false.B
+    io.in(1).ready := false.B
     decoder2.io.in.valid := false.B
   }
 

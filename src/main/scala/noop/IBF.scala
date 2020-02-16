@@ -15,9 +15,8 @@ trait HasIBUFConst{
 
 class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new FrontendIO))
-    val out1 = Decoupled(new CtrlFlowIO)
-    val out2 = Decoupled(new CtrlFlowIO)
+    val in = Flipped(Decoupled(new InstFetchIO))
+    val out = Vec(2, Decoupled(new CtrlFlowIO))
     val flush = Input(Bool())
   })
 
@@ -98,44 +97,44 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   (0 to 3).map(i => dequeueIsRVC(i.U) := dequeueInstrVec(i.U)(1,0)=/="b11".U)
 
   //dequeue socket 1
-  io.out1.bits := DontCare
-  io.out1.bits.redirect.valid := false.B
-  io.out1.bits.pc := pcRingMeta(ringBufferTail)
-  io.out1.bits.pnpc := npcRingMeta(ringBufferTail)
-  io.out1.bits.instr := Cat(ringInstBuffer(ringBufferTail+1.U), ringInstBuffer(ringBufferTail))
-  io.out1.bits.brIdx := branchRingMeta(ringBufferTail)
-  io.out1.bits.crossPageIPFFix := !ipfRingMeta(ringBufferTail) && !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
+  io.out(0).bits := DontCare
+  io.out(0).bits.redirect.valid := false.B
+  io.out(0).bits.pc := pcRingMeta(ringBufferTail)
+  io.out(0).bits.pnpc := npcRingMeta(ringBufferTail)
+  io.out(0).bits.instr := Cat(ringInstBuffer(ringBufferTail+1.U), ringInstBuffer(ringBufferTail))
+  io.out(0).bits.brIdx := branchRingMeta(ringBufferTail)
+  io.out(0).bits.crossPageIPFFix := !ipfRingMeta(ringBufferTail) && !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
 
-  io.out1.valid := dequeueIsValid(0) && (dequeueIsRVC(0) || dequeueIsValid(1)) && !io.flush
-  io.out1.bits.exceptionVec.map(_ => false.B)
-  io.out1.bits.exceptionVec(instrPageFault) := ipfRingMeta(ringBufferTail) || !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
-  val dequeueSize1 = Mux(io.out1.fire(), Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
+  io.out(0).valid := dequeueIsValid(0) && (dequeueIsRVC(0) || dequeueIsValid(1)) && !io.flush
+  io.out(0).bits.exceptionVec.map(_ => false.B)
+  io.out(0).bits.exceptionVec(instrPageFault) := ipfRingMeta(ringBufferTail) || !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
+  val dequeueSize1 = Mux(io.out(0).fire(), Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
   Debug(){
-    when(io.out1.fire()){printf("[IBUF] dequeue: bufferhead %x buffertail %x time %d\n", ringBufferHead, ringBufferTail, GTimer())}
-    when(io.out1.fire()){printf("[IBUF]     dequeue1: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out1.bits.instr, io.out1.bits.pc, io.out1.bits.pnpc, io.out1.bits.brIdx, io.out1.bits.exceptionVec(instrPageFault), GTimer())}
+    when(io.out(0).fire()){printf("[IBUF] dequeue: bufferhead %x buffertail %x time %d\n", ringBufferHead, ringBufferTail, GTimer())}
+    when(io.out(0).fire()){printf("[IBUF]     dequeue1: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out(0).bits.instr, io.out(0).bits.pc, io.out(0).bits.pnpc, io.out(0).bits.brIdx, io.out(0).bits.exceptionVec(instrPageFault), GTimer())}
   }
 
   //dequeue socket 2
   val inst2_StartIndex = ringBufferTail + dequeueSize1
-  io.out2.bits := DontCare
-  io.out2.bits.redirect.valid := false.B
-  io.out2.bits.pc := pcRingMeta(inst2_StartIndex)
-  // io.out2.bits.pnpc := Mux(io.out2.bits.brIdx, npcRingMeta(inst2_StartIndex), io.out2.bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
-  io.out2.bits.pnpc := npcRingMeta(inst2_StartIndex)
-  io.out2.bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
-  io.out2.bits.brIdx := branchRingMeta(inst2_StartIndex)
-  io.out2.bits.crossPageIPFFix := !ipfRingMeta(inst2_StartIndex) && !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
+  io.out(1).bits := DontCare
+  io.out(1).bits.redirect.valid := false.B
+  io.out(1).bits.pc := pcRingMeta(inst2_StartIndex)
+  // io.out(1).bits.pnpc := Mux(io.out(1).bits.brIdx, npcRingMeta(inst2_StartIndex), io.out(1).bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
+  io.out(1).bits.pnpc := npcRingMeta(inst2_StartIndex)
+  io.out(1).bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
+  io.out(1).bits.brIdx := branchRingMeta(inst2_StartIndex)
+  io.out(1).bits.crossPageIPFFix := !ipfRingMeta(inst2_StartIndex) && !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
 
   if(EnableMultiIssue){
-    io.out2.valid := dequeueIsValid(dequeueSize1) && (dequeueIsRVC(dequeueSize1) || dequeueIsValid(dequeueSize1 + 1.U)) && !io.flush
+    io.out(1).valid := dequeueIsValid(dequeueSize1) && (dequeueIsRVC(dequeueSize1) || dequeueIsValid(dequeueSize1 + 1.U)) && !io.flush
   }else{
-    io.out2.valid := false.B
+    io.out(1).valid := false.B
   }
-  io.out2.bits.exceptionVec.map(_ => false.B)
-  io.out2.bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex) || !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
-  val dequeueSize2 = Mux(io.out2.fire(), Mux(dequeueIsRVC(dequeueSize1), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
+  io.out(1).bits.exceptionVec.map(_ => false.B)
+  io.out(1).bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex) || !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
+  val dequeueSize2 = Mux(io.out(1).fire(), Mux(dequeueIsRVC(dequeueSize1), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
   Debug(){
-    when(io.out2.fire()){printf("[IBUF]     dequeue2: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out2.bits.instr, io.out2.bits.pc, io.out2.bits.pnpc, io.out2.bits.brIdx, io.out2.bits.exceptionVec(instrPageFault), GTimer())}
+    when(io.out(1).fire()){printf("[IBUF]     dequeue2: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out(1).bits.instr, io.out(1).bits.pc, io.out(1).bits.pnpc, io.out(1).bits.brIdx, io.out(1).bits.exceptionVec(instrPageFault), GTimer())}
   }
 
   val dequeueSize = dequeueSize1 +& dequeueSize2
