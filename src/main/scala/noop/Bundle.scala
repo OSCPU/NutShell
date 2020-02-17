@@ -61,6 +61,14 @@ class CommitIO extends NOOPBundle {
   val commits = Output(Vec(FuType.num, UInt(XLEN.W)))
 }
 
+class OOCommitIO extends NOOPBundle with HasROBConst{
+  val decode = new DecodeIO
+  val isMMIO = Output(Bool())
+  val intrNO = Output(UInt(XLEN.W))
+  val commits = Output(UInt(XLEN.W))
+  val prfidx = Output(UInt(prfAddrWidth.W))
+}
+
 class FunctionUnitIO extends NOOPBundle {
   val in = Flipped(Decoupled(new Bundle {
     val src1 = Output(UInt(XLEN.W))
@@ -128,4 +136,13 @@ class InstFetchIO extends NOOPBundle {
 class ROBTerm extends NOOPBundle {
   val decode = new DecodeIO
   // val valid = Output(Bool())
+}
+
+class RenamedDecodeIO extends NOOPBundle with HasROBConst {
+  val decode = new DecodeIO
+  val prfDest = Output(UInt(prfAddrWidth.W))
+  val prfSrc1 = Output(UInt(prfAddrWidth.W))
+  val prfSrc2 = Output(UInt(prfAddrWidth.W))
+  val src1Rdy = Output(Bool())
+  val src2Rdy = Output(Bool())
 }

@@ -29,6 +29,7 @@ class ScoreBoard extends HasRegFileParameter {
   }
 }
 
+// Sequential Inst Issue Unit 
 class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParameter {
   val io = IO(new Bundle {
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))

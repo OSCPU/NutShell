@@ -6,10 +6,17 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-sealed trait HasROBConst{
+trait HasROBConst{
   // val multiIssue = true
   val robSize = 8
   val robWidth = 2
+  val prfAddrWidth = log2Up(robSize) + 1
+}
+
+object physicalRFTools{
+  def getPRFAddr(robIndex: UInt, bank: UInt): UInt = {
+    Cat(robIndex, bank(0))
+  }
 }
 
 class ROB extends NOOPModule with HasInstrType with HasROBConst{
@@ -23,20 +30,20 @@ class ROB extends NOOPModule with HasInstrType with HasROBConst{
     val index = Output(UInt(log2Up(robSize).W))
   })
 
-  val decode = Vec(robSize, Vec(robWidth, new DecodeIO))
-  val valid = Vec(robSize, Vec(robWidth, Bool()))
-  val commited = Vec(robSize, Vec(robWidth, Bool()))
+  val decode = Vec(robSize, Vec(robWidth, Reg(new DecodeIO)))
+  val valid = Vec(robSize, Vec(robWidth, RegInit(false.B)))
+  val commited = Vec(robSize, Vec(robWidth, Reg(Bool())))
 
   val ringBufferHead = RegInit(0.U(log2Up(robSize).W))
   val ringBufferTail = RegInit(0.U(log2Up(robSize).W))
   val ringBufferEmpty = ringBufferHead === ringBufferTail && !valid(ringBufferHead)(0) && !valid(ringBufferHead)(1)
-  val ringBufferFull = ringBufferTail =/= ringBufferHead + 1.U
+  val ringBufferFull = ringBufferTail === ringBufferHead && (valid(ringBufferHead)(0) || valid(ringBufferHead)(1))
   val ringBufferAllowin = !ringBufferFull 
 
   io.index := ringBufferHead
 
   def forAllROBBanks(func: Int => _) = {
-   List.tabulate(robWidth)(func)
+    List.tabulate(robWidth)(func)
   }
 
   // ROB enqueue
