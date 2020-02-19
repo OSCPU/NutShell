@@ -15,6 +15,7 @@ class CtrlSignalIO extends NOOPBundle {
   val isNoopTrap = Output(Bool())
   val isSrc1Forward = Output(Bool())
   val isSrc2Forward = Output(Bool())
+  val isSpecExec = Output(Bool()) //TODO
 }
 
 class DataSrcIO extends NOOPBundle {
@@ -66,7 +67,7 @@ class OOCommitIO extends NOOPBundle with HasROBConst{
   val isMMIO = Output(Bool())
   val intrNO = Output(UInt(XLEN.W))
   val commits = Output(UInt(XLEN.W))
-  val prfidx = Output(UInt(prfAddrWidth.W))
+  val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
 }
 
 class FunctionUnitIO extends NOOPBundle {
