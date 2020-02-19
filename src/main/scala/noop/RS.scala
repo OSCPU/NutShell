@@ -33,12 +33,10 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
 
   val instRdy = List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i))
 
-  val ringBufferHead = RegInit(0.U(log2Up(rsSize).W)) //TODO
-  val ringBufferTail = RegInit(0.U(log2Up(rsSize).W)) //TODO
-  val ringBufferEmpty = ringBufferHead === ringBufferTail && !valid(ringBufferHead) //TODO
-  val ringBufferFull = ringBufferTail === ringBufferHead && valid(ringBufferHead) //TODO
-  val ringBufferAllowin = !ringBufferFull //TODO
-  val ringBufferReadygo = !ringBufferFull //TODO
+  val rsEmpty = !valid.asUInt.orR
+  val rsFull = valid.asUInt.andR
+  val rsAllowin = !rsFull
+  val rsReadygo = instRdy.foldRight(false.B)((sum, i) => sum|i)
 
   // Listen to Common Data Bus
   // Here we listen to commit signal chosen by ROB?
@@ -62,10 +60,13 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   )
 
   // RS enqueue
-  io.in.ready := ringBufferAllowin
+  io.in.ready := rsAllowin
+  val emptySlot = ~valid.asUInt
+  val enqueueSelect = PriorityEncoder(emptySlot) // TODO: replace PriorityEncoder with other logic
+
   when(io.in.fire()){
-    decode(ringBufferHead) := io.in.bits
-    ringBufferHead := ringBufferHead + 1.U
+    decode(enqueueSelect) := io.in.bits
+    valid(enqueueSelect) := false.B
     prfSrc1 := io.in.bits.prfSrc1
     prfSrc2 := io.in.bits.prfSrc2
     src1Rdy := io.in.bits.src1Rdy
@@ -75,18 +76,12 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   }
 
   // RS dequeue
-  io.out.valid := false.B //TODO
+  io.out.valid := rsReadygo
+  val dequeueSelect = PriorityEncoder(instRdy) // TODO: replace PriorityEncoder with other logic
   when(io.out.fire()){
-    //TODO
+    valid(dequeueSelect) := false.B
   }
 
-  val EnableOutOfOrderDequeue = true
-  val dequeueSelect = 
-    if(EnableOutOfOrderDequeue){
-      PriorityEncoder(instRdy) // TODO: replace PriorityEncoder with other logic
-    }else{
-      ringBufferTail
-    }
   io.out.bits.decode := decode(dequeueSelect)
   io.out.bits.prfDest := prfDest(dequeueSelect)
   io.out.bits.prfSrc1 := DontCare
