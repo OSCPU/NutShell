@@ -23,9 +23,9 @@ object physicalRFTools{
 class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasROBConst{
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
-    val out = Vec(robWidth, Decoupled(new DecodeIO))
-    val commit = Vec(2, Flipped(Decoupled(new OOCommitIO)))
-    val wb = Vec(2, new WriteBackIO)
+    // val out = Vec(robWidth, Decoupled(new DecodeIO))
+    val commit = Vec(robWidth, Flipped(Decoupled(new OOCommitIO)))
+    val wb = Vec(robWidth, new WriteBackIO)
     val redirect = new RedirectIO
     val flush = Input(Bool())
     val index = Output(UInt(log2Up(robSize).W))
@@ -42,28 +42,19 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     val rvalid = Output(Vec(robWidth * 2, Bool()))
     val rcommited = Output(Vec(robWidth * 2, Bool()))
 
-    // RMT
-    // val rarf = Input(Vec(robWidth * 2, UInt(5.W)))
-    // val rprf = Output(Vec(robWidth * 2, UInt(prfAddrWidth.W)))
-
   })
 
   val decode = Vec(robSize, Vec(robWidth, Reg(new DecodeIO)))
   val valid = Vec(robSize, Vec(robWidth, RegInit(false.B)))
   val commited = Vec(robSize, Vec(robWidth, Reg(Bool())))
   val redirect = Vec(robSize, Vec(robWidth, Reg(new RedirectIO)))
-  // val redirectTarget = Vec(robSize, Vec(robWidth, Reg(UInt(VAddrBits.W))))
   val isMMIO = Vec(robSize, Vec(robWidth, Reg(Bool())))
   val intrNO = Vec(robSize, Vec(robWidth, Reg(UInt(XLEN.W))))
   val prf = Mem(robSize * robWidth, UInt(XLEN.W))
-  val lsexc = Vec(robSize, Vec(robWidth, Reg(Bool()))) // load/store exception bit
+
   // Almost all int/exceptions can be detected at decode stage, excepting for load/store related exception.
-  // In NOOP-Argo's backend, non-l/s int/exc will be sent dircetly to CSR,
-  // while l/s exc has a special lsexc bit in ROB.
-  // Detailed exception info is stored in independent lsexcReg to minimize space cost.
-  // When ROB trys to retire an inst with lsexc bit, it will flush itself, read detailed info from lsexcReg,
-  // then send a pseudoinst to CSR to trigger exception.
-  // See `ROB-retire` for further information.
+  // In NOOP-Argo's backend, non-l/s int/exc will be sent dircetly to CSR when dispatch,
+  // while l/s exc will be sent to CSR by LSU.
 
   val ringBufferHead = RegInit(0.U(log2Up(robSize).W))
   val ringBufferTail = RegInit(0.U(log2Up(robSize).W))
@@ -92,6 +83,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   })
   io.rvalid <> rmt.io.rvalid
   io.rcommited <> rmt.io.rcommited
+  rmt.io.cen := 0.U
+  rmt.io.cprf := DontCare
+  rmt.io.rten := 0.U
+  rmt.io.rtprf := DontCare
+  rmt.io.flush := io.flush
 
   // Dispatch logic
   // ROB enqueue
@@ -102,11 +98,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     forAllROBBanks((i: Int) => valid(ringBufferHead)(i) := io.in(i).valid)
     forAllROBBanks((i: Int) => commited(ringBufferHead)(i) := false.B)
     forAllROBBanks((i: Int) => redirect(ringBufferHead)(i) := false.B)
-    forAllROBBanks((i: Int) => 
-      when(io.in(i).bits.ctrl.rfWen){
-
-      }
-    )
+    // forAllROBBanks((i: Int) => when(io.in(i).bits.ctrl.rfWen){})
   }
   forAllROBBanks((i: Int) => io.in(i).ready := ringBufferAllowin)
 
@@ -121,7 +113,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     for(j <- (0 to robWidth)){
       val robIdx = Cat(i.U, j.U)
       for(k <- (0 to robWidth)){
-        when(valid(i)(j) && io.commit(k).bits.prfidx === robIdx){
+        when(valid(i)(j) && io.commit(k).bits.prfidx === robIdx && io.commit(k).valid){
           assert(!commited(i)(j))
           // Mark an ROB term as commited
           commited(i)(j) := true.B
@@ -132,6 +124,12 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           intrNO(i)(j) := io.commit(k).bits.intrNO
           // Write redirect info
           redirect(i)(j) := io.commit(k).bits.decode.cf.redirect
+          // Update rmt
+          // TODO: merge RMT with ROB
+          when(io.commit(k).bits.decode.ctrl.rfWen){
+            rmt.io.cen(k) := true.B
+            rmt.io.cprf(k) := Cat(i.U, j.U)
+          }
         }
       }
     }
@@ -147,12 +145,14 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   val tailTermEmpty = !valid(ringBufferTail).asUInt.orR
   val retireATerm = tailBankNotUsed.foldRight(true.B)((sum, i) => sum & i) && !tailTermEmpty
   when(retireATerm){
-    forAllROBBanks((i: Int) => 
+    forAllROBBanks((i: Int) =>{
       valid(ringBufferTail)(i) := false.B
-      // when(decode(ringBufferTail)(i).ctrl.rfWen){
-      //   // TODO: free prf in EXU (update RMT)
-      // }
-    )
+      // free prf (update RMT)
+      when(decode(ringBufferTail)(i).ctrl.rfWen){
+        rmt.io.rten(i) := true.B
+        rmt.io.rtprf(i) := Cat(ringBufferTail, i.U)
+      }
+    })
   }
 
   // speculative execution
@@ -163,7 +163,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // when speculated branch enters ROB, add current reg map into rmq
   // when a speculated branch inst retires, delete it from rmq
   // TODO
-  rmq.io.enq.valid := List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.isSpecExec).foldRight(false.B)((sum, i) => sum | i)
+  rmq.io.enq.valid := List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.isSpecExec).foldRight(false.B)((sum, i) => sum | i) // when(io.in(0).ctrl.isSpecExec)
   rmq.io.enq.bits := DontCare //TODO
   rmq.io.deq.ready := List.tabulate(robWidth)(i => 
     valid(ringBufferTail)(i) && decode(ringBufferTail)(i).ctrl.isSpecExec
@@ -182,18 +182,10 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // retire: trigger exception
   // Only l/s exception will trigger ROB flush
   // Other exception/interrupt will be stalled by Dispatch Unit until ROB is empty
-  // TODO
 
-  // l/s exception detection
-  // TODO
-  // CSR gets decode from io.lsexc.bits
-  io.lsexc.valid := List.tabulate(robWidth)(i => 
-    valid(ringBufferTail)(i) && decode(ringBufferTail)(i).ctrl.isSpecExec
-  ).foldRight(false.B)((sum, i) => sum || i)
-  io.lsexc.bits := Mux(decode(ringBufferTail)(0).ctrl.isSpecExec,
-    decode(ringBufferTail)(0),
-    decode(ringBufferTail)(1)
-  )// TODO: currently only support robWidth = 2
+  // Currently, agu(lsu) will send exception directly to CSR,
+  // After sending exception signal, LSU will not commit this inst.
+  // The inst which caused exception will be commited by CSR.
 
   // Raise decoupled store request
   // If l/s are decoupled, store request is sent to store buffer here.
@@ -221,6 +213,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   }
 
   val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1)
+  val firstValidInst = Mux(valid(ringBufferTail)(0), 0.U, 1.U)
   BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
   BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
   
@@ -228,15 +221,15 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     // TODO: fix debug
     BoringUtils.addSource(RegNext(retireATerm), "difftestCommit")
     BoringUtils.addSource(RegNext(retireMultiTerms), "difftestMultiCommit")
-    BoringUtils.addSource(RegNext(SignExt(decode(ringBufferTail)(0).cf.pc, AddrBits)), "difftestThisPC")
+    BoringUtils.addSource(RegNext(SignExt(decode(ringBufferTail)(firstValidInst).cf.pc, AddrBits)), "difftestThisPC")
     // BoringUtils.addSource(RegNext(SignExt(decode(ringBufferTail)(1).cf.pc, AddrBits)), "difftestThisPC2")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(0).cf.instr), "difftestThisINST")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "difftestThisINST")
     // BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr), "difftestThisINST2")
-    BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0)), "difftestIsMMIO")
+    BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0)), "difftestIsMMIO") //TODO
     // BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(1)), "difftestIsMMIO2")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(0).cf.instr(1,0)=/="b11".U), "difftestIsRVC1")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr(1,0)=/="b11".U), "difftestIsRVC1")
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr(1,0)=/="b11".U), "difftestIsRVC2")
-    BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(0)), "difftestIntrNO")
+    BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
     // BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(1)), "difftestIntrNO2")
   } else {
     BoringUtils.addSource(DontCare, "ilaWBUvalid")
