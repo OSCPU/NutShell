@@ -20,7 +20,7 @@ object physicalRFTools{
   }
 }
 
-class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasROBConst{
+class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasROBConst with HasRegFileParameter{
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
     // val out = Vec(robWidth, Decoupled(new DecodeIO))
@@ -68,26 +68,19 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
 
   io.index := ringBufferHead
 
-  // Register Map
-  val rmt = Module(new RMT)
-  rmt.io.wen := 0.U
-  forAllROBBanks((i: Int) => rmt.io.warf := io.in(i).bits.ctrl.rfDest)
-  forAllROBBanks((i: Int) => rmt.io.wprf := Cat(io.index, i.U))
-  forAllROBBanks((i: Int) => rmt.io.wen := io.in(i).bits.ctrl.rfWen)
-  
+  // Register Map  
+  val rmtMap = Mem(NRReg, UInt(prfAddrWidth.W))
+  val rmtValid = Vec(NRReg, RegInit(false.B))
+  val rmtCommited = Vec(NRReg, RegInit(false.B))
+
   forAllROBBanks((i: Int) => {
-    rmt.io.rarf(2*i)   := io.in(i).bits.ctrl.rfSrc1
-    rmt.io.rarf(2*i+1) := io.in(i).bits.ctrl.rfSrc2
-    io.rprf(2*i)   := prf(rmt.io.rprf(2*i))
-    io.rprf(2*i+1) := prf(rmt.io.rprf(2*i+1))
+    io.rprf(2*i)        := rmtMap(io.in(i).bits.ctrl.rfSrc1)
+    io.rprf(2*i+1)      := rmtMap(io.in(i).bits.ctrl.rfSrc2)
+    io.rvalid(2*i)      := rmtValid(io.in(i).bits.ctrl.rfSrc1)
+    io.rvalid(2*i+1)    := rmtValid(io.in(i).bits.ctrl.rfSrc2)
+    io.rcommited(2*i)   := rmtCommited(io.in(i).bits.ctrl.rfSrc1)
+    io.rcommited(2*i+1) := rmtCommited(io.in(i).bits.ctrl.rfSrc2)
   })
-  io.rvalid <> rmt.io.rvalid
-  io.rcommited <> rmt.io.rcommited
-  rmt.io.cen := 0.U
-  rmt.io.cprf := DontCare
-  rmt.io.rten := 0.U
-  rmt.io.rtprf := DontCare
-  rmt.io.flush := io.flush
 
   // Dispatch logic
   // ROB enqueue
@@ -98,7 +91,13 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     forAllROBBanks((i: Int) => valid(ringBufferHead)(i) := io.in(i).valid)
     forAllROBBanks((i: Int) => commited(ringBufferHead)(i) := false.B)
     forAllROBBanks((i: Int) => redirect(ringBufferHead)(i) := false.B)
-    // forAllROBBanks((i: Int) => when(io.in(i).bits.ctrl.rfWen){})
+    forAllROBBanks((i: Int) => 
+      when(io.in(i).valid && io.in(i).bits.ctrl.rfWen){
+        rmtMap(io.in(i).bits.ctrl.rfDest) := Cat(ringBufferHead, i.U)
+        rmtValid(io.in(i).bits.ctrl.rfDest) := true.B
+        rmtCommited(io.in(i).bits.ctrl.rfDest) := false.B
+      }
+    )
   }
   forAllROBBanks((i: Int) => io.in(i).ready := ringBufferAllowin)
 
@@ -127,8 +126,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           // Update rmt
           // TODO: merge RMT with ROB
           when(io.commit(k).bits.decode.ctrl.rfWen){
-            rmt.io.cen(k) := true.B
-            rmt.io.cprf(k) := Cat(i.U, j.U)
+            rmtCommited(Cat(i.U, j.U)) := true.B
           }
         }
       }
@@ -149,8 +147,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       valid(ringBufferTail)(i) := false.B
       // free prf (update RMT)
       when(decode(ringBufferTail)(i).ctrl.rfWen){
-        rmt.io.rten(i) := true.B
-        rmt.io.rtprf(i) := Cat(ringBufferTail, i.U)
+        rmtValid(Cat(ringBufferTail, i.U)) := false.B
       }
     })
   }
@@ -244,6 +241,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     ringBufferHead := 0.U
     ringBufferTail := 0.U
     List.tabulate(robSize)(i => valid(i) := 0.U) // set valid to 0
+    List.tabulate(NRReg)(i => rmtValid(i) := false.B) // flush rmt
   }
 
 }
