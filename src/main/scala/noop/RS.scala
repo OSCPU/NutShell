@@ -20,15 +20,16 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
     val flush = Input(Bool())
   })
 
-  val decode = Vec(rsSize, Reg(new RenamedDecodeIO)) // TODO: decouple DataSrcIO from DecodeIO
-  val valid = Vec(rsSize, RegInit(false.B))
-  val src1Rdy = Vec(rsSize, RegInit(false.B))
-  val src2Rdy = Vec(rsSize, RegInit(false.B))
-  val prfDest = Vec(rsSize, Reg(UInt(prfAddrWidth.W)))
-  val prfSrc1 = Vec(rsSize, Reg(UInt(prfAddrWidth.W)))
-  val prfSrc2 = Vec(rsSize, Reg(UInt(prfAddrWidth.W)))
-  val src1 = Vec(rsSize, Reg(UInt(XLEN.W)))
-  val src2 = Vec(rsSize, Reg(UInt(XLEN.W)))
+  val decode  = Mem(rsSize, new RenamedDecodeIO) // TODO: decouple DataSrcIO from DecodeIO
+  // val decode  = Reg(Vec(rsSize, new RenamedDecodeIO)) // TODO: decouple DataSrcIO from DecodeIO
+  val valid   = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
+  val src1Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
+  val src2Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
+  // val prfDest = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
+  val prfSrc1 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
+  val prfSrc2 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
+  val src1    = Reg(Vec(rsSize, UInt(XLEN.W)))
+  val src2    = Reg(Vec(rsSize, UInt(XLEN.W)))
 //   val imm = Vec(rsSize, Reg(UInt(XLEN.W)))
 
   val instRdy = List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i))
@@ -67,12 +68,12 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   when(io.in.fire()){
     decode(enqueueSelect) := io.in.bits
     valid(enqueueSelect) := false.B
-    prfSrc1 := io.in.bits.prfSrc1
-    prfSrc2 := io.in.bits.prfSrc2
-    src1Rdy := io.in.bits.src1Rdy
-    src2Rdy := io.in.bits.src2Rdy
-    src1 := io.in.bits.decode.data.src1
-    src2 := io.in.bits.decode.data.src2
+    prfSrc1(enqueueSelect) := io.in.bits.prfSrc1
+    prfSrc2(enqueueSelect) := io.in.bits.prfSrc2
+    src1Rdy(enqueueSelect) := io.in.bits.src1Rdy
+    src2Rdy(enqueueSelect) := io.in.bits.src2Rdy
+    src1(enqueueSelect) := io.in.bits.decode.data.src1
+    src2(enqueueSelect) := io.in.bits.decode.data.src2
   }
 
   // RS dequeue
@@ -82,9 +83,10 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
     valid(dequeueSelect) := false.B
   }
 
-  io.out.bits.decode := decode(dequeueSelect)
-  io.out.bits.prfDest := prfDest(dequeueSelect)
-  io.out.bits.prfSrc1 := DontCare
-  io.out.bits.prfSrc2 := DontCare
+  List.tabulate(rsCommitWidth)(i => io.commit(i).ready := DontCare)
+  io.out.bits := decode(dequeueSelect)
+  // io.out.bits.prfDest := prfDest(dequeueSelect)
+  // io.out.bits.prfSrc1 := DontCare
+  // io.out.bits.prfSrc2 := DontCare
 
 }
