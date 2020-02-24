@@ -7,7 +7,7 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 
 trait HasRSConst{
-  val rsSize = 2
+  val rsSize = 4
   val rsCommitWidth = 2
 }
 
@@ -18,6 +18,7 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
     val out = Decoupled(new RenamedDecodeIO)
     val commit = Vec(rsCommitWidth, Flipped(Decoupled(new OOCommitIO)))
     val flush = Input(Bool())
+    val empty = Output(Bool())
   })
 
   val decode  = Mem(rsSize, new RenamedDecodeIO) // TODO: decouple DataSrcIO from DecodeIO
@@ -62,6 +63,7 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
 
   // RS enqueue
   io.in.ready := rsAllowin
+  io.empty := rsEmpty
   val emptySlot = ~valid.asUInt
   val enqueueSelect = PriorityEncoder(emptySlot) // TODO: replace PriorityEncoder with other logic
 
@@ -85,6 +87,8 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
 
   List.tabulate(rsCommitWidth)(i => io.commit(i).ready := DontCare)
   io.out.bits := decode(dequeueSelect)
+  io.out.bits.decode.data.src1 := src1(dequeueSelect)
+  io.out.bits.decode.data.src2 := src2(dequeueSelect)
   // io.out.bits.prfDest := prfDest(dequeueSelect)
   // io.out.bits.prfSrc1 := DontCare
   // io.out.bits.prfSrc2 := DontCare

@@ -28,6 +28,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     val wb = Vec(robWidth, new WriteBackIO)
     val redirect = new RedirectIO
     val flush = Input(Bool())
+    val empty = Output(Bool())
     val index = Output(UInt(log2Up(robSize).W))
 
     // to CSR
@@ -73,6 +74,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   }
 
   io.index := ringBufferHead
+  io.empty := ringBufferEmpty
 
   // Register Map  
   val rmtMap = Mem(NRReg, UInt(prfAddrWidth.W))
@@ -233,7 +235,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     // BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr), "difftestThisINST2")
     BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0)), "difftestIsMMIO") //TODO
     // BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(1)), "difftestIsMMIO2")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr(1,0)=/="b11".U), "difftestIsRVC1")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr(1,0)=/="b11".U), "difftestIsRVC")
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr(1,0)=/="b11".U), "difftestIsRVC2")
     BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
     // BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(1)), "difftestIntrNO2")
