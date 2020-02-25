@@ -16,7 +16,7 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
-    val commit = Vec(rsCommitWidth, Flipped(Decoupled(new OOCommitIO)))
+    val cdb = Vec(rsCommitWidth, Flipped(Valid(new OOCommitIO)))
     val flush = Input(Bool())
     val empty = Output(Bool())
   })
@@ -47,15 +47,15 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   List.tabulate(rsSize)(i => 
     when(valid(i)){
       List.tabulate(rsCommitWidth)(j =>
-        when(!src1Rdy(i) && src1(i) === io.commit(j).bits.prfidx && io.commit(j).valid){
+        when(!src1Rdy(i) && src1(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
             src1Rdy(i) := true.B
-            src1(i) := io.commit(j).bits.commits
+            src1(i) := io.cdb(j).bits.commits
         }
       )
       List.tabulate(rsCommitWidth)(j =>
-        when(!src2Rdy(i) && src2(i) === io.commit(j).bits.prfidx && io.commit(j).valid){
+        when(!src2Rdy(i) && src2(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
             src2Rdy(i) := true.B
-            src2(i) := io.commit(j).bits.commits
+            src2(i) := io.cdb(j).bits.commits
         }
       )
     }
@@ -69,7 +69,7 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
 
   when(io.in.fire()){
     decode(enqueueSelect) := io.in.bits
-    valid(enqueueSelect) := false.B
+    valid(enqueueSelect) := true.B
     prfSrc1(enqueueSelect) := io.in.bits.prfSrc1
     prfSrc2(enqueueSelect) := io.in.bits.prfSrc2
     src1Rdy(enqueueSelect) := io.in.bits.src1Rdy
@@ -85,7 +85,6 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
     valid(dequeueSelect) := false.B
   }
 
-  List.tabulate(rsCommitWidth)(i => io.commit(i).ready := DontCare)
   io.out.bits := decode(dequeueSelect)
   io.out.bits.decode.data.src1 := src1(dequeueSelect)
   io.out.bits.decode.data.src2 := src2(dequeueSelect)
