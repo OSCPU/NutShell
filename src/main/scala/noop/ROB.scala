@@ -38,8 +38,8 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     val scommit = Output(Bool())
 
     // PRF
-    // val arprf = Input(Vec(robWidth, UInt(prfAddrWidth.W))) // read from decode
-    val rprf = Output(Vec(robWidth * 2, UInt(XLEN.W)))
+    val aprf = Output(Vec(robWidth * 2, UInt(prfAddrWidth.W))) // prf addr for current enqueue inst
+    val rprf = Output(Vec(robWidth * 2, UInt(XLEN.W))) // prf value data for current enqueue inst
     val rvalid = Output(Vec(robWidth * 2, Bool()))
     val rcommited = Output(Vec(robWidth * 2, Bool()))
 
@@ -79,37 +79,23 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // Register Map  
   val rmtMap = Mem(NRReg, UInt(prfAddrWidth.W))
   val rmtValid = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
-  val rmtCommited = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
+  // val rmtCommited = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
 
   forAllROBBanks((i: Int) => {
-    io.rprf(2*i)        := rmtMap(io.in(i).bits.ctrl.rfSrc1)
-    io.rprf(2*i+1)      := rmtMap(io.in(i).bits.ctrl.rfSrc2)
+    io.aprf(2*i)        := rmtMap(io.in(i).bits.ctrl.rfSrc1)
+    io.aprf(2*i+1)      := rmtMap(io.in(i).bits.ctrl.rfSrc2)
+    io.rprf(2*i)        := prf(io.aprf(2*i))
+    io.rprf(2*i+1)      := prf(io.aprf(2*i+1))
     io.rvalid(2*i)      := rmtValid(io.in(i).bits.ctrl.rfSrc1)
     io.rvalid(2*i+1)    := rmtValid(io.in(i).bits.ctrl.rfSrc2)
-    io.rcommited(2*i)   := rmtCommited(io.in(i).bits.ctrl.rfSrc1)
-    io.rcommited(2*i+1) := rmtCommited(io.in(i).bits.ctrl.rfSrc2)
+    io.rcommited(2*i)   := commited(io.aprf(2*i)>>1)(io.aprf(2*i)(0))
+    io.rcommited(2*i+1) := commited(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0))
   })
 
-  // Dispatch logic
-  // ROB enqueue
-  val validEnqueueRequest = List.tabulate(robWidth)(i => io.in(i).valid).foldRight(false.B)((sum,i)=>sum|i) //io.in(0).valid || io.in(1).valid
-  when(validEnqueueRequest && ringBufferAllowin){
-    ringBufferHead := ringBufferHead + 1.U
-    forAllROBBanks((i: Int) => decode(ringBufferHead)(i) := io.in(i).bits)
-    forAllROBBanks((i: Int) => valid(ringBufferHead)(i) := io.in(i).valid)
-    forAllROBBanks((i: Int) => commited(ringBufferHead)(i) := false.B)
-    forAllROBBanks((i: Int) => redirect(ringBufferHead)(i).valid := false.B)
-    forAllROBBanks((i: Int) => 
-      when(io.in(i).valid && io.in(i).bits.ctrl.rfWen){
-        rmtMap(io.in(i).bits.ctrl.rfDest) := Cat(ringBufferHead, i.U)
-        rmtValid(io.in(i).bits.ctrl.rfDest) := true.B
-        rmtCommited(io.in(i).bits.ctrl.rfDest) := false.B
-      }
-    )
-  }
-  forAllROBBanks((i: Int) => io.in(i).ready := ringBufferAllowin)
-
+  //---------------------------------------------------------
   // Commit logic
+  //---------------------------------------------------------
+
   // commit to ROB
   // ROB listens to CDB (common data bus), i.e. CommitIO
   // An ROB term will be marked as commited after that inst was commited to CDB
@@ -134,15 +120,17 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           redirect(i)(j) := io.cdb(k).bits.decode.cf.redirect
           // Update rmt
           // TODO: merge RMT with ROB
-          when(io.cdb(k).bits.decode.ctrl.rfWen){
-            rmtCommited(Cat(i.U, j.U)) := true.B
-          }
+          // when(io.cdb(k).bits.decode.ctrl.rfWen){
+          //   rmtCommited(robIdx) := true.B
+          // }
         }
       }
     }
   }
 
+  //---------------------------------------------------------
   // Retire logic
+  //---------------------------------------------------------
 
   // ROB Retire
   // We write back at most #bank reg results back to arch-rf.
@@ -157,9 +145,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       valid(ringBufferTail)(i) := false.B
       // free prf (update RMT)
       when(decode(ringBufferTail)(i).ctrl.rfWen){
-        rmtValid(Cat(ringBufferTail, i.U)) := false.B
+        //TODO: make it prettier
+        rmtValid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
       }
     })
+    ringBufferTail := ringBufferTail + 1.U
   }
 
   // speculative execution
@@ -213,6 +203,28 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     io.wb(i).rfData := prf(Cat(ringBufferTail, i.U))
   }
 
+  //---------------------------------------------------------
+  // Dispatch logic
+  //---------------------------------------------------------
+
+  // ROB enqueue
+  val validEnqueueRequest = List.tabulate(robWidth)(i => io.in(i).valid).foldRight(false.B)((sum,i)=>sum|i) //io.in(0).valid || io.in(1).valid
+  when(validEnqueueRequest && ringBufferAllowin){
+    ringBufferHead := ringBufferHead + 1.U
+    forAllROBBanks((i: Int) => decode(ringBufferHead)(i) := io.in(i).bits)
+    forAllROBBanks((i: Int) => valid(ringBufferHead)(i) := io.in(i).valid)
+    forAllROBBanks((i: Int) => commited(ringBufferHead)(i) := false.B)
+    forAllROBBanks((i: Int) => redirect(ringBufferHead)(i).valid := false.B)
+    forAllROBBanks((i: Int) => 
+      when(io.in(i).valid && io.in(i).bits.ctrl.rfWen){
+        rmtMap(io.in(i).bits.ctrl.rfDest) := Cat(ringBufferHead, i.U)
+        rmtValid(io.in(i).bits.ctrl.rfDest) := true.B
+        // rmtCommited(io.in(i).bits.ctrl.rfDest) := false.B
+      }
+    )
+  }
+  forAllROBBanks((i: Int) => io.in(i).ready := ringBufferAllowin)
+
   // Generate Debug Info
   Debug(){
     when (io.cdb(0).valid){printf("[COMMIT1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", GTimer(), io.cdb(0).bits.decode.cf.pc, io.cdb(0).bits.decode.cf.instr, io.cdb(0).bits.decode.ctrl.rfWen, io.cdb(0).bits.decode.ctrl.rfDest, io.cdb(0).bits.commits)}
@@ -242,7 +254,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     for(i <- 0 to (NRReg - 1)){
       if(i % 6 == 0)printf("\n")
       when(rmtValid(i)){
-        printf("%d -> %d %b  ", i.U, rmtMap(i), rmtCommited(i))
+        printf("%d -> %d %b  ", i.U, rmtMap(i), commited(i.U>>1)(i.U(0)))
       }
     }
     printf("\n")
