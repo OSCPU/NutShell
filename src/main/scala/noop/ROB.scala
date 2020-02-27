@@ -197,10 +197,17 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
 
   // Arch-RF write back
   for(i <- (0 to robWidth - 1)){
-    val haveRedirect = List.tabulate(i + 1)(j => redirect(ringBufferTail)(j).valid && valid(j)(ringBufferTail)).foldRight(false.B)((sum, i) => sum|i)
-    io.wb(i).rfWen := retireATerm && decode(ringBufferTail)(i).ctrl.rfWen && valid(ringBufferTail)(i) && !haveRedirect
+    // val haveRedirect = List.tabulate(i + 1)(j => redirect(ringBufferTail)(j).valid && valid(ringBufferTail)(j)).foldRight(false.B)((sum, i) => sum|i)
+    io.wb(i).rfWen := retireATerm && decode(ringBufferTail)(i).ctrl.rfWen && valid(ringBufferTail)(i)
     io.wb(i).rfDest := decode(ringBufferTail)(i).ctrl.rfDest
     io.wb(i).rfData := prf(Cat(ringBufferTail, i.U))
+  }
+  // fix wen
+  // TODO: parameterize it
+  val inst1Redirect = redirect(ringBufferTail)(0).valid && valid(ringBufferTail)(0)
+  // val inst2Redirect = redirect(ringBufferTail)(1).valid && valid(ringBufferTail)(1)
+  when(inst1Redirect){
+    io.wb(1).rfWen := false.B
   }
 
   //---------------------------------------------------------
@@ -216,7 +223,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     forAllROBBanks((i: Int) => commited(ringBufferHead)(i) := false.B)
     forAllROBBanks((i: Int) => redirect(ringBufferHead)(i).valid := false.B)
     forAllROBBanks((i: Int) => 
-      when(io.in(i).valid && io.in(i).bits.ctrl.rfWen){
+      when(io.in(i).valid && io.in(i).bits.ctrl.rfWen && io.in(i).bits.ctrl.rfDest =/= 0.U){
         rmtMap(io.in(i).bits.ctrl.rfDest) := Cat(ringBufferHead, i.U)
         rmtValid(io.in(i).bits.ctrl.rfDest) := true.B
         // rmtCommited(io.in(i).bits.ctrl.rfDest) := false.B
@@ -227,8 +234,10 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
 
   // Generate Debug Info
   Debug(){
+    when (io.in(0).fire()){printf("[DISPATCH1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x\n", GTimer(), io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)}
+    when (io.in(1).fire()){printf("[DISPATCH2] TIMER: %d pc = 0x%x inst %x wen %x wdst %x\n", GTimer(), io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)}
     when (io.cdb(0).valid){printf("[COMMIT1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", GTimer(), io.cdb(0).bits.decode.cf.pc, io.cdb(0).bits.decode.cf.instr, io.cdb(0).bits.decode.ctrl.rfWen, io.cdb(0).bits.decode.ctrl.rfDest, io.cdb(0).bits.commits)}
-    when (io.cdb(1).valid){printf("[COMMIT1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", GTimer(), io.cdb(1).bits.decode.cf.pc, io.cdb(1).bits.decode.cf.instr, io.cdb(1).bits.decode.ctrl.rfWen, io.cdb(1).bits.decode.ctrl.rfDest, io.cdb(1).bits.commits)}
+    when (io.cdb(1).valid){printf("[COMMIT2] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", GTimer(), io.cdb(1).bits.decode.cf.pc, io.cdb(1).bits.decode.cf.instr, io.cdb(1).bits.decode.ctrl.rfWen, io.cdb(1).bits.decode.ctrl.rfDest, io.cdb(1).bits.commits)}
     when (retireATerm && valid(ringBufferTail)(0)) { printf("[RETIRE1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", GTimer(), decode(ringBufferTail)(0).cf.pc, decode(ringBufferTail)(0).cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, isMMIO(ringBufferTail)(0), intrNO(ringBufferTail)(0)) }
     when (retireATerm && valid(ringBufferTail)(1)) { printf("[RETIRE2] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", GTimer(), decode(ringBufferTail)(1).cf.pc, decode(ringBufferTail)(1).cf.instr, io.wb(1).rfWen, io.wb(1).rfDest, io.wb(1).rfData, isMMIO(ringBufferTail)(1), intrNO(ringBufferTail)(1)) }
   }
@@ -250,17 +259,17 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       .otherwise{printf(" ")}
     }
     printf("\n")
-    printf("|RMT INFO|----------------")
-    for(i <- 0 to (NRReg - 1)){
-      if(i % 6 == 0)printf("\n")
-      when(rmtValid(i)){
-        printf("%d -> %d %b  ", i.U, rmtMap(i), commited(i.U>>1)(i.U(0)))
-      }
-    }
-    printf("\n")
+    // printf("|RMT INFO|----------------")
+    // for(i <- 0 to (NRReg - 1)){
+    //  // if(i % 6 == 0)printf("\n")
+    //   when(rmtValid(i)){
+    //     printf("%d -> %d %b  ", i.U, rmtMap(i), commited(i.U>>1)(i.U(0)))
+    //   }
+    // }
+    // printf("\n")
   }
 
-  val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1)
+  val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1) && !inst1Redirect
   val firstValidInst = Mux(valid(ringBufferTail)(0), 0.U, 1.U)
   BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
   BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
