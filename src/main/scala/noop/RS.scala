@@ -47,13 +47,13 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   List.tabulate(rsSize)(i => 
     when(valid(i)){
       List.tabulate(rsCommitWidth)(j =>
-        when(!src1Rdy(i) && src1(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
+        when(!src1Rdy(i) && prfSrc1(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
             src1Rdy(i) := true.B
             src1(i) := io.cdb(j).bits.commits
         }
       )
       List.tabulate(rsCommitWidth)(j =>
-        when(!src2Rdy(i) && src2(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
+        when(!src2Rdy(i) && prfSrc2(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
             src2Rdy(i) := true.B
             src2(i) := io.cdb(j).bits.commits
         }
