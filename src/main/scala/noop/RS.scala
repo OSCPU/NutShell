@@ -88,8 +88,11 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   io.out.bits := decode(dequeueSelect)
   io.out.bits.decode.data.src1 := src1(dequeueSelect)
   io.out.bits.decode.data.src2 := src2(dequeueSelect)
-  // io.out.bits.prfDest := prfDest(dequeueSelect)
-  // io.out.bits.prfSrc1 := DontCare
-  // io.out.bits.prfSrc2 := DontCare
+
+  when(io.flush){
+    List.tabulate(rsSize)(i => 
+      valid(i) := false.B
+    )
+  }
 
 }
