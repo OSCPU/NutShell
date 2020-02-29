@@ -144,7 +144,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     forAllROBBanks((i: Int) =>{
       valid(ringBufferTail)(i) := false.B
       // free prf (update RMT)
-      when(decode(ringBufferTail)(i).ctrl.rfWen){
+      when(
+        decode(ringBufferTail)(i).ctrl.rfWen && 
+        rmtMap(decode(ringBufferTail)(i).ctrl.rfWen) === Cat(ringBufferTail, i.U(1.W)) && // no other in flight inst will write this reg 
+        valid(ringBufferTail)(i)
+      ){
         //TODO: make it prettier
         rmtValid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
       }
@@ -172,9 +176,10 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // exception/interrupt/branch mispredict redirect is raised by ROB
   val redirectBank = Mux(redirect(ringBufferTail)(0).valid, 0.U, 1.U) // TODO: Fix it for robWidth > 2
   io.redirect := redirect(ringBufferTail)(redirectBank)
-  io.redirect.valid := List.tabulate(robWidth)(i => 
+  io.redirect.valid := retireATerm && List.tabulate(robWidth)(i => 
     redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i)
   ).foldRight(false.B)((sum, i) => sum || i)
+  // TODO: redirect when inst1 is valid
 
   // retire: trigger exception
   // Only l/s exception will trigger ROB flush
@@ -246,11 +251,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     printf("|ROB INFO|----------------\n")
     printf("ROB Tail PC: (%b)%x (%b)%x\n", valid(ringBufferTail)(0), decode(ringBufferTail)(0).cf.pc, valid(ringBufferTail)(1), decode(ringBufferTail)(1).cf.pc)
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(0)){printf("v")}.elsewhen(valid(i)(0) && commited(i)(0)){printf("c")}.otherwise{printf(" ")}
+      when(valid(i)(0) && commited(i)(0)){printf("c")}.elsewhen(valid(i)(0)){printf("v")}.otherwise{printf(" ")}
     }
     printf("\n")
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(1)){printf("v")}.elsewhen(valid(i)(1) && commited(i)(1)){printf("c")}.otherwise{printf(" ")}
+      when(valid(i)(1) && commited(i)(1)){printf("c")}.elsewhen(valid(i)(1)){printf("v")}.otherwise{printf(" ")}
     }
     printf("\n")
     for(i <- 0 to (robSize - 1)){
@@ -273,12 +278,14 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   val firstValidInst = Mux(valid(ringBufferTail)(0), 0.U, 1.U)
   BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
   BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
+  val retirePC = SignExt(decode(ringBufferTail)(firstValidInst).cf.pc, AddrBits)
+  val retirePC2 = SignExt(decode(ringBufferTail)(1).cf.pc, AddrBits)
   
   if (!p.FPGAPlatform) {
     // TODO: fix debug
     BoringUtils.addSource(RegNext(retireATerm), "difftestCommit")
     BoringUtils.addSource(RegNext(retireMultiTerms), "difftestMultiCommit")
-    BoringUtils.addSource(RegNext(SignExt(decode(ringBufferTail)(firstValidInst).cf.pc, AddrBits)), "difftestThisPC")
+    BoringUtils.addSource(RegNext(retirePC), "difftestThisPC")
     // BoringUtils.addSource(RegNext(SignExt(decode(ringBufferTail)(1).cf.pc, AddrBits)), "difftestThisPC2")
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "difftestThisINST")
     // BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr), "difftestThisINST2")

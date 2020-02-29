@@ -109,11 +109,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // check dependency for insts at commit stage
   List.tabulate(DispatchWidth)(i => {
     List.tabulate(CommitWidth)(j => {
-      when(inst(i).prfSrc1 === cdb(j).bits.prfidx && cdb(j).valid && cdb(j).bits.decode.ctrl.rfWen && !rob.io.rvalid(2*i)){
+      when(inst(i).prfSrc1 === cdb(j).bits.prfidx && cdb(j).valid && cdb(j).bits.decode.ctrl.rfWen && rob.io.rvalid(2*i)){
         inst(i).src1Rdy := true.B
         inst(i).decode.data.src1 := cdb(j).bits.commits
       }
-      when(inst(i).prfSrc2 === cdb(j).bits.prfidx && cdb(j).valid && cdb(j).bits.decode.ctrl.rfWen && !rob.io.rvalid(2*i+1)){
+      when(inst(i).prfSrc2 === cdb(j).bits.prfidx && cdb(j).valid && cdb(j).bits.decode.ctrl.rfWen && rob.io.rvalid(2*i+1)){
         inst(i).src2Rdy := true.B
         inst(i).decode.data.src2 := cdb(j).bits.commits
       }
@@ -153,7 +153,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   if(Chicken){
     hasBlockInst(0) := true.B
     hasBlockInst(1) := true.B
-  } 
+  }
 
   instCango(0) := 
     io.in(0).valid &&
@@ -167,11 +167,12 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
       FuType.mou -> csrrs.io.in.ready
     ))
   instCango(1) := 
+    instCango(0) &&
     io.in(1).valid &&
     rob.io.in(1).ready && // rob has empty slot
     !hasBlockInst(0) && // there is no block inst
     !hasBlockInst(1) &&
-    LookupTree(io.in(0).bits.ctrl.fuType, List(
+    LookupTree(io.in(1).bits.ctrl.fuType, List(
       FuType.alu -> (alu2rs.io.in.ready && !ALUOpType.isBru(inst(1).decode.ctrl.fuOpType)),
       FuType.lsu -> lsurs.io.in.ready,
       FuType.mdu -> (mdurs.io.in.ready && (lsuCnt < 2.U)),
@@ -179,6 +180,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
       FuType.mou -> (csrrs.io.in.ready && (csrCnt < 2.U))
     ))
   instCango(2) := false.B
+  assert(!(instCango(1) && !instCango(0))) // insts must be dispatched in seq
 
   val noInst = 2.U
   val alu1Inst = Mux(inst(0).decode.ctrl.fuType === FuType.alu, 0.U, noInst)
