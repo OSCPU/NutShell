@@ -146,7 +146,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       // free prf (update RMT)
       when(
         decode(ringBufferTail)(i).ctrl.rfWen && 
-        rmtMap(decode(ringBufferTail)(i).ctrl.rfWen) === Cat(ringBufferTail, i.U(1.W)) && // no other in flight inst will write this reg 
+        rmtMap(decode(ringBufferTail)(i).ctrl.rfDest) === Cat(ringBufferTail, i.U(1.W)) && // no other in flight inst will write this reg 
         valid(ringBufferTail)(i)
       ){
         //TODO: make it prettier

@@ -45,11 +45,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     rob.io.in(i).bits := io.in(i).bits
   })
 
-  val alu1rs = Module(new RS)
-  val alu2rs = Module(new RS)
-  val csrrs = Module(new RS) // CSR & MOU
-  val lsurs = Module(new RS)
-  val mdurs = Module(new RS)
+  val alu1rs = Module(new RS(name = "ALU1RS"))
+  val alu2rs = Module(new RS(name = "ALU2RS"))
+  val csrrs = Module(new RS(name = "CSRRS")) // CSR & MOU
+  val lsurs = Module(new RS(pipelined = true, name = "LSURS"))
+  val mdurs = Module(new RS(pipelined = false, name = "MDURS"))
 
   // ------------------------------------------------
   // Backend stage 1
@@ -174,8 +174,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     !hasBlockInst(1) &&
     LookupTree(io.in(1).bits.ctrl.fuType, List(
       FuType.alu -> (alu2rs.io.in.ready && !ALUOpType.isBru(inst(1).decode.ctrl.fuOpType)),
-      FuType.lsu -> lsurs.io.in.ready,
-      FuType.mdu -> (mdurs.io.in.ready && (lsuCnt < 2.U)),
+      FuType.lsu -> (lsurs.io.in.ready && (lsuCnt < 2.U)),
+      FuType.mdu -> (mdurs.io.in.ready && (mduCnt < 2.U)),
       FuType.csr -> (csrrs.io.in.ready && (csrCnt < 2.U)),
       FuType.mou -> (csrrs.io.in.ready && (csrCnt < 2.U))
     ))
@@ -273,30 +273,54 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)
   val lsuTlbPF = WireInit(false.B)
+  
+  val lsuValid = RegInit(false.B)
+  val lsuUop = RegEnable(lsurs.io.out.bits, lsurs.io.out.fire())
+  when(lsu.io.out.fire()){ lsuValid := false.B }
+  when(lsurs.io.out.fire()){ lsuValid := true.B }
+  when(io.flush){ lsuValid := false.B }
+
   val lsuOut = lsu.access(
-    valid = lsurs.io.out.valid, 
-    src1 = lsurs.io.out.bits.decode.data.src1, 
-    src2 = lsurs.io.out.bits.decode.data.imm, 
-    func = lsurs.io.out.bits.decode.ctrl.fuOpType, 
+    valid = lsuValid,
+    src1 = lsuUop.decode.data.src1, 
+    src2 = lsuUop.decode.data.imm, 
+    func = lsuUop.decode.ctrl.fuOpType, 
     dtlbPF = lsuTlbPF
   )
-  lsu.io.wdata := lsurs.io.out.bits.decode.data.src2
-  lsu.io.instr := lsurs.io.out.bits.decode.cf.instr
+  lsu.io.wdata := lsuUop.decode.data.src2
+  lsu.io.instr := lsuUop.decode.cf.instr
   io.dmem <> lsu.io.dmem
   lsu.io.out.ready := true.B //TODO
-  lsucommit.decode := lsurs.io.out.bits.decode
-  lsucommit.isMMIO := lsu.io.isMMIO || (AddressSpace.isMMIO(lsurs.io.out.bits.decode.cf.pc) && lsurs.io.out.valid)
+  lsucommit.decode := lsuUop.decode
+  lsucommit.isMMIO := lsu.io.isMMIO || (AddressSpace.isMMIO(lsuUop.decode.cf.pc) && lsuValid)
   lsucommit.intrNO := 0.U
   lsucommit.commits := lsuOut
-  lsucommit.prfidx := lsurs.io.out.bits.prfDest
+  lsucommit.prfidx := lsuUop.prfDest
+
+  // val lsuOut = lsu.access(
+  //   valid = lsurs.io.out.valid, 
+  //   src1 = lsurs.io.out.bits.decode.data.src1, 
+  //   src2 = lsurs.io.out.bits.decode.data.imm, 
+  //   func = lsurs.io.out.bits.decode.ctrl.fuOpType, 
+  //   dtlbPF = lsuTlbPF
+  // )
+  // lsu.io.wdata := lsurs.io.out.bits.decode.data.src2
+  // lsu.io.instr := lsurs.io.out.bits.decode.cf.instr
+  // io.dmem <> lsu.io.dmem
+  // lsu.io.out.ready := true.B //TODO
+  // lsucommit.decode := lsurs.io.out.bits.decode
+  // lsucommit.isMMIO := lsu.io.isMMIO || (AddressSpace.isMMIO(lsurs.io.out.bits.decode.cf.pc) && lsurs.io.out.valid)
+  // lsucommit.intrNO := 0.U
+  // lsucommit.commits := lsuOut
+  // lsucommit.prfidx := lsurs.io.out.bits.prfDest
 
   val mdu = Module(new MDU)
   val mducommit = Wire(new OOCommitIO)
   val mduOut = mdu.access(
     valid = mdurs.io.out.valid, 
-    src1 = lsurs.io.out.bits.decode.data.src1, 
-    src2 = lsurs.io.out.bits.decode.data.src2, 
-    func = lsurs.io.out.bits.decode.ctrl.fuOpType
+    src1 = mdurs.io.out.bits.decode.data.src1, 
+    src2 = mdurs.io.out.bits.decode.data.src2, 
+    func = mdurs.io.out.bits.decode.ctrl.fuOpType
   )
   mdu.io.out.ready := true.B //TODO
   mducommit.decode := mdurs.io.out.bits.decode
@@ -304,6 +328,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.intrNO := 0.U
   mducommit.commits := mduOut
   mducommit.prfidx := mdurs.io.out.bits.prfDest
+  mdurs.io.commit.get := mdu.io.out.fire()
 
   val csr = Module(new CSR)
   val csrcommit = Wire(new OOCommitIO)
@@ -384,7 +409,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1rs.io.out.ready := cdbSrc1 === srcALU1.U
   alu2rs.io.out.ready := cdbSrc2 === srcALU2.U
   csrrs.io.out.ready := csr.io.in.ready
-  lsurs.io.out.ready := lsu.io.in.ready
+  // lsurs.io.out.ready := lsu.io.in.ready //FIXME after update LSU
+  lsurs.io.out.ready := !lsuValid || lsu.io.out.fire() //FIXME after update LSU
   mdurs.io.out.ready := mdu.io.in.ready
 
   // Performance Counter

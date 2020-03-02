@@ -7,20 +7,22 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 
 trait HasRSConst{
-  val rsSize = 4
+  // val rsSize = 4
   val rsCommitWidth = 2
 }
 
 // Reservation Station
-class RS extends NOOPModule with HasRSConst with HasROBConst {
+class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasROBConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
     val cdb = Vec(rsCommitWidth, Flipped(Valid(new OOCommitIO)))
     val flush = Input(Bool())
     val empty = Output(Bool())
+    val commit = if (!pipelined) Some(Input(Bool())) else None
   })
 
+  val rsSize = size
   val decode  = Mem(rsSize, new RenamedDecodeIO) // TODO: decouple DataSrcIO from DecodeIO
   // val decode  = Reg(Vec(rsSize, new RenamedDecodeIO)) // TODO: decouple DataSrcIO from DecodeIO
   val valid   = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
@@ -40,6 +42,7 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   val rsAllowin = !rsFull
   val rsReadygo = instRdy.foldRight(false.B)((sum, i) => sum|i)
 
+  val forceDequeue = WireInit(false.B)
   // Listen to Common Data Bus
   // Here we listen to commit signal chosen by ROB?
   // If prf === src, mark it as `ready`
@@ -81,7 +84,7 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
   // RS dequeue
   io.out.valid := rsReadygo
   val dequeueSelect = PriorityEncoder(instRdy) // TODO: replace PriorityEncoder with other logic
-  when(io.out.fire()){
+  when(io.out.fire() || forceDequeue){
     valid(dequeueSelect) := false.B
   }
 
@@ -93,6 +96,22 @@ class RS extends NOOPModule with HasRSConst with HasROBConst {
     List.tabulate(rsSize)(i => 
       valid(i) := false.B
     )
+  }
+
+  Debug(){
+    when(io.out.fire()){printf("[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x wdst %x\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.decode.ctrl.rfDest)}
+  }
+
+  // fix unpipelined 
+  if(!pipelined){
+    val fuValidReg = RegInit(false.B)
+    val fuDecodeReg = RegEnable(io.out.bits, io.out.fire())
+    when(io.out.fire()){ fuValidReg := true.B }
+    when(io.commit.get){ fuValidReg := false.B }
+    when(io.flush){ fuValidReg := false.B }
+    when(fuValidReg){ io.out.bits := fuDecodeReg }
+    when(fuValidReg){ io.out.valid := false.B }
+    assert(!(io.out.fire() && io.commit.get && fuValidReg && !io.flush))
   }
 
 }
