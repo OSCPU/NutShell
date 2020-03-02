@@ -278,7 +278,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsuUop = RegEnable(lsurs.io.out.bits, lsurs.io.out.fire())
   when(lsu.io.out.fire()){ lsuValid := false.B }
   when(lsurs.io.out.fire()){ lsuValid := true.B }
-  when(io.flush){ lsuValid := false.B }
+  // when(io.flush){ lsuValid := false.B }
 
   val lsuOut = lsu.access(
     valid = lsuValid,
