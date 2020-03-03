@@ -100,6 +100,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   static uint64_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t multi_commit_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+  static uint32_t skip_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static int pc_retire_pointer = 7;
   #ifdef NO_DIFFTEST
   return 0;
@@ -119,6 +120,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     pc_retire_queue[pc_retire_pointer] = this_pc;
     inst_retire_queue[pc_retire_pointer] = this_inst;
     multi_commit_queue[pc_retire_pointer] = isMultiCommit;
+    skip_queue[pc_retire_pointer] = isMMIO;
     return 0;
   }
 
@@ -141,6 +143,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   pc_retire_queue[pc_retire_pointer] = this_pc;
   inst_retire_queue[pc_retire_pointer] = this_inst;
   multi_commit_queue[pc_retire_pointer] = isMultiCommit;
+  skip_queue[pc_retire_pointer] = isMMIO;
   
   int isCSR = ((this_inst & 0x7f) ==  0x73);
   int isCSRMip = ((this_inst >> 20) == 0x344) && isCSR;
@@ -162,7 +165,13 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     printf("\n==============Retire Trace==============\n");
     int j;
     for(j = 0; j < DEBUG_RETIRE_TRACE_SIZE; j++){
-      printf("retire trace [%x]: pc %010lx inst %08x %s %s\n", j, pc_retire_queue[j], inst_retire_queue[j], (multi_commit_queue[j])?"MC":"  ", (j==pc_retire_pointer)?"<--":"");
+      printf("retire trace [%x]: pc %010lx inst %08x %s %s %s\n", j, 
+        pc_retire_queue[j], 
+        inst_retire_queue[j], 
+        (multi_commit_queue[j])?"MC":"  ", 
+        (skip_queue[j])?"SKIP":"    ", 
+        (j==pc_retire_pointer)?"<--":""
+      );
     }
     printf("\n==============  Reg Diff  ==============\n");
     ref_isa_reg_display();
