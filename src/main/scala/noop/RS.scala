@@ -105,13 +105,16 @@ class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") e
   // fix unpipelined 
   if(!pipelined){
     val fuValidReg = RegInit(false.B)
+    val fuFlushReg = RegInit(false.B)
     val fuDecodeReg = RegEnable(io.out.bits, io.out.fire())
     when(io.out.fire()){ fuValidReg := true.B }
     when(io.commit.get){ fuValidReg := false.B }
-    when(io.flush){ fuValidReg := false.B }
+    when(io.flush && (fuValidReg || io.out.fire())){ fuFlushReg := true.B }
+    when(io.commit.get){ fuFlushReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
-    when(fuValidReg){ io.out.valid := true.B }
+    when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
     assert(!(io.out.fire() && io.commit.get && fuValidReg && !io.flush))
+
   }
 
 }
