@@ -275,10 +275,13 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsuTlbPF = WireInit(false.B)
   
   val lsuValid = RegInit(false.B)
+  val lsuFlush = RegInit(false.B)
   val lsuUop = RegEnable(lsurs.io.out.bits, lsurs.io.out.fire())
   when(lsu.io.out.fire()){ lsuValid := false.B }
   when(lsurs.io.out.fire()){ lsuValid := true.B }
   // when(io.flush){ lsuValid := false.B }
+  when(io.flush && (lsuValid || lsurs.io.out.fire())){ lsuFlush := true.B }
+  when(lsu.io.out.fire()){ lsuFlush := false.B }
 
   val lsuOut = lsu.access(
     valid = lsuValid,
@@ -384,7 +387,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // CDB arbit
   val (srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU) = (0, 1, 2, 3, 4, 5)
   val commit = VecInit(List(alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit))
-  val commitValid = VecInit(List(alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid, csr.io.out.valid, mou.io.out.valid))
+  val commitValid = VecInit(List(alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid && !lsuFlush, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid))
 
   val Src1Priority = Seq(
     srcCSR,
@@ -412,6 +415,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // lsurs.io.out.ready := lsu.io.in.ready //FIXME after update LSU
   lsurs.io.out.ready := !lsuValid || lsu.io.out.fire() //FIXME after update LSU
   mdurs.io.out.ready := mdu.io.in.ready
+
+  Debug(){when(io.flush){printf("[FLUSH] TIMER: %d\n", GTimer())}}
+  Debug(){when(io.redirect.valid){printf("[RDIRECT] TIMER: %d target 0x%x\n", GTimer(), io.redirect.target)}}
 
   // Performance Counter
 

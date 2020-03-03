@@ -110,7 +110,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") e
     when(io.commit.get){ fuValidReg := false.B }
     when(io.flush){ fuValidReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
-    when(fuValidReg){ io.out.valid := false.B }
+    when(fuValidReg){ io.out.valid := true.B }
     assert(!(io.out.fire() && io.commit.get && fuValidReg && !io.flush))
   }
 

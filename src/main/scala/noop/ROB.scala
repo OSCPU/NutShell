@@ -108,7 +108,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       for(k <- (0 to robWidth - 1)){
         when(valid(i)(j) && io.cdb(k).bits.prfidx === robIdx && io.cdb(k).valid){
         // when(true.B){
-          assert(!commited(i)(j))
+          assert(!commited(i)(j), "double commit")
           // Mark an ROB term as commited
           commited(i)(j) := true.B
           // Write result to ROB-PRF
