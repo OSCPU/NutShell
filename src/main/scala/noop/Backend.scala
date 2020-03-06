@@ -47,7 +47,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val alu1rs = Module(new RS(name = "ALU1RS"))
   val alu2rs = Module(new RS(name = "ALU2RS"))
-  val csrrs = Module(new RS(name = "CSRRS")) // CSR & MOU
+  val csrrs = Module(new RS(name = "CSRRS", size = 1)) // CSR & MOU
   val lsurs = Module(new RS(pipelined = true, name = "LSURS"))
   val mdurs = Module(new RS(pipelined = false, name = "MDURS"))
 
@@ -282,6 +282,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // when(io.flush){ lsuValid := false.B }
   when(io.flush && (lsuValid || lsurs.io.out.fire())){ lsuFlush := true.B }
   when(lsu.io.out.fire()){ lsuFlush := false.B }
+  Debug(){
+    printf("[RS LSUFSM INFO] lsuValid %x lsuFlush %x in %x out %x pc %x\n", lsuValid, lsuFlush, lsurs.io.out.fire(), lsu.io.out.fire(), lsuUop.decode.cf.pc)
+  }
 
   val lsuOut = lsu.access(
     valid = lsuValid,

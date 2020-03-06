@@ -108,7 +108,14 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       for(k <- (0 to robWidth - 1)){
         when(valid(i)(j) && io.cdb(k).bits.prfidx === robIdx && io.cdb(k).valid){
         // when(true.B){
-          assert(!commited(i)(j), "double commit")
+          when(commited(i)(j)){
+            printf("[ERROR] double commit at time %d robidx %d pc %x inst %x pcin %x instin %x\n", GTimer(), robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
+          }
+          when(io.cdb(k).bits.decode.cf.pc =/= decode(i)(j).cf.pc){
+            printf("[ERROR] commit pc not match at time %d robidx %d pc %x inst %x pcin %x instin %x\n", GTimer(), robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
+          }
+          // assert(io.cdb(k).bits.decode.cf.pc === decode(i)(j).cf.pc)
+          // assert(!commited(i)(j), "double commit")
           // Mark an ROB term as commited
           commited(i)(j) := true.B
           // Write result to ROB-PRF
@@ -174,7 +181,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
 
   // retire: trigger redirect
   // exception/interrupt/branch mispredict redirect is raised by ROB
-  val redirectBank = Mux(redirect(ringBufferTail)(0).valid, 0.U, 1.U) // TODO: Fix it for robWidth > 2
+  val redirectBank = Mux(redirect(ringBufferTail)(0).valid && valid(ringBufferTail)(0), 0.U, 1.U) // TODO: Fix it for robWidth > 2
   io.redirect := redirect(ringBufferTail)(redirectBank)
   io.redirect.valid := retireATerm && List.tabulate(robWidth)(i => 
     redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i)
@@ -248,23 +255,34 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   }
 
   Debug(){
-    printf("|ROB INFO|----------------\n")
-    printf("ROB Tail PC: (%b)%x (%b)%x\n", valid(ringBufferTail)(0), decode(ringBufferTail)(0).cf.pc, valid(ringBufferTail)(1), decode(ringBufferTail)(1).cf.pc)
+    printf("[ROB] time %d\n", GTimer())
+    printf("[ROB] ")
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(0) && commited(i)(0)){printf("c")}.elsewhen(valid(i)(0)){printf("v")}.otherwise{printf(" ")}
+      when(valid(i)(0) && commited(i)(0)){printf("c")}.elsewhen(valid(i)(0)){printf("v")}.otherwise{printf("-")}
     }
-    printf("\n")
+    printf("\n[ROB] ")
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(1) && commited(i)(1)){printf("c")}.elsewhen(valid(i)(1)){printf("v")}.otherwise{printf(" ")}
+      when(valid(i)(1) && commited(i)(1)){printf("c")}.elsewhen(valid(i)(1)){printf("v")}.otherwise{printf("-")}
     }
-    printf("\n")
+    printf("\n[ROB] ")
     for(i <- 0 to (robSize - 1)){
       when(ringBufferHead === i.U){printf("h")}
       .elsewhen(ringBufferTail === i.U){printf("t")}
       .otherwise{printf(" ")}
     }
     printf("\n")
-    // printf("|RMT INFO|----------------")
+    printf("[ROB] pc           v c r   pc           v c r\n")
+    for(i <- 0 to (robSize - 1)){
+      printf("[ROB] 0x%x %d %d %d   0x%x %d %d %d  " + i, 
+        decode(i)(0).cf.pc, valid(i)(0), commited(i)(0), redirect(i)(0).valid && valid(i)(0),
+        decode(i)(1).cf.pc, valid(i)(1), commited(i)(1), redirect(i)(1).valid && valid(i)(1)
+      )
+      when(valid(i)(0) || valid(i)(1)){printf("  valid")}
+      when(ringBufferHead === i.U){printf("  head")}
+      when(ringBufferTail === i.U){printf("  tail")}
+      printf("\n")
+    }
+    // printf("[RMT INFO]")
     // for(i <- 0 to (NRReg - 1)){
     //  // if(i % 6 == 0)printf("\n")
     //   when(rmtValid(i)){

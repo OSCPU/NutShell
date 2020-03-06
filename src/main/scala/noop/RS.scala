@@ -102,6 +102,16 @@ class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") e
     when(io.out.fire()){printf("[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x wdst %x\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.decode.ctrl.rfDest)}
   }
 
+  Debug(){
+    printf("[RS " + name + "] time %d\n", GTimer())
+    printf("[RS " + name + "] pc           v src1               src2\n")
+    for(i <- 0 to (size -1)){
+      printf("[RS " + name + "] 0x%x %x %x %x %x %x", decode(i).decode.cf.pc, valid(i), src1Rdy(i), src1(i), src2Rdy(i), src2(i))
+      when(valid(i)){printf("  valid")}
+      printf("\n")
+    }
+  }
+
   // fix unpipelined 
   if(!pipelined){
     val fuValidReg = RegInit(false.B)

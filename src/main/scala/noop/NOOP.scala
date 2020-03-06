@@ -104,7 +104,6 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
 
     Debug(){
       printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
-      //TODO
     }
   }else{
     val isu  = Module(new ISU)
