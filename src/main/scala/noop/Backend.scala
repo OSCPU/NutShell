@@ -349,11 +349,14 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   csr.io.cfIn.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
   csr.io.instrValid := (lsurs.io.out.valid && csrrs.io.out.valid) && !io.flush //TODO: LSU valid
   csr.io.out.ready := true.B
+  csr.io.in.valid := csrrs.io.out.valid // TODO: fix LSU
   csrcommit.decode := csrrs.io.out.bits.decode
   csrcommit.isMMIO := false.B
   csrcommit.intrNO := csr.io.intrNO
   csrcommit.commits := csrOut
   csrcommit.prfidx := csrrs.io.out.bits.prfDest
+  // commit redirect
+  csrcommit.decode.cf.redirect := csr.io.redirect
   // fix wen
   when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
 
@@ -364,7 +367,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val moucommit = Wire(new OOCommitIO)
   // mou does not write register
   mou.access(
-    valid = csrrs.io.out.valid && lsurs.io.out.bits.decode.ctrl.fuType === FuType.mou, 
+    valid = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.mou, 
     src1 = csrrs.io.out.bits.decode.data.src1, 
     src2 = csrrs.io.out.bits.decode.data.src2, 
     func = csrrs.io.out.bits.decode.ctrl.fuOpType
@@ -376,6 +379,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   moucommit.intrNO := 0.U
   moucommit.commits := DontCare
   moucommit.prfidx := csrrs.io.out.bits.prfDest
+  // commit redirect
+  moucommit.decode.cf.redirect := mou.io.redirect
 
   // ------------------------------------------------
   // Backend stage 3+
