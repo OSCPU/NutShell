@@ -278,9 +278,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsuFlush = RegInit(false.B)
   val lsuUop = RegEnable(lsurs.io.out.bits, lsurs.io.out.fire())
   when(lsu.io.out.fire()){ lsuValid := false.B }
-  when(lsurs.io.out.fire()){ lsuValid := true.B }
+  when(lsurs.io.out.fire() && !io.flush){ lsuValid := true.B }
   // when(io.flush){ lsuValid := false.B }
-  when(io.flush && (lsuValid || lsurs.io.out.fire())){ lsuFlush := true.B }
+  when(io.flush && lsuValid){ lsuFlush := true.B }
   when(lsu.io.out.fire()){ lsuFlush := false.B }
   Debug(){
     printf("[RS LSUFSM INFO] lsuValid %x lsuFlush %x in %x out %x pc %x\n", lsuValid, lsuFlush, lsurs.io.out.fire(), lsu.io.out.fire(), lsuUop.decode.cf.pc)
