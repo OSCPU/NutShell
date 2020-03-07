@@ -336,10 +336,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.prfidx := mdurs.io.out.bits.prfDest
   mdurs.io.commit.get := mdu.io.out.fire()
 
+  val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr //TODO: fix LSU
   val csr = Module(new CSR)
   val csrcommit = Wire(new OOCommitIO)
   val csrOut = csr.access(
-    valid = csrrs.io.out.valid && lsurs.io.out.bits.decode.ctrl.fuType === FuType.csr, 
+    valid = csrVaild, 
     src1 = csrrs.io.out.bits.decode.data.src1, 
     src2 = csrrs.io.out.bits.decode.data.src2, 
     func = csrrs.io.out.bits.decode.ctrl.fuOpType
@@ -347,9 +348,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   csr.io.cfIn := csrrs.io.out.bits.decode.cf
   csr.io.cfIn.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
   csr.io.cfIn.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
-  csr.io.instrValid := (lsurs.io.out.valid && csrrs.io.out.valid) && !io.flush //TODO: LSU valid
+  csr.io.instrValid := csrVaild && !io.flush //TODO: LSU valid
   csr.io.out.ready := true.B
-  csr.io.in.valid := csrrs.io.out.valid // TODO: fix LSU
   csrcommit.decode := csrrs.io.out.bits.decode
   csrcommit.isMMIO := false.B
   csrcommit.intrNO := csr.io.intrNO
