@@ -114,8 +114,8 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           when(io.cdb(k).bits.decode.cf.pc =/= decode(i)(j).cf.pc){
             printf("[ERROR] commit pc not match at time %d robidx %d pc %x inst %x pcin %x instin %x\n", GTimer(), robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
           }
-          // assert(io.cdb(k).bits.decode.cf.pc === decode(i)(j).cf.pc)
-          // assert(!commited(i)(j), "double commit")
+          assert(io.cdb(k).bits.decode.cf.pc === decode(i)(j).cf.pc)
+          assert(!commited(i)(j), "double commit")
           // Mark an ROB term as commited
           commited(i)(j) := true.B
           // Write result to ROB-PRF
@@ -125,11 +125,9 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           intrNO(i)(j) := io.cdb(k).bits.intrNO
           // Write redirect info
           redirect(i)(j) := io.cdb(k).bits.decode.cf.redirect
-          // Update rmt
-          // TODO: merge RMT with ROB
-          // when(io.cdb(k).bits.decode.ctrl.rfWen){
-          //   rmtCommited(robIdx) := true.B
-          // }
+          // Update wen
+          // In several cases, FU will invalidate rfWen
+          decode(i)(j).ctrl.rfWen := io.cdb(k).bits.decode.ctrl.rfWen
         }
       }
     }
