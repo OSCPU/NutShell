@@ -231,7 +231,19 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // Issue
   // ------------------------------------------------
 
-  //TODO: FU template
+  // Backend exception regs
+
+  val raiseBackendException = WireInit(false.B)
+  val commitBackendException = WireInit(false.B)
+  val backendExceptionPending = RegInit(false.B)
+
+  when(raiseBackendException){backendExceptionPending := true.B}
+  when(io.flush || commitBackendException){backendExceptionPending := false.B}
+
+  commitBackendException := rob.io.exception && backendExceptionPending
+
+  // Function Units
+  // TODO: FU template
 
   val alu1 = Module(new ALU(hasBru = true))
   val alu1commit = Wire(new OOCommitIO)
@@ -251,6 +263,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1commit.prfidx := alu1rs.io.out.bits.prfDest
   // commit redirect
   alu1commit.decode.cf.redirect := alu1.io.redirect
+  alu1commit.exception := false.B
 
   // def isBru(func: UInt) = func(4)
   val alu2 = Module(new ALU)
@@ -269,6 +282,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu2commit.intrNO := 0.U
   alu2commit.commits := alu2Out
   alu2commit.prfidx := alu2rs.io.out.bits.prfDest
+  alu2commit.decode.cf.redirect.valid := false.B
+  alu2commit.exception := false.B
 
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)
@@ -302,6 +317,22 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsucommit.intrNO := 0.U
   lsucommit.commits := lsuOut
   lsucommit.prfidx := lsuUop.prfDest
+  lsucommit.decode.cf.redirect.valid := false.B
+  lsucommit.exception := lsu.io.dtlbPF || lsu.io.storeAddrMisaligned || lsu.io.loadAddrMisaligned // TODO: refactor
+  // fix exceptionVec
+  // TODO: refactor
+  lsucommit.decode.cf.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
+  lsucommit.decode.cf.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
+  lsucommit.decode.cf.exceptionVec(storePageFault) := lsu.io.dtlbPF && io.memMMU.dmem.storePF
+  lsucommit.decode.cf.exceptionVec(loadPageFault) := lsu.io.dtlbPF && io.memMMU.dmem.loadPF
+
+  raiseBackendException := lsucommit.exception && lsu.io.out.fire()
+  val lsuUopFixed = WireInit(lsuUop)
+  lsuUopFixed.decode := lsucommit.decode
+  val backendExceptionUop = RegEnable(lsuUopFixed, raiseBackendException && !backendExceptionPending) // only save the first valid backend exception
+  // when(lsu.io.storeAddrMisaligned || lsu.io.loadAddrMisaligned){
+  //   printf("[LSU-EXCEPTION] time %d %x %x %x\n", GTimer(), lsu.io.dtlbPF, lsu.io.storeAddrMisaligned, lsu.io.loadAddrMisaligned)
+  // }
 
   // val lsuOut = lsu.access(
   //   valid = lsurs.io.out.valid, 
@@ -334,34 +365,40 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.intrNO := 0.U
   mducommit.commits := mduOut
   mducommit.prfidx := mdurs.io.out.bits.prfDest
+  mducommit.decode.cf.redirect.valid := false.B
+  mducommit.exception := false.B
   mdurs.io.commit.get := mdu.io.out.fire()
 
-  val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr //TODO: fix LSU
+  val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr || commitBackendException
+  val csrUop = Mux(commitBackendException, backendExceptionUop, csrrs.io.out.bits)
   val csr = Module(new CSR)
   val csrcommit = Wire(new OOCommitIO)
   val csrOut = csr.access(
     valid = csrVaild, 
-    src1 = csrrs.io.out.bits.decode.data.src1, 
-    src2 = csrrs.io.out.bits.decode.data.src2, 
-    func = csrrs.io.out.bits.decode.ctrl.fuOpType
+    src1 = csrUop.decode.data.src1, 
+    src2 = csrUop.decode.data.src2, 
+    func = csrUop.decode.ctrl.fuOpType
   )
-  csr.io.cfIn := csrrs.io.out.bits.decode.cf
-  csr.io.cfIn.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
-  csr.io.cfIn.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
-  csr.io.instrValid := csrVaild && !io.flush //TODO: LSU valid
+  csr.io.cfIn := csrUop.decode.cf
+  csr.io.instrValid := csrVaild && !io.flush
+  csr.io.isBackendException := commitBackendException
   csr.io.out.ready := true.B
-  csrcommit.decode := csrrs.io.out.bits.decode
+  csrcommit.decode := csrUop.decode
   csrcommit.isMMIO := false.B
   csrcommit.intrNO := csr.io.intrNO
   csrcommit.commits := csrOut
-  csrcommit.prfidx := csrrs.io.out.bits.prfDest
-  // commit redirect
+  csrcommit.prfidx := csrUop.prfDest
   csrcommit.decode.cf.redirect := csr.io.redirect
+  csrcommit.exception := false.B
   // fix wen
   when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
 
   csr.io.imemMMU <> io.memMMU.imem
   csr.io.dmemMMU <> io.memMMU.dmem
+
+  // when(csrVaild && commitBackendException){
+  //   printf("[BACKEND EXC] time %d pc %x inst %x evec %b\n", GTimer(), csrUop.decode.cf.pc, csrUop.decode.cf.instr, csrUop.decode.cf.exceptionVec.asUInt)
+  // }
 
   val mou = Module(new MOU)
   val moucommit = Wire(new OOCommitIO)
@@ -379,8 +416,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   moucommit.intrNO := 0.U
   moucommit.commits := DontCare
   moucommit.prfidx := csrrs.io.out.bits.prfDest
-  // commit redirect
   moucommit.decode.cf.redirect := mou.io.redirect
+  moucommit.exception := false.B
 
   // ------------------------------------------------
   // Backend stage 3+

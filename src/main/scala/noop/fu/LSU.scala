@@ -52,9 +52,9 @@ class LSUIO extends FunctionUnitIO {
   val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr
   val dmem = new SimpleBusUC(addrBits = VAddrBits)
   val isMMIO = Output(Bool())
-  val dtlbPF = Output(Bool())
-  val loadAddrMisaligned = Output(Bool())
-  val storeAddrMisaligned = Output(Bool())
+  val dtlbPF = Output(Bool()) // TODO: refactor it for new backend
+  val loadAddrMisaligned = Output(Bool()) // TODO: refactor it for new backend
+  val storeAddrMisaligned = Output(Bool()) // TODO: refactor it for new backend
 }
 
 class StoreQueueEntry extends NOOPBundle{

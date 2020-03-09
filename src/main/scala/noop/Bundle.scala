@@ -70,6 +70,7 @@ class OOCommitIO extends NOOPBundle with HasROBConst{
   val intrNO = Output(UInt(XLEN.W))
   val commits = Output(UInt(XLEN.W))
   val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
+  val exception = Output(Bool())
 }
 
 class FunctionUnitIO extends NOOPBundle {
