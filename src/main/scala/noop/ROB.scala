@@ -6,21 +6,13 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-trait HasROBConst{
-  // val multiIssue = true
-  val robSize = 16
-  val robWidth = 2
-  val rmqSize = 4 // register map queue size
-  val prfAddrWidth = log2Up(robSize) + log2Up(robWidth) // physical rf addr width
-}
-
 object physicalRFTools{
   def getPRFAddr(robIndex: UInt, bank: UInt): UInt = {
     Cat(robIndex, bank(0))
   }
 }
 
-class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasROBConst with HasRegFileParameter{
+class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasBackendConst with HasRegFileParameter{
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
     val cdb = Vec(robWidth, Flipped(Valid(new OOCommitIO)))

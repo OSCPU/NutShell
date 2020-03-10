@@ -15,7 +15,7 @@ trait HasRMTConst{
 // Register File Map Table
 // `arf` denotes arch regfile
 // `prf` denotes phy regfile
-class RMT extends NOOPModule with HasROBConst with HasRegFileParameter with HasRMTConst{
+class RMT extends NOOPModule with HasBackendConst with HasRegFileParameter with HasRMTConst{
   val io = IO(new Bundle {
     // write
     val wen = Input(Vec(rmtWriteWidth, Bool()))

@@ -64,7 +64,7 @@ class CommitIO extends NOOPBundle {
   val commits = Output(Vec(FuType.num, UInt(XLEN.W)))
 }
 
-class OOCommitIO extends NOOPBundle with HasROBConst{
+class OOCommitIO extends NOOPBundle with HasBackendConst{
   val decode = new DecodeIO
   val isMMIO = Output(Bool())
   val intrNO = Output(UInt(XLEN.W))
@@ -142,7 +142,7 @@ class ROBTerm extends NOOPBundle {
   // val valid = Output(Bool())
 }
 
-class RenamedDecodeIO extends NOOPBundle with HasROBConst {
+class RenamedDecodeIO extends NOOPBundle with HasBackendConst {
   val decode = new DecodeIO
   val prfDest = Output(UInt(prfAddrWidth.W))
   val prfSrc1 = Output(UInt(prfAddrWidth.W))

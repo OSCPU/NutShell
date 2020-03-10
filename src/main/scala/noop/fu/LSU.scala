@@ -324,6 +324,9 @@ class LSU extends NOOPModule with HasLSUConst {
       io.in.ready := true.B
     }
 
+  Debug(){
+    when(io.out.fire()){printf("[LSU-AGU] state %x inv %x inr %x\n", state, io.in.valid, io.in.ready)}
+  }
     // controled by FSM 
     // io.in.ready := lsExecUnit.io.in.ready
     // lsExecUnit.io.wdata := io.wdata
@@ -426,6 +429,10 @@ class LSExecUnit extends NOOPModule {
 
   io.out.valid := Mux( dtlbPF && state =/= s_idle || io.loadAddrMisaligned || io.storeAddrMisaligned, true.B, Mux(partialLoad, state === s_partialLoad, dmem.resp.fire() && (state === s_wait_resp)))
   io.in.ready := (state === s_idle) || dtlbPF
+
+  Debug(){
+    when(io.out.fire()){printf("[LSU-EXECUNIT] state %x dresp %x dpf %x lm %x sm %x\n", state, dmem.resp.fire(), dtlbPF, io.loadAddrMisaligned, io.storeAddrMisaligned)}
+  }
 
   val rdata = dmem.resp.bits.rdata
   val rdataLatch = RegNext(rdata)

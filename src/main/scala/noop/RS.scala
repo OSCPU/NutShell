@@ -12,7 +12,7 @@ trait HasRSConst{
 }
 
 // Reservation Station
-class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasROBConst {
+class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)

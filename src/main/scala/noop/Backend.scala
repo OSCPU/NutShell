@@ -7,8 +7,16 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 import bus.simplebus._
 
+trait HasBackendConst{
+  // val multiIssue = true
+  val robSize = 16
+  val robWidth = 2
+  val rmqSize = 4 // register map queue size
+  val prfAddrWidth = log2Up(robSize) + log2Up(robWidth) // physical rf addr width
+}
+
 // Out Of Order Execution Backend 
-class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParameter with HasROBConst{
+class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParameter with HasBackendConst{
 
   val io = IO(new Bundle {
     // EXU
@@ -49,6 +57,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val alu2rs = Module(new RS(name = "ALU2RS"))
   val csrrs = Module(new RS(name = "CSRRS", size = 1)) // CSR & MOU
   val lsurs = Module(new RS(pipelined = true, name = "LSURS"))
+  // val lsurs = Module(new RS(pipelined = true, name = "LSURS", size = 1)) // FIXIT: out of order l/s disabled
   val mdurs = Module(new RS(pipelined = false, name = "MDURS"))
 
   // ------------------------------------------------
@@ -330,9 +339,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsuUopFixed = WireInit(lsuUop)
   lsuUopFixed.decode := lsucommit.decode
   val backendExceptionUop = RegEnable(lsuUopFixed, raiseBackendException && !backendExceptionPending) // only save the first valid backend exception
-  // when(lsu.io.storeAddrMisaligned || lsu.io.loadAddrMisaligned){
-  //   printf("[LSU-EXCEPTION] time %d %x %x %x\n", GTimer(), lsu.io.dtlbPF, lsu.io.storeAddrMisaligned, lsu.io.loadAddrMisaligned)
-  // }
+  Debug(){
+    when(lsu.io.storeAddrMisaligned || lsu.io.loadAddrMisaligned || lsu.io.dtlbPF){
+      printf("[LSU-EXCEPTION] time %d %x %x %x\n", GTimer(), lsu.io.dtlbPF, lsu.io.storeAddrMisaligned, lsu.io.loadAddrMisaligned)
+    }
+  }
 
   // val lsuOut = lsu.access(
   //   valid = lsurs.io.out.valid, 
@@ -396,9 +407,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   csr.io.imemMMU <> io.memMMU.imem
   csr.io.dmemMMU <> io.memMMU.dmem
 
-  // when(csrVaild && commitBackendException){
-  //   printf("[BACKEND EXC] time %d pc %x inst %x evec %b\n", GTimer(), csrUop.decode.cf.pc, csrUop.decode.cf.instr, csrUop.decode.cf.exceptionVec.asUInt)
-  // }
+  Debug(){
+    when(csrVaild && commitBackendException){
+      printf("[BACKEND EXC] time %d pc %x inst %x evec %b\n", GTimer(), csrUop.decode.cf.pc, csrUop.decode.cf.instr, csrUop.decode.cf.exceptionVec.asUInt)
+    }
+  }
 
   val mou = Module(new MOU)
   val moucommit = Wire(new OOCommitIO)
