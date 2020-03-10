@@ -24,6 +24,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
 
     // to CSR
     val exception = Output(Bool())
+    val beUop = Output(new RenamedDecodeIO)
 
     // to LSU
     val scommit = Output(Bool())
@@ -198,9 +199,19 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.exception := 
     valid(ringBufferTail)(0) && exception(ringBufferTail)(0) ||
     valid(ringBufferTail)(1) && exception(ringBufferTail)(1) && (!valid(ringBufferTail)(0) || commited(ringBufferTail)(0) && !redirect(ringBufferTail)(0).valid)
-    // List.tabulate(robWidth)(i => 
-    //   valid(ringBufferTail)(i) && exception(ringBufferTail)(i)
-    // ).foldRight(false.B)((sum, i) => sum || i)
+
+  // setup beUop for CSR
+  // `beUop` stands for `backend exception uop`
+  val exceptionSelect = Mux(exception(ringBufferTail)(0), 0.U, 1.U)
+  io.beUop := DontCare
+  io.beUop.decode := decode(ringBufferTail)(exceptionSelect)
+  for(i <- 0 to storePageFault){io.beUop.decode.cf.exceptionVec(i) := false.B}
+  io.beUop.decode.cf.exceptionVec(loadPageFault) := intrNO(ringBufferTail)(exceptionSelect)(loadPageFault)
+  io.beUop.decode.cf.exceptionVec(storePageFault) := intrNO(ringBufferTail)(exceptionSelect)(storePageFault)
+  io.beUop.decode.cf.exceptionVec(loadAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(loadAddrMisaligned)
+  io.beUop.decode.cf.exceptionVec(storeAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(storeAddrMisaligned)
+  io.beUop.prfDest := Cat(ringBufferTail, exceptionSelect)
+
   assert(!(exception(ringBufferTail)(0) && exception(ringBufferTail)(1) && valid(ringBufferTail)(0) && valid(ringBufferTail)(1)))
   assert(!(exception(ringBufferTail)(0) && decode(ringBufferTail)(0).ctrl.fuType =/= FuType.lsu && valid(ringBufferTail)(0)))
   assert(!(exception(ringBufferTail)(1) && decode(ringBufferTail)(1).ctrl.fuType =/= FuType.lsu && valid(ringBufferTail)(1)))

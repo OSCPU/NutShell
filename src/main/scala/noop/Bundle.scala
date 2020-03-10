@@ -137,11 +137,6 @@ class InstFetchIO extends NOOPBundle {
   val instr = Output(UInt(64.W))
 }
 
-class ROBTerm extends NOOPBundle {
-  val decode = new DecodeIO
-  // val valid = Output(Bool())
-}
-
 class RenamedDecodeIO extends NOOPBundle with HasBackendConst {
   val decode = new DecodeIO
   val prfDest = Output(UInt(prfAddrWidth.W))
