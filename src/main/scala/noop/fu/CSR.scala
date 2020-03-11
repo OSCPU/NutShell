@@ -452,10 +452,10 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
 
   // CSR inst decode
   val ret = Wire(Bool())
-  val isEcall = addr === privEcall && func === CSROpType.jmp
-  val isMret = addr === privMret   && func === CSROpType.jmp
-  val isSret = addr === privSret   && func === CSROpType.jmp
-  val isUret = addr === privUret   && func === CSROpType.jmp
+  val isEcall = addr === privEcall && func === CSROpType.jmp && !io.isBackendException
+  val isMret = addr === privMret   && func === CSROpType.jmp && !io.isBackendException
+  val isSret = addr === privSret   && func === CSROpType.jmp && !io.isBackendException
+  val isUret = addr === privUret   && func === CSROpType.jmp && !io.isBackendException
 
   Debug(false){
     when(wen){
