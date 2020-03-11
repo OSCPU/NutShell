@@ -16,9 +16,12 @@ class WBU(implicit val p: NOOPConfig) extends NOOPModule{
   io.wb(0).rfWen := io.in.bits(0).decode.ctrl.rfWen && io.in.valid
   io.wb(0).rfDest := io.in.bits(0).decode.ctrl.rfDest
   io.wb(0).rfData := io.in.bits(0).commits(io.in.bits(0).decode.ctrl.fuType)
+
   io.wb(1).rfWen := io.in.bits(1).decode.ctrl.rfWen && commitPipeline2
   io.wb(1).rfDest := io.in.bits(1).decode.ctrl.rfDest
   io.wb(1).rfData := io.in.bits(1).commits(io.in.bits(1).decode.ctrl.fuType)
+  if(!EnableSuperScalarExec){ io.wb(1).rfWen := false.B }
+
   io.in.ready := true.B
 
   io.redirect := io.in.bits(0).decode.cf.redirect

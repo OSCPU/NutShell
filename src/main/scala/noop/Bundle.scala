@@ -15,6 +15,9 @@ class CtrlSignalIO extends NOOPBundle {
   val isNoopTrap = Output(Bool())
   val isSrc1Forward = Output(Bool())
   val isSrc2Forward = Output(Bool())
+  val isSpecExec = Output(Bool())  // This inst is a branch inst, and this branch is speculated
+  val isPipeLined = Output(Bool()) // Function unti for this inst is pipelined
+  val isBlocked = Output(Bool())   // This inst requires pipeline to be blocked
 }
 
 class DataSrcIO extends NOOPBundle {
@@ -29,14 +32,6 @@ class RedirectIO extends NOOPBundle {
   val valid = Output(Bool())
 }
 
-// class IRIDCtrlFlowIO extends NOOPBundle {
-//   val instr = Output(UInt(64.W))
-//   val pc = Output(UInt(VAddrBits.W))
-//   val pnpc = Output(UInt(VAddrBits.W))
-//   val brIdx = Output(UInt(3.W))
-//   val redirect = new RedirectIO
-// }
-
 class CtrlFlowIO extends NOOPBundle {
   val instr = Output(UInt(64.W))
   val pc = Output(UInt(VAddrBits.W))
@@ -44,7 +39,7 @@ class CtrlFlowIO extends NOOPBundle {
   val redirect = new RedirectIO
   val exceptionVec = Output(Vec(16, Bool()))
   val intrVec = Output(Vec(12, Bool()))
-  val brIdx = Output(Bool()) // for debug only
+  val brIdx = Output(Bool())
   val instValid = Output(UInt(4.W))
   val crossPageIPFFix = Output(Bool())
 }
@@ -67,6 +62,15 @@ class CommitIO extends NOOPBundle {
   val isMMIO = Output(Bool())
   val intrNO = Output(UInt(XLEN.W))
   val commits = Output(Vec(FuType.num, UInt(XLEN.W)))
+}
+
+class OOCommitIO extends NOOPBundle with HasBackendConst{
+  val decode = new DecodeIO
+  val isMMIO = Output(Bool())
+  val intrNO = Output(UInt(XLEN.W))
+  val commits = Output(UInt(XLEN.W))
+  val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
+  val exception = Output(Bool())
 }
 
 class FunctionUnitIO extends NOOPBundle {
@@ -123,7 +127,7 @@ class TLBExuIO extends NOOPBundle {
   }
 }
 
-class FrontendIO extends NOOPBundle {
+class InstFetchIO extends NOOPBundle {
   val pc = Output(UInt(VAddrBits.W)) // real PC will be regenerated in IBF 
   val pnpc = Output(UInt(VAddrBits.W))
   val brIdx = Output(UInt(4.W))
@@ -131,4 +135,13 @@ class FrontendIO extends NOOPBundle {
   //above will be used as user bits in icache
   val icachePF = Output(Bool())
   val instr = Output(UInt(64.W))
+}
+
+class RenamedDecodeIO extends NOOPBundle with HasBackendConst {
+  val decode = new DecodeIO
+  val prfDest = Output(UInt(prfAddrWidth.W))
+  val prfSrc1 = Output(UInt(prfAddrWidth.W))
+  val prfSrc2 = Output(UInt(prfAddrWidth.W))
+  val src1Rdy = Output(Bool())
+  val src2Rdy = Output(Bool())
 }

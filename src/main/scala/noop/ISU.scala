@@ -6,29 +6,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-trait HasRegFileParameter {
-  val NRReg = 32
-}
-
-class RegFile extends HasRegFileParameter with HasNOOPParameter {
-  val rf = Mem(NRReg, UInt(XLEN.W))
-  def read(addr: UInt) : UInt = Mux(addr === 0.U, 0.U, rf(addr))
-  def write(addr: UInt, data: UInt) = { rf(addr) := data }
-} 
-
-class ScoreBoard extends HasRegFileParameter {
-  val busy = RegInit(0.U(NRReg.W))
-  def isBusy(idx: UInt): Bool = busy(idx)
-  def mask(idx: UInt) = (1.U(NRReg.W) << idx)(NRReg-1, 0)
-  def update(setMask: UInt, clearMask: UInt) = {
-    // When clearMask(i) and setMask(i) are both set, setMask(i) wins.
-    // This can correctly record the busy bit when reg(i) is written
-    // and issued at the same cycle.
-    // Note that rf(0) is always free.
-    busy := Cat(((busy & ~clearMask) | setMask)(NRReg-1, 1), 0.U(1.W))
-  }
-}
-
+// Sequential Inst Issue Unit 
 class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParameter {
   val io = IO(new Bundle {
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
@@ -49,6 +27,8 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   def isDepend(rfSrc: UInt, rfDest: UInt, wen: Bool): Bool = (rfSrc =/= 0.U) && (rfSrc === rfDest) && wen
   def isDepend2(rfSrc: UInt, rfDest1: UInt, wen1: Bool, rfDest2: UInt, wen2: Bool): Bool = (rfSrc =/= 0.U) && ((rfSrc === rfDest1) && wen1 || (rfSrc === rfDest2) && wen2)
 
+  val enablePipeline2 = EnableSuperScalarExec.B
+
   val forwardRfWen = List(
     io.forward(0).wb.rfWen && io.forward(0).valid,
     io.forward(1).wb.rfWen && io.forward(1).valid
@@ -59,12 +39,12 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   val src4DependIS = isDepend(rfSrc4, rfDest1, io.in(0).bits.ctrl.rfWen)
   val src1DependEX = isDepend2(rfSrc1, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
   val src2DependEX = isDepend2(rfSrc2, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
-  val src3DependEX = isDepend2(rfSrc3, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
-  val src4DependEX = isDepend2(rfSrc4, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1))
+  val src3DependEX = isDepend2(rfSrc3, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1)) && enablePipeline2
+  val src4DependEX = isDepend2(rfSrc4, io.forward(0).wb.rfDest, forwardRfWen(0), io.forward(1).wb.rfDest, forwardRfWen(1)) && enablePipeline2
   val src1DependWB = isDepend2(rfSrc1, io.wb(0).rfDest, io.wb(0).rfWen, io.wb(1).rfDest, io.wb(1).rfWen)
   val src2DependWB = isDepend2(rfSrc2, io.wb(0).rfDest, io.wb(0).rfWen, io.wb(1).rfDest, io.wb(1).rfWen)
-  val src3DependWB = isDepend2(rfSrc3, io.wb(0).rfDest, io.wb(0).rfWen, io.wb(1).rfDest, io.wb(1).rfWen)
-  val src4DependWB = isDepend2(rfSrc4, io.wb(0).rfDest, io.wb(0).rfWen, io.wb(1).rfDest, io.wb(1).rfWen)
+  val src3DependWB = isDepend2(rfSrc3, io.wb(0).rfDest, io.wb(0).rfWen, io.wb(1).rfDest, io.wb(1).rfWen) && enablePipeline2
+  val src4DependWB = isDepend2(rfSrc4, io.wb(0).rfDest, io.wb(0).rfWen, io.wb(1).rfDest, io.wb(1).rfWen) && enablePipeline2
 
   val src1ForwardNextCycle = src1DependEX && !dontForward1
   val src2ForwardNextCycle = src2DependEX && !dontForward1
@@ -113,8 +93,8 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   val sb = new ScoreBoard
   val src1Ready = !sb.isBusy(rfSrc1) || src1ForwardNextCycle || src1Forward
   val src2Ready = !sb.isBusy(rfSrc2) || src2ForwardNextCycle || src2Forward
-  val src3Ready = (!sb.isBusy(rfSrc3) || src3ForwardNextCycle || src3Forward) && !src3DependIS
-  val src4Ready = (!sb.isBusy(rfSrc4) || src4ForwardNextCycle || src4Forward) && !src4DependIS
+  val src3Ready = (!sb.isBusy(rfSrc3) || src3ForwardNextCycle || src3Forward) && !src3DependIS && enablePipeline2
+  val src4Ready = (!sb.isBusy(rfSrc4) || src4ForwardNextCycle || src4Forward) && !src4DependIS && enablePipeline2
   io.out.valid := io.in(0).valid && src1Ready && src2Ready
 
   def isBru(func: UInt) = func(4)
@@ -122,6 +102,9 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   if(EnableSuperScalarExec){
     // in simple sequential multi issue mode, only alu inst can go through the 2nd pipeline
     io.out.bits(1).pipeline2 := io.in(1).valid && src3Ready && src4Ready && inst2IsALUInst
+    if(EnableOutOfOrderExec){
+      io.out.bits(1).pipeline2 := io.in(1).valid
+    }
   }else{
     io.out.bits(1).pipeline2 := false.B
   }
@@ -153,20 +136,25 @@ class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParamete
   io.out.bits(0).ctrl.isSrc2Forward := src2ForwardNextCycle
 
   // out2
-  io.out.bits(1).data.src1 := Mux1H(List(
-    (io.in(1).bits.ctrl.src1Type === SrcType.pc) -> SignExt(io.in(1).bits.cf.pc, AddrBits),
-    src3ForwardNextCycle -> out2_1ForwardDataEX,
-    (src3Forward && !src3ForwardNextCycle) -> out2_1ForwardDataWB,
-    ((io.in(1).bits.ctrl.src1Type =/= SrcType.pc) && !src3ForwardNextCycle && !src3Forward) -> rf.read(rfSrc3)
-  ))
-  io.out.bits(1).data.src2 := Mux1H(List(
-    (io.in(1).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(1).bits.data.imm,
-    src4ForwardNextCycle -> out2_2ForwardDataEX,
-    (src4Forward && !src4ForwardNextCycle) -> out2_2ForwardDataWB,
-    ((io.in(1).bits.ctrl.src2Type === SrcType.reg) && !src4ForwardNextCycle && !src4Forward) -> rf.read(rfSrc4)
-  ))
-  io.out.bits(1).data.imm  := io.in(1).bits.data.imm
+  if(EnableSuperScalarExec){
+    io.out.bits(1).data.src1 := Mux1H(List(
+      (io.in(1).bits.ctrl.src1Type === SrcType.pc) -> SignExt(io.in(1).bits.cf.pc, AddrBits),
+      src3ForwardNextCycle -> out2_1ForwardDataEX,
+      (src3Forward && !src3ForwardNextCycle) -> out2_1ForwardDataWB,
+      ((io.in(1).bits.ctrl.src1Type =/= SrcType.pc) && !src3ForwardNextCycle && !src3Forward) -> rf.read(rfSrc3)
+    ))
+    io.out.bits(1).data.src2 := Mux1H(List(
+      (io.in(1).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(1).bits.data.imm,
+      src4ForwardNextCycle -> out2_2ForwardDataEX,
+      (src4Forward && !src4ForwardNextCycle) -> out2_2ForwardDataWB,
+      ((io.in(1).bits.ctrl.src2Type === SrcType.reg) && !src4ForwardNextCycle && !src4Forward) -> rf.read(rfSrc4)
+    ))
+  }else{
+    io.out.bits(1).data.src1 := DontCare
+    io.out.bits(1).data.src2 := DontCare
+  }
 
+  io.out.bits(1).data.imm  := io.in(1).bits.data.imm
   io.out.bits(1).cf <> io.in(1).bits.cf
   io.out.bits(1).ctrl := io.in(1).bits.ctrl
   io.out.bits(1).ctrl.isSrc1Forward := src3ForwardNextCycle

@@ -84,6 +84,12 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   int isMultiCommit
   ) {
 
+  // Note:
+  // reg_scala[DIFFTEST_THIS_PC] is the first PC commited by CPU-WB
+  // ref_r[DIFFTEST_THIS_PC] is NEMU's next PC
+  // To skip the compare of an instruction, replace NEMU reg value with CPU's regfile value,
+  // then set NEMU's PC to next PC to be run
+
   #define DEBUG_RETIRE_TRACE_SIZE 16
 
   uint64_t ref_r[DIFFTEST_NR_REG];
@@ -93,6 +99,8 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   static uint64_t nemu_this_pc = 0x80000000;
   static uint64_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+  static uint32_t multi_commit_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+  static uint32_t skip_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static int pc_retire_pointer = 7;
   #ifdef NO_DIFFTEST
   return 0;
@@ -111,6 +119,8 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
     pc_retire_queue[pc_retire_pointer] = this_pc;
     inst_retire_queue[pc_retire_pointer] = this_inst;
+    multi_commit_queue[pc_retire_pointer] = isMultiCommit;
+    skip_queue[pc_retire_pointer] = isMMIO;
     return 0;
   }
 
@@ -132,6 +142,8 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
   pc_retire_queue[pc_retire_pointer] = this_pc;
   inst_retire_queue[pc_retire_pointer] = this_inst;
+  multi_commit_queue[pc_retire_pointer] = isMultiCommit;
+  skip_queue[pc_retire_pointer] = isMMIO;
   
   int isCSR = ((this_inst & 0x7f) ==  0x73);
   int isCSRMip = ((this_inst >> 20) == 0x344) && isCSR;
@@ -153,7 +165,13 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     printf("\n==============Retire Trace==============\n");
     int j;
     for(j = 0; j < DEBUG_RETIRE_TRACE_SIZE; j++){
-      printf("retire trace [%x]: pc %010lx inst %08x %s\n", j, pc_retire_queue[j], inst_retire_queue[j], (j==pc_retire_pointer)?"<--":"");
+      printf("retire trace [%x]: pc %010lx inst %08x %s %s %s\n", j, 
+        pc_retire_queue[j], 
+        inst_retire_queue[j], 
+        (multi_commit_queue[j])?"MC":"  ", 
+        (skip_queue[j])?"SKIP":"    ", 
+        (j==pc_retire_pointer)?"<--":""
+      );
     }
     printf("\n==============  Reg Diff  ==============\n");
     ref_isa_reg_display();

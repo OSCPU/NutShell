@@ -10,7 +10,7 @@ object NOOPTrap extends HasInstrType {
   def StateRunning   = 3.U
 
   def TRAP    = BitPat("b????????????_?????_000_?????_1101011")
-  val table = Array(TRAP -> List(InstrI, FuType.alu, ALUOpType.add))
+  val table = Array(TRAP -> List(InstrI, FuType.csr, CSROpType.set))
 }
 
 class Monitor extends BlackBox {

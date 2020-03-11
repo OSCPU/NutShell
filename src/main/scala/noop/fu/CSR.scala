@@ -162,6 +162,7 @@ class CSRIO extends FunctionUnitIO {
   val redirect = new RedirectIO
   // for exception check
   val instrValid = Input(Bool())
+  val isBackendException = Input(Bool())
   // for differential testing
   val intrNO = Output(UInt(XLEN.W))
   val imemMMU = Flipped(new MMUIO)
@@ -451,10 +452,10 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
 
   // CSR inst decode
   val ret = Wire(Bool())
-  val isEcall = addr === privEcall && func === CSROpType.jmp
-  val isMret = addr === privMret   && func === CSROpType.jmp
-  val isSret = addr === privSret   && func === CSROpType.jmp
-  val isUret = addr === privUret   && func === CSROpType.jmp
+  val isEcall = addr === privEcall && func === CSROpType.jmp && !io.isBackendException
+  val isMret = addr === privMret   && func === CSROpType.jmp && !io.isBackendException
+  val isSret = addr === privSret   && func === CSROpType.jmp && !io.isBackendException
+  val isUret = addr === privUret   && func === CSROpType.jmp && !io.isBackendException
 
   Debug(false){
     when(wen){
@@ -496,11 +497,25 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   io.imemMMU.status_mxr := DontCare
   io.dmemMMU.status_mxr := mstatusStruct.mxr.asBool
 
-  val hasInstrPageFault = io.cfIn.exceptionVec(instrPageFault) && valid
-  val hasLoadPageFault = io.dmemMMU.loadPF   
-  val hasStorePageFault = io.dmemMMU.storePF 
-  val hasStoreAddrMisaligned = io.cfIn.exceptionVec(storeAddrMisaligned)
-  val hasLoadAddrMisaligned = io.cfIn.exceptionVec(loadAddrMisaligned)
+  val hasInstrPageFault = Wire(Bool())
+  val hasLoadPageFault = Wire(Bool())
+  val hasStorePageFault = Wire(Bool())
+  val hasStoreAddrMisaligned = Wire(Bool())
+  val hasLoadAddrMisaligned = Wire(Bool())
+
+  if(EnableOutOfOrderExec){
+    hasInstrPageFault      := valid && io.cfIn.exceptionVec(instrPageFault)
+    hasLoadPageFault       := valid && io.cfIn.exceptionVec(loadPageFault)
+    hasStorePageFault      := valid && io.cfIn.exceptionVec(storePageFault)
+    hasStoreAddrMisaligned := valid && io.cfIn.exceptionVec(storeAddrMisaligned)
+    hasLoadAddrMisaligned  := valid && io.cfIn.exceptionVec(loadAddrMisaligned)
+  }else{
+    hasInstrPageFault := io.cfIn.exceptionVec(instrPageFault) && valid
+    hasLoadPageFault := io.dmemMMU.loadPF   // TODO: fix it for Hercules backend: io.cfIn.exceptionVec(loadPageFault) && valid
+    hasStorePageFault := io.dmemMMU.storePF // TODO: fix it for Hercules backend: io.cfIn.exceptionVec(storePageFault) && valid
+    hasStoreAddrMisaligned := io.cfIn.exceptionVec(storeAddrMisaligned) // TODO: fix it for Hercules backend: && valid 
+    hasLoadAddrMisaligned := io.cfIn.exceptionVec(loadAddrMisaligned)   // TODO: fix it for Hercules backend: && valid
+  }
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
     val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt(io.cfIn.pc + 2.U, XLEN), SignExt(io.cfIn.pc, XLEN)), SignExt(io.dmemMMU.addr, XLEN))
@@ -552,7 +567,8 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
   // csrExceptionVec(instrPageFault) := hasInstrPageFault
-  csrExceptionVec(illegalInstr) := isIllegalAddr && wen // Trigger an illegal instr exception when unimplemented csr is being read/written
+  // TODO: FIXIT
+  csrExceptionVec(illegalInstr) := isIllegalAddr && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
@@ -568,10 +584,11 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val retTarget = Wire(UInt(VAddrBits.W))
   val trapTarget = Wire(UInt(VAddrBits.W))
   io.redirect.valid := (valid && func === CSROpType.jmp) || raiseExceptionIntr || resetSatp
-  io.redirect.target := Mux(resetSatp, io.cfIn.pnpc, Mux(raiseExceptionIntr, trapTarget, retTarget))
+  io.redirect.target := Mux(resetSatp, io.cfIn.pc + 4.U, Mux(raiseExceptionIntr, trapTarget, retTarget))
 
   Debug(){
     when(raiseExceptionIntr){
+      printf("[CSR] excin %b excgen %b", csrExceptionVec.asUInt(), iduExceptionVec.asUInt())
       printf("[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
       printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
     }

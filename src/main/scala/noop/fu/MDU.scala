@@ -166,5 +166,7 @@ class MDU extends NOOPModule {
   io.in.ready := Mux(isDiv, div.io.in.ready, mul.io.in.ready)
   io.out.valid := Mux(isDivReg, div.io.out.valid, mul.io.out.valid)
 
+  Debug(){printf("[FU-MDU] irv-orv %d %d - %d %d\n", io.in.ready, io.in.valid, io.out.ready, io.out.valid)}
+
   BoringUtils.addSource(mul.io.out.fire(), "perfCntCondMmulInstr")
 }
