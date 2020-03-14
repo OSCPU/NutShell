@@ -57,7 +57,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val alu2rs = Module(new RS(name = "ALU2RS"))
   val csrrs = Module(new RS(name = "CSRRS", size = 1)) // CSR & MOU
   // val lsurs = Module(new RS(pipelined = true, name = "LSURS"))
-  val lsurs = Module(new RS(pipelined = true, name = "LSURS", size = 1)) // FIXIT: out of order l/s disabled
+  val lsurs = Module(new RS(fifo = true, name = "LSURS")) // FIXIT: out of order l/s disabled
   val mdurs = Module(new RS(pipelined = false, name = "MDURS"))
 
   // ------------------------------------------------

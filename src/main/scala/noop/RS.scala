@@ -12,7 +12,7 @@ trait HasRSConst{
 }
 
 // Reservation Station
-class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
+class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
@@ -35,12 +35,12 @@ class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") e
   val src2    = Reg(Vec(rsSize, UInt(XLEN.W)))
 //   val imm = Vec(rsSize, Reg(UInt(XLEN.W)))
 
-  val instRdy = List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i))
-
+  val instRdy = WireInit(VecInit(List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i))))
   val rsEmpty = !valid.asUInt.orR
   val rsFull = valid.asUInt.andR
   val rsAllowin = !rsFull
-  val rsReadygo = instRdy.foldRight(false.B)((sum, i) => sum|i)
+  val rsReadygo = Wire(Bool())
+  rsReadygo := instRdy.foldRight(false.B)((sum, i) => sum|i)
 
   val forceDequeue = WireInit(false.B)
   // Listen to Common Data Bus
@@ -83,7 +83,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") e
 
   // RS dequeue
   io.out.valid := rsReadygo
-  val dequeueSelect = PriorityEncoder(instRdy) // TODO: replace PriorityEncoder with other logic
+  val dequeueSelect = Wire(UInt(log2Up(size).W))
+  dequeueSelect := PriorityEncoder(instRdy) // TODO: replace PriorityEncoder with other logic
   when(io.out.fire() || forceDequeue){
     valid(dequeueSelect) := false.B
   }
@@ -113,6 +114,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") e
   }
 
   // fix unpipelined 
+  // when `pipelined` === false, RS helps unpipelined FU to store its uop for commit
+  // if an unpipelined fu can store uop itself, set `pipelined` to true (it behaves just like a pipelined FU)
   if(!pipelined){
     val fuValidReg = RegInit(false.B)
     val fuFlushReg = RegInit(false.B)
@@ -124,7 +127,19 @@ class RS(size: Int = 4, pipelined: Boolean = true, name: String = "unnamedRS") e
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
     assert(!(io.out.fire() && io.commit.get && fuValidReg && !io.flush))
+  }
 
+  if(fifo){
+    val queue = Module(new FlushableQueue(UInt(log2Up(size).W), size))
+    queue.io.flush := io.flush
+    queue.io.enq.bits := enqueueSelect
+    queue.io.enq.valid := io.in.fire()
+    queue.io.deq.ready := io.out.fire()
+    dequeueSelect := queue.io.deq.bits
+    rsReadygo := instRdy(dequeueSelect)
+    io.in.ready := rsAllowin // && queue.enq.ready
+    io.out.valid := rsReadygo && queue.io.deq.valid
+    assert(!(rsAllowin && !queue.io.enq.ready))
   }
 
 }
