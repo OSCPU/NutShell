@@ -55,7 +55,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     val imem = new SimpleBusC
     val dmem = new SimpleBusC
     val mmio = new SimpleBusUC
-    val frontend = Flipped(new SimpleBusUC)
+    val frontend = Flipped(new SimpleBusUC())
   })
 
   def pipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
@@ -84,24 +84,29 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   }
 
   val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
-  val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
+  val dmemXbar = Module(new SimpleBusCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
 
   if(EnableOutOfOrderExec){
     val backend = Module(new Backend)
     // backend.io := DontCare // TODO: Delete it
     PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 16)
     backend.io.flush := ifu.io.flushVec(2)
+    ifu.io.redirect <> backend.io.redirect
 
     val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
     
-    val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
+    val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
-    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
+    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
+      CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
 
-    ifu.io.redirect <> backend.io.redirect
+    // Make DMA access through L1 DCache to keep coherence
+    val expender = Module(new SimpleBusUCExpender(userBits = DCacheUserBundleWidth, userVal = 0.U))
+    expender.io.in <> io.frontend
+    dmemXbar.io.in(3) <> expender.io.out
 
     Debug(){
       printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
@@ -149,11 +154,11 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     
     val dtlb = TLB(in = exu.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = exu.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
-    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
-  }
+    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
 
-  // Make DMA access through L1 DCache to keep coherence
-  dmemXbar.io.in(3) <> io.frontend
+    // Make DMA access through L1 DCache to keep coherence
+    dmemXbar.io.in(3) <> io.frontend
+  }  
 
   io.mmio <> mmioXbar.io.out
 }

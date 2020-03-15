@@ -91,6 +91,27 @@ class SimpleBusUC(val userBits: Int = 0, val addrBits: Int = 32) extends SimpleB
   }
 }
 
+class SimpleBusUCExpender(val userBits: Int, val userVal: UInt, val addrBits: Int = 32) extends Module {
+  val io = IO(new Bundle{
+    val in = Flipped(new SimpleBusUC())
+    val out = new SimpleBusUC(userBits = userBits)
+  })
+  require(userBits > 0)
+  io.out.req.valid := io.in.req.valid
+  io.in.req.ready := io.out.req.ready
+  io.out.req.bits.addr := io.in.req.bits.addr
+  io.out.req.bits.size := io.in.req.bits.size 
+  io.out.req.bits.cmd := io.in.req.bits.cmd 
+  io.out.req.bits.wmask := io.in.req.bits.wmask 
+  io.out.req.bits.wdata := io.in.req.bits.wdata 
+  io.out.req.bits.user.get := userVal
+  io.in.resp.valid := io.out.resp.valid
+  io.out.resp.ready := io.in.resp.ready
+  io.in.resp.bits.cmd := io.out.resp.bits.cmd
+  io.in.resp.bits.rdata := io.out.resp.bits.rdata
+  // DontCare := io.out.resp.bits.user.get
+}
+
 // Cache
 class SimpleBusC(val userBits: Int = 0) extends SimpleBusBundle {
   val mem = new SimpleBusUC(userBits)

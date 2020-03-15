@@ -22,7 +22,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     // EXU
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
     val flush = Input(Bool())
-    val dmem = new SimpleBusUC(addrBits = VAddrBits)
+    val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
     val memMMU = Flipped(new MemMMUIO)
 
     // WBU
@@ -294,70 +294,37 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsucommit = Wire(new OOCommitIO)
   val lsuTlbPF = WireInit(false.B)
   
-  val lsuValid = RegInit(false.B)
-  val lsuFlush = RegInit(false.B)
-  val lsuUop = RegEnable(lsurs.io.out.bits, lsurs.io.out.fire())
-  when(lsu.io.out.fire()){ lsuValid := false.B }
-  when(lsurs.io.out.fire() && !io.flush){ lsuValid := true.B }
-  // when(io.flush){ lsuValid := false.B }
-  when(io.flush && lsuValid){ lsuFlush := true.B }
-  when(lsu.io.out.fire()){ lsuFlush := false.B }
-  Debug(){
-    printf("[RS LSUFSM INFO] lsuValid %x lsuFlush %x in %x out %x pc %x\n", lsuValid, lsuFlush, lsurs.io.out.fire(), lsu.io.out.fire(), lsuUop.decode.cf.pc)
-  }
+  val lsuUop = lsurs.io.out.bits
 
   val lsuOut = lsu.access(
-    valid = lsuValid,
+    valid = lsurs.io.out.valid,
     src1 = lsuUop.decode.data.src1, 
     src2 = lsuUop.decode.data.imm, 
     func = lsuUop.decode.ctrl.fuOpType, 
     dtlbPF = lsuTlbPF
   )
+  lsu.io.uopIn := lsuUop
+  lsu.io.scommit := rob.io.scommit
+  lsu.io.flush := io.flush
   lsu.io.wdata := lsuUop.decode.data.src2
-  lsu.io.instr := lsuUop.decode.cf.instr
+  // lsu.io.instr := lsuUop.decode.cf.instr
   io.dmem <> lsu.io.dmem
   lsu.io.out.ready := true.B //TODO
-  lsucommit.decode := lsuUop.decode
-  lsucommit.isMMIO := lsu.io.isMMIO || (AddressSpace.isMMIO(lsuUop.decode.cf.pc) && lsuValid)
+  lsucommit.decode := lsu.io.uopOut.decode
+  lsucommit.isMMIO := lsu.io.isMMIO
   lsucommit.commits := lsuOut
-  lsucommit.prfidx := lsuUop.prfDest
+  lsucommit.prfidx := lsu.io.uopOut.prfDest
   lsucommit.decode.cf.redirect.valid := false.B
-  lsucommit.exception := lsu.io.dtlbPF || lsu.io.storeAddrMisaligned || lsu.io.loadAddrMisaligned // TODO: refactor
+  lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
   // fix exceptionVec
   // TODO: refactor
-  lsucommit.decode.cf.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
-  lsucommit.decode.cf.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
-  lsucommit.decode.cf.exceptionVec(storePageFault) := lsu.io.dtlbPF && io.memMMU.dmem.storePF
-  lsucommit.decode.cf.exceptionVec(loadPageFault) := lsu.io.dtlbPF && io.memMMU.dmem.loadPF
+  lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
   // backend exceptions only come from LSU
   raiseBackendException := lsucommit.exception && lsu.io.out.fire()
   // for backend exceptions, we reuse 'intrNO' field in ROB
   // when ROB.exception(x) === 1, intrNO(x) represents backend exception vec for this inst
   lsucommit.intrNO := lsucommit.decode.cf.exceptionVec.asUInt
-
-  Debug(){
-    when(lsu.io.storeAddrMisaligned || lsu.io.loadAddrMisaligned || lsu.io.dtlbPF){
-      printf("[LSU-EXCEPTION] time %d %x %x %x\n", GTimer(), lsu.io.dtlbPF, lsu.io.storeAddrMisaligned, lsu.io.loadAddrMisaligned)
-    }
-  }
-
-  // val lsuOut = lsu.access(
-  //   valid = lsurs.io.out.valid, 
-  //   src1 = lsurs.io.out.bits.decode.data.src1, 
-  //   src2 = lsurs.io.out.bits.decode.data.imm, 
-  //   func = lsurs.io.out.bits.decode.ctrl.fuOpType, 
-  //   dtlbPF = lsuTlbPF
-  // )
-  // lsu.io.wdata := lsurs.io.out.bits.decode.data.src2
-  // lsu.io.instr := lsurs.io.out.bits.decode.cf.instr
-  // io.dmem <> lsu.io.dmem
-  // lsu.io.out.ready := true.B //TODO
-  // lsucommit.decode := lsurs.io.out.bits.decode
-  // lsucommit.isMMIO := lsu.io.isMMIO || (AddressSpace.isMMIO(lsurs.io.out.bits.decode.cf.pc) && lsurs.io.out.valid)
-  // lsucommit.intrNO := 0.U
-  // lsucommit.commits := lsuOut
-  // lsucommit.prfidx := lsurs.io.out.bits.prfDest
 
   val mdu = Module(new MDU)
   val mducommit = Wire(new OOCommitIO)
@@ -439,13 +406,13 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   // ------------------------------------------------
   // Backend final stage
-  // Commit
+  // Commit to CDB
   // ------------------------------------------------
 
   // CDB arbit
   val (srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU) = (0, 1, 2, 3, 4, 5)
   val commit = VecInit(List(alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit))
-  val commitValid = VecInit(List(alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid && !lsuFlush, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid))
+  val commitValid = VecInit(List(alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid))
 
   val Src1Priority = Seq(
     srcCSR,
@@ -470,8 +437,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1rs.io.out.ready := cdbSrc1 === srcALU1.U
   alu2rs.io.out.ready := cdbSrc2 === srcALU2.U
   csrrs.io.out.ready := csr.io.in.ready
-  // lsurs.io.out.ready := lsu.io.in.ready //FIXME after update LSU
-  lsurs.io.out.ready := !lsuValid || lsu.io.out.fire() //FIXME after update LSU
+  lsurs.io.out.ready := lsu.io.in.ready
   mdurs.io.out.ready := mdu.io.in.ready
 
   Debug(){when(io.flush){printf("[FLUSH] TIMER: %d\n", GTimer())}}
