@@ -71,7 +71,7 @@ object MEMOpID {
   def commitToVPU(memop: UInt) = memop(6)
 }
 
-sealed trait HasLSUConst {
+trait HasLSUConst {
   val IndependentAddrCalcState = false
   val loadQueueSize = 8
   val storeQueueSize = 8
@@ -80,7 +80,7 @@ sealed trait HasLSUConst {
 class LSUIO extends FunctionUnitIO {
   val wdata = Input(UInt(XLEN.W))
   // val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr // TODO
-  val dmem = new SimpleBusUC(addrBits = VAddrBits)
+  val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
   val uopIn = Input(new RenamedDecodeIO)
   val uopOut = Output(new RenamedDecodeIO)
   val isMMIO = Output(Bool())
@@ -137,13 +137,13 @@ class MemReq extends NOOPBundle {
 }
 
 class DCacheUserBundle extends NOOPBundle {
-  val pc       = UInt(VAddrBits.W)
-  val prfidx   = UInt(prfAddrWidth.W)
+  // val pc       = UInt(VAddrBits.W)
+  // val prfidx   = UInt(prfAddrWidth.W)
   val ldqidx   = UInt(5.W) //TODO
   val op       = UInt(7.W)
-  val func     = UInt(7.W)
-  val loadAddrMisaligned  = Bool()
-  val storeAddrMisaligned = Bool()
+  // val func     = UInt(7.W)
+  // val loadAddrMisaligned  = Bool()
+  // val storeAddrMisaligned = Bool()
 }
 // or use LoadQueueEntry instead
 
@@ -197,11 +197,10 @@ class LSU extends NOOPModule with HasLSUConst {
   val dmem = io.dmem
   // Gen result
   val dmemUserOut = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle)
-  val opResp = dmemUserOut.op
+  val opResp = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op
+  val opReq = dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val ldqidxResp = dmemUserOut.ldqidx
   // if loadqueue is enabled, dcache user bit only contains op and ldqidx
-  val vaddrBack = DontCare //TODO
-  val paddrBack = loadQueue(dmemUserOut.ldqidx).paddr //DontCare //TODO
 
   // Decode
   val instr    = io.uopIn.decode.cf.instr
@@ -213,9 +212,11 @@ class LSU extends NOOPModule with HasLSUConst {
   val scReq   = valid & LSUOpType.isSC(func)
   val aq = instr(26)
   val rl = instr(25)
-  val funct3 = func(14, 12)
+  val funct3 = instr(14, 12)
   val atomWidthW = !funct3(0)
   val atomWidthD = funct3(0)
+  val findLoadAddrMisaligned = Wire(Bool())
+  val findStoreAddrMisaligned = Wire(Bool())
 
   val addr = src1 + src2
   val data = io.uopIn.decode.data.src2
@@ -227,8 +228,9 @@ class LSU extends NOOPModule with HasLSUConst {
     false.B, // commitToSTQ
     io.in.valid, // commitToCDB
     amoReq, // needAlu
-    storeReq || amoReq || scReq, // needStore
+    !findStoreAddrMisaligned && (storeReq || amoReq || scReq), // needStore
     loadReq || amoReq || lrReq // needLoad
+    // TODO: Fix findStoreAddrMisaligned
   )
 
   // Atom LR/SC Control Bits
@@ -243,6 +245,20 @@ class LSU extends NOOPModule with HasLSUConst {
   BoringUtils.addSink(lr, "lr")
   BoringUtils.addSink(lrAddr, "lr_addr")
   val scInvalid = !(src1 === lrAddr) && scReq
+  setLr := DontCare
+  setLrVal := DontCare
+  setLrAddr := DontCare
+  lr := DontCare
+  lrAddr := DontCare
+
+  // PF signal from TLB
+  // TODO: add a TLB bus instead of using BoringUtils.addSink/Src
+  val dtlbFinish = WireInit(false.B)
+  val dtlbPF = WireInit(false.B)
+  val dtlbEnable = WireInit(false.B)
+  BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
+  BoringUtils.addSink(dtlbPF, "DTLBPF")
+  BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
 
   // L/S Queue
 
@@ -250,8 +266,8 @@ class LSU extends NOOPModule with HasLSUConst {
   // ------------------------------------------------------------
   // |   not used   |   waiting    |   dmemreq   |   not used   |
   // ------------------------------------------------------------
-  //               |              |             |
-  //             head            mid           tail
+  //                |              |             |
+  //              head            mid           tail
 
   val loadQueue = Reg(Vec(loadQueueSize, new LoadQueueEntry)) // TODO: replace it with utils.queue
   // Load Queue contains Load, Store and TLB request
@@ -265,11 +281,11 @@ class LSU extends NOOPModule with HasLSUConst {
   val havePendingDemReq = loadMid =/= loadHead
 
   //                               Store Queue
-  //              ---------------------------------------------
-  // ---> Enqueue |   not used   |   commited   |   retired   |  --> Dequeue
-  //             ---------------------------------------------
-  //                            |              |             |
-  //                          head            mid           tail
+  //              ------------------------------------------------------------
+  // ---> Enqueue |   not used   |   commited   |   retiring   |   retired   |  --> Dequeue
+  //              ------------------------------------------------------------
+  //                             |              |              |
+  //                           head            mid            tail
 
   val storeQueue = Reg(Vec(storeQueueSize, new StoreQueueEntry))
   // Store Queue contains store insts that have finished TLB lookup stage
@@ -277,8 +293,9 @@ class LSU extends NOOPModule with HasLSUConst {
   // CDB-commited insts have already gotten their paddr from TLB, 
   // but whether these insts will be canceled is still pending for judgement.
   // ROB-commited insts are those insts already retired from ROB
-  val storeHead = RegInit(0.U((log2Up(storeQueueSize)+1).W))
-  val storeMid  = RegInit(0.U((log2Up(storeQueueSize)+1).W))
+  val storeHead    = RegInit(0.U((log2Up(storeQueueSize)+1).W))
+  val storeMid     = RegInit(0.U((log2Up(storeQueueSize)+1).W))
+  val storeTail    = RegInit(0.U((log2Up(storeQueueSize)+1).W))
   val nextStoreMid = Wire(UInt((log2Up(storeQueueSize)+1).W))
   val haveUnconfirmedStore = storeHead =/= storeMid
   val haveUnfinishedStore = 0.U =/= storeMid
@@ -301,9 +318,9 @@ class LSU extends NOOPModule with HasLSUConst {
     "b10".U   -> (addr(1,0) === 0.U), //w
     "b11".U   -> (addr(2,0) === 0.U)  //d
   ))
-  val findLoadAddrMisaligned  = valid && !storeReq && !amoReq && !addrAligned
-  val findStoreAddrMisaligned = valid && (storeReq || amoReq) && !addrAligned
-  when(findLoadAddrMisaligned || findStoreAddrMisaligned){memop(1,0) := "b01".U} // Just load
+  findLoadAddrMisaligned  := valid && !storeReq && !amoReq && !addrAligned
+  findStoreAddrMisaligned := valid && (storeReq || amoReq) && !addrAligned
+  // when(findLoadAddrMisaligned || findStoreAddrMisaligned){memop(1,0) := "b01".U} // Just load
 
   // load queue enqueue
   // Head ++ 
@@ -381,8 +398,8 @@ class LSU extends NOOPModule with HasLSUConst {
 
   val pageTableWalkerWorking = RegInit(false.B)
   val tlbReadygo   = tlbDMemReq.valid
-  val storeReadygo = storeDMemReq.valid && !tlbDMemReq.valid && !pageTableWalkerWorking
-  val loadReadygo  = loadDMemReq.valid && !tlbDMemReq.valid && !storeDMemReq.valid && !pageTableWalkerWorking
+  val storeReadygo = storeDMemReq.valid && !tlbDMemReq.valid && !pageTableWalkerWorking && !storeQueueFull
+  val loadReadygo  = loadDMemReq.valid && !tlbDMemReq.valid && !storeDMemReq.valid && !pageTableWalkerWorking && !loadQueueFull && !storeQueueFull
 
   val memReq = Mux1H(List(
     tlbReadygo -> tlbDMemReq,
@@ -444,6 +461,8 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // tlbDMemReq
   // TODO
+  tlbDMemReq := DontCare
+  tlbDMemReq.valid := false.B
 
   // noDMemReq
   noDMemReq := DontCare
@@ -493,6 +512,10 @@ class LSU extends NOOPModule with HasLSUConst {
   // If TLB hit, dequeue inst will be marked as finished in Load Queue
   // If TLB miss, reset Load Queue Pointer
   // If it is a valid store inst, add it to store queue
+  // If an inst is marked as `finished`, it will be commited to CDB in the next cycle
+
+  val vaddrBack = DontCare //TODO
+  val paddrBack = loadQueue(dmemUserOut.ldqidx).paddr //DontCare //TODO
 
   // MMIO check
   val lsuMMIO = WireInit(false.B)
@@ -510,7 +533,7 @@ class LSU extends NOOPModule with HasLSUConst {
   }
 
   // write back to load queue
-  when(dmem.resp.valid){
+  when(dmem.resp.fire()){
     when(MEMOpID.commitToCDB(opResp)){
       when(!MEMOpID.needStore(opResp)){loadQueue(ldqidxResp).data := dataBack}
       loadQueue(ldqidxResp).finished := true.B
@@ -520,6 +543,20 @@ class LSU extends NOOPModule with HasLSUConst {
     when(MEMOpID.commitToVPU(opResp)){
       // TODO
     }
+  }
+
+  // write back to store queue
+  val storeQueueEnqueue = dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && MEMOpID.needStore(opResp)// && !storeQueueFull
+  assert(!(storeQueueEnqueue && storeQueueFull))
+  when(storeQueueEnqueue){
+    storeQueue(storeHead).pc := loadQueue(ldqidxResp).pc
+    storeQueue(storeHead).prfidx := loadQueue(ldqidxResp).prfidx
+    storeQueue(storeHead).vaddr := loadQueue(ldqidxResp).vaddr
+    storeQueue(storeHead).paddr := loadQueue(ldqidxResp).paddr //TODO: replace it with TLB result
+    storeQueue(storeHead).func := loadQueue(ldqidxResp).func
+    storeQueue(storeHead).op := loadQueue(ldqidxResp).op
+    storeQueue(storeHead).data := loadQueue(ldqidxResp).data
+    storeQueue(storeHead).isMMIO := lsuMMIO //FIXIT: this is ugly
   }
 
   //-------------------------------------------------------
@@ -541,10 +578,10 @@ class LSU extends NOOPModule with HasLSUConst {
   // Request from Store Queue / Commit to Store Queue
   //-------------------------------------------------------
 
-  // when found a store on CDB, add it to store queue
-  val storeQueueEnqueue = dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && MEMOpID.needStore(opResp) && !storeQueueFull
   // when a store inst is retired, commit 1 term in Store Queue
   val storeQueueConfirm = io.scommit // TODO: Argo only support 1 scommit / cycle
+  // when a store inst actually writes data to dmem, mark it as `waiting for dmem resp`
+  val storeQueueReqsend = dmem.req.fire() && MEMOpID.commitToSTQ(opReq)
   // when dmem try to commit to store queue, dequeue
   val storeQueueDequeue = dmem.resp.fire() && MEMOpID.commitToSTQ(opResp)
   when(storeQueueDequeue){
@@ -558,8 +595,8 @@ class LSU extends NOOPModule with HasLSUConst {
   when(!storeQueueDequeue && storeQueueConfirm){nextStoreMid := storeMid + 1.U}
   storeMid := nextStoreMid
   // storeHead := storeHead
-  when(storeQueueConfirm && !storeQueueEnqueue){storeHead := storeHead - 1.U}
   when(!storeQueueConfirm && storeQueueEnqueue){storeHead := storeHead + 1.U}
+  when(storeQueueConfirm && !storeQueueEnqueue){storeHead := storeHead - 1.U}
   when(io.flush){storeHead := nextStoreMid}
 
   // TODO: store queue enqueue
@@ -599,8 +636,8 @@ class LSU extends NOOPModule with HasLSUConst {
   io.exceptionVec(storePageFault) := false.B // TODO: fixit
   io.exceptionVec(loadAddrMisaligned) := loadQueue(loadTail).loadAddrMisaligned
   io.exceptionVec(storeAddrMisaligned) := loadQueue(loadTail).storeAddrMisaligned
-  io.uopOut.decode.cf.pc := dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).pc // TODO: fixit
-  io.uopOut.prfDest := dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).prfidx // TODO: fixit
+  io.uopOut.decode.cf.pc := loadQueue(loadTail).pc
+  io.uopOut.prfDest := loadQueue(loadTail).prfidx
 
   io.in.ready := !loadQueueFull
   io.out.valid := dmem.resp.fire() && MEMOpID.commitToCDB(opResp)
