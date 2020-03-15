@@ -30,6 +30,7 @@ trait HasNOOPParameter {
 trait HasNOOPConst {
   val CacheReadWidth = 8
   val ICacheUserBundleWidth = 39*2 + 9 // TODO: this const depends on VAddrBits
+  val DCacheUserBundleWidth = 16
 }
 
 abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO
@@ -148,7 +149,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     
     val dtlb = TLB(in = exu.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = exu.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
-    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
+    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
   }
 
   // Make DMA access through L1 DCache to keep coherence
