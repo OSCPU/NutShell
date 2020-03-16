@@ -222,8 +222,10 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.scommit := List.tabulate(robWidth)(i => 
     valid(ringBufferTail)(i) && 
     decode(ringBufferTail)(i).ctrl.fuType === FuType.lsu && 
-    LSUOpType.isStore(decode(ringBufferTail)(i).ctrl.fuOpType)
-  ).foldRight(false.B)((sum, i) => sum || i)
+    LSUOpType.isStore(decode(ringBufferTail)(i).ctrl.fuOpType) && 
+    ((i == 0).B || !redirect(ringBufferTail)(0).valid)
+  ).foldRight(false.B)((sum, i) => sum || i) && retireATerm
+
   // In current version, only one l/s inst can be sent to agu in a cycle
   // therefore, in all banks, there is no more than 1 store insts
 
