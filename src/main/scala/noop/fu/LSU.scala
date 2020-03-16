@@ -304,6 +304,28 @@ class LSU extends NOOPModule with HasLSUConst {
     }
   }
 
+  Debug(){
+    printf("[LSU LDQ] time %x\n", GTimer())
+    printf("[LSU LDQ] pc           id vaddr        func    op      data             mmio   valid   finished   exc \n")
+    for(i <- 0 to (loadQueueSize - 1)){
+      printf(
+        "[LSU LDQ] 0x%x %x 0x%x %b %b %x mmio:%b valid:%b finished:%b exc:%b%b%b%b %d", 
+        loadQueue(i).pc, loadQueue(i).prfidx, loadQueue(i).vaddr, loadQueue(i).func, loadQueue(i).op, loadQueue(i).data, loadQueue(i).isMMIO, loadQueue(i).valid, loadQueue(i).finished, loadQueue(i).loadPageFault, loadQueue(i).storePageFault, loadQueue(i).loadAddrMisaligned, loadQueue(i).storeAddrMisaligned, i.U
+      )
+      when(loadQueue(i).valid){printf(" valid")}
+      when(loadHead === i.U){printf(" head")}
+      when(loadMid === i.U){printf(" mid")}
+      when(loadTail === i.U){printf(" tail")}
+      printf("\n")
+    }
+  }
+
+  Debug(){
+    when(loadQueueEnqueue){
+      printf("[ENLDQ] pc %x ldqidx %x time %x\n", io.uopIn.decode.cf.pc, loadHead, GTimer())
+    }
+  }
+
   //                               Store Queue
   //              ------------------------------------------------------------
   // ---> Enqueue |   not used   |   commited   |   retiring   |   retired   |  --> Dequeue
@@ -356,6 +378,22 @@ class LSU extends NOOPModule with HasLSUConst {
   when(storeQueueDequeue && !storeQueueEnqueue){storeHead := storeHead - 1.U}
   when(!storeQueueDequeue && storeQueueEnqueue){storeHead := storeHead + 1.U}
   when(io.flush){storeHead := nextStoreMid}
+  printf("[PSTQ] time %x head %x mid %x tail %x flush %x\n", GTimer(), storeHead, storeMid, storeTail, io.flush)
+
+  Debug(){
+    printf("[LSU STQ] time %x\n", GTimer())
+    printf("[LSU STQ] pc           id vaddr        func    op      data             mmio \n")
+    for(i <- 0 to (storeQueueSize - 1)){
+      printf(
+        "[LSU STQ] 0x%x %x 0x%x %b %b %x mmio:%b %d", 
+        storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, i.U
+      )
+      when(storeHead === i.U){printf(" head")}
+      when(storeMid === i.U){printf(" mid")}
+      when(storeTail === i.U){printf(" tail")}
+      printf("\n")
+    }
+  }
 
   //-------------------------------------------------------
   // Load / Store Pipeline
@@ -494,6 +532,16 @@ class LSU extends NOOPModule with HasLSUConst {
   loadDMemReq.cmd := SimpleBusCmd.read //TODO: only MEMOpID.needLoad(memop) need load
   loadDMemReq.user := loadSideUserBundle
 
+  Debug(){
+    when(dmem.req.fire() && MEMOpID.commitToCDB(opReq)){
+      when(havePendingDemReq){
+        printf("[LSU DREQ] pc 0x%x\n", loadQueue(loadMid).pc)
+      }.otherwise{
+        printf("[LSU DREQ] pc 0x%x\n", io.uopIn.decode.cf.pc)
+      }
+    }
+  }
+
   // storeDMemReq
   // TODO: store queue
   storeDMemReq.addr := storeQueue(storeTail).vaddr //TODO: fixit
@@ -610,6 +658,12 @@ class LSU extends NOOPModule with HasLSUConst {
     storeQueue(storeQueueEnqPtr).data := loadQueue(ldqidxResp).data
     storeQueue(storeQueueEnqPtr).isMMIO := lsuMMIO //FIXIT: this is ugly
   }
+  Debug(){
+    when(storeQueueEnqueue){
+      printf("[ENSTQ] pc %x ldqidx %x valid %x enqp %x head %x time %x\n", loadQueue(ldqidxResp).pc, ldqidxResp, loadQueue(ldqidxResp).valid, storeQueueEnqPtr, storeHead, GTimer())
+    }
+  }
+  assert(!(storeQueueEnqueue && !loadQueue(ldqidxResp).valid))
 
   //-------------------------------------------------------
   // LSU Stage 4: Atom and CDB broadcast
@@ -665,6 +719,9 @@ class LSU extends NOOPModule with HasLSUConst {
   io.in.ready := !loadQueueFull
   io.out.valid := dmem.resp.fire() && MEMOpID.commitToCDB(opResp)
 
-  // Flush
+    when(dmem.resp.fire()){
+      printf("[LSU DRESP] data %x fwddata %x ldqidx %x memop %b\n", dmem.resp.bits.rdata, dataBack, dmemUserOut.ldqidx, dmemUserOut.op)
+    }
+  }
 
 }
