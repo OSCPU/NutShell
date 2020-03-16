@@ -280,9 +280,12 @@ class LSU extends NOOPModule with HasLSUConst {
   val loadQueueFull = loadHead === (loadTail - 1.U) //TODO: fix it with maybe_full logic
   val loadQueueEmpty = loadHead === loadTail //TODO: fix it with maybe_full logic
   val havePendingDemReq = loadMid =/= loadHead
+  val havePendingCDBCmt = loadQueue(loadTail).finished
+  assert(!(loadQueue(loadTail).finished && !loadQueue(loadTail).valid))
 
   // load queue enqueue
-  when(io.in.fire()){ loadHead := loadHead + 1.U }
+  val loadQueueEnqueue = io.in.fire()
+  when(loadQueueEnqueue){ loadHead := loadHead + 1.U }
   // move loadMid ptr
   when(dmem.req.fire() && MEMOpID.commitToCDB(dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op)){
     loadMid := loadMid + 1.U
@@ -295,6 +298,7 @@ class LSU extends NOOPModule with HasLSUConst {
   }
 
   when(io.flush){
+    // FIXIT
     loadHead := loadTail + 1.U
     loadMid := loadTail + 1.U
     loadTail := loadTail + 1.U
@@ -349,7 +353,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val storeQueueFull = storeHead === storeQueueSize.U 
 
   // when a store inst get its result from TLB, add it to store queue
-  val storeQueueEnqueue = dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && MEMOpID.needStore(opResp)// && !storeQueueFull
+  val storeQueueEnqueue = dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && MEMOpID.needStore(opResp) && loadQueue(ldqidxResp).valid// && !storeQueueFull
   assert(!(storeQueueEnqueue && storeQueueFull))
   // when a store inst is retired, commit 1 term in Store Queue
   val storeQueueConfirm = io.scommit // TODO: Argo only support 1 scommit / cycle
@@ -418,7 +422,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // load queue enqueue
   // Head ++ 
-  when(io.in.fire()){
+  when(loadQueueEnqueue){
     loadQueue(loadHead).pc := io.uopIn.decode.cf.pc
     loadQueue(loadHead).prfidx := io.uopIn.prfDest
     loadQueue(loadHead).vaddr := addr
@@ -495,7 +499,7 @@ class LSU extends NOOPModule with HasLSUConst {
   // loadSideUserBundle.pc := io.uopIn.decode.cf.pc
   // loadSideUserBundle.prfidx := io.uopIn.decode.prfDest
   loadSideUserBundle.ldqidx := loadMid
-  loadSideUserBundle.op := memop
+  loadSideUserBundle.op := Mux(havePendingDemReq, loadQueue(loadMid).op, memop)
   // loadSideUserBundle.func := func
   // loadSideUserBundle.loadAddrMisaligned := loadAddrMisaligned
   // loadSideUserBundle.storeAddrMisaligned := storeAddrMisaligned
@@ -717,7 +721,17 @@ class LSU extends NOOPModule with HasLSUConst {
   io.uopOut.prfDest := loadQueue(loadTail).prfidx
 
   io.in.ready := !loadQueueFull
-  io.out.valid := dmem.resp.fire() && MEMOpID.commitToCDB(opResp)
+  io.out.valid := havePendingCDBCmt
+
+  Debug(){
+    when(dmem.req.fire()){
+      printf("[LSU DREQ] ")
+      when(loadReadygo){printf("loadDMemReq")}
+      when(storeReadygo){printf("storeDMemReq")}
+      when(tlbReadygo){printf("tlbDMemReq")}
+      when((!tlbReadygo && !loadReadygo && !storeReadygo)){printf("noDMemReq")}
+      printf(" addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b\n", dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op)
+    }
 
     when(dmem.resp.fire()){
       printf("[LSU DRESP] data %x fwddata %x ldqidx %x memop %b\n", dmem.resp.bits.rdata, dataBack, dmemUserOut.ldqidx, dmemUserOut.op)
