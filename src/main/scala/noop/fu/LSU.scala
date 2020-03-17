@@ -334,15 +334,15 @@ class LSU extends NOOPModule with HasLSUConst {
   //              ------------------------------------------------------------
   // ---> Enqueue |   not used   |   commited   |   retiring   |   retired   |  --> Dequeue
   //              ------------------------------------------------------------
-  //                             |              |              |
-  //                           head            mid            tail
-
+  //                    |        |               |              |
+  //                  alloc     head            mid            tail
   val storeQueue = Reg(Vec(storeQueueSize, new StoreQueueEntry))
   // Store Queue contains store insts that have finished TLB lookup stage
   // There are 2 types of store insts in this queue: ROB-commited (retired) / CDB-commited (commited)
   // CDB-commited insts have already gotten their paddr from TLB, 
   // but whether these insts will be canceled is still pending for judgement.
   // ROB-commited insts are those insts already retired from ROB
+  val storeAlloc   = RegInit(0.U((log2Up(storeQueueSize)+1).W))
   val storeHead    = RegInit(0.U((log2Up(storeQueueSize)+1).W))
   val storeMid     = RegInit(0.U((log2Up(storeQueueSize)+1).W))
   val storeTail    = RegInit(0.U((log2Up(storeQueueSize)+1).W))
@@ -350,8 +350,10 @@ class LSU extends NOOPModule with HasLSUConst {
   val haveUnconfirmedStore = storeHead =/= storeMid
   val haveUnrequiredStore = storeMid =/= storeTail
   val haveUnfinishedStore = 0.U =/= storeTail
-  val storeQueueFull = storeHead === storeQueueSize.U 
+  val storeQueueFull = storeAlloc === storeQueueSize.U 
 
+  // alloc a slot when a store tlb request is sent
+  val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
   // when a store inst get its result from TLB, add it to store queue
   val storeQueueEnqueue = dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && MEMOpID.needStore(opResp) && loadQueue(ldqidxResp).valid// && !storeQueueFull
   assert(!(storeQueueEnqueue && storeQueueFull))
@@ -382,7 +384,14 @@ class LSU extends NOOPModule with HasLSUConst {
   when(storeQueueDequeue && !storeQueueEnqueue){storeHead := storeHead - 1.U}
   when(!storeQueueDequeue && storeQueueEnqueue){storeHead := storeHead + 1.U}
   when(io.flush){storeHead := nextStoreMid}
-  printf("[PSTQ] time %x head %x mid %x tail %x flush %x\n", GTimer(), storeHead, storeMid, storeTail, io.flush)
+
+  // alloc store queue slot
+  when(storeQueueDequeue && !storeQueueAlloc){storeAlloc := storeAlloc - 1.U}
+  when(!storeQueueDequeue && storeQueueAlloc){storeAlloc := storeAlloc + 1.U}
+  when(io.flush){storeAlloc := nextStoreMid}
+  assert(!(storeQueueFull && storeQueueAlloc))
+
+  printf("[PSTQ] time %x alloc %x head %x mid %x tail %x flush %x\n", GTimer(), storeAlloc, storeHead, storeMid, storeTail, io.flush)
 
   Debug(){
     printf("[LSU STQ] time %x\n", GTimer())
@@ -392,6 +401,7 @@ class LSU extends NOOPModule with HasLSUConst {
         "[LSU STQ] 0x%x %x 0x%x %b %b %x mmio:%b %d", 
         storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, i.U
       )
+      when(storeAlloc === i.U){printf(" alloc")}
       when(storeHead === i.U){printf(" head")}
       when(storeMid === i.U){printf(" mid")}
       when(storeTail === i.U){printf(" tail")}
@@ -485,7 +495,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   val pageTableWalkerWorking = RegInit(false.B)
   val tlbReadygo   = tlbDMemReq.valid
-  val storeReadygo = storeDMemReq.valid && !tlbDMemReq.valid && !pageTableWalkerWorking && !storeQueueFull
+  val storeReadygo = storeDMemReq.valid && !tlbDMemReq.valid && !pageTableWalkerWorking
   val loadReadygo  = loadDMemReq.valid && !tlbDMemReq.valid && !storeDMemReq.valid && !pageTableWalkerWorking && !loadQueueFull && !storeQueueFull
 
   val memReq = Mux1H(List(
