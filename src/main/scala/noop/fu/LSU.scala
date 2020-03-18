@@ -287,11 +287,12 @@ class LSU extends NOOPModule with HasLSUConst {
   val loadQueueEnqueue = io.in.fire()
   when(loadQueueEnqueue){ loadHead := loadHead + 1.U }
   // move loadMid ptr
-  when(dmem.req.fire() && MEMOpID.commitToCDB(dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op)){
+  val loadQueueReqsend = dmem.req.fire() && MEMOpID.commitToCDB(opReq)
+  when(loadQueueReqsend){
     loadMid := loadMid + 1.U
   }
   // load queue dequeue
-  when(io.out.fire()){
+  when(io.out.fire() || (loadQueue(loadTail).finished && !loadQueue(loadTail).valid)){
     loadTail := loadTail + 1.U
     loadQueue(loadTail).valid := false.B
     loadQueue(loadTail).finished := false.B
@@ -345,7 +346,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
   // when a store inst get its result from TLB, add it to store queue
   val storeQueueEnqueue = dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && MEMOpID.needStore(opResp) && loadQueue(ldqidxResp).valid// && !storeQueueFull
-  assert(!(storeQueueEnqueue && storeQueueFull))
+  assert(!(storeQueueAlloc && storeQueueFull))
   // when a store inst is retired, commit 1 term in Store Queue
   val storeQueueConfirm = io.scommit // TODO: Argo only support 1 scommit / cycle
   // when a store inst actually writes data to dmem, mark it as `waiting for dmem resp`
@@ -536,16 +537,6 @@ class LSU extends NOOPModule with HasLSUConst {
   loadDMemReq.cmd := SimpleBusCmd.read //TODO: only MEMOpID.needLoad(memop) need load
   loadDMemReq.user := loadSideUserBundle
 
-  Debug(){
-    when(dmem.req.fire() && MEMOpID.commitToCDB(opReq)){
-      when(havePendingDemReq){
-        printf("[LSU DREQ] pc 0x%x\n", loadQueue(loadMid).pc)
-      }.otherwise{
-        printf("[LSU DREQ] pc 0x%x\n", io.uopIn.decode.cf.pc)
-      }
-    }
-  }
-
   // storeDMemReq
   // TODO: store queue
   storeDMemReq.addr := storeQueue(storeTail).vaddr //TODO: fixit
@@ -565,11 +556,11 @@ class LSU extends NOOPModule with HasLSUConst {
   noDMemReq := DontCare
   noDMemReq.valid := false.B
 
-  Debug(){
-    printf("[DREQ] addr %x, size %x, wdata %x, wmask %x, cmd %x, user %x %x %b, valid %x\n",
-      memReq.addr, memReq.size, memReq.wdata, memReq.wmask, memReq.cmd, memReq.user.asUInt, memReq.user.ldqidx, memReq.user.op, memReq.valid
-    )
-  }
+  // Debug(){
+    // printf("[DREQ] addr %x, size %x, wdata %x, wmask %x, cmd %x, user %x %x %b, valid %x\n",
+    //   memReq.addr, memReq.size, memReq.wdata, memReq.wmask, memReq.cmd, memReq.user.asUInt, memReq.user.ldqidx, memReq.user.op, memReq.valid
+    // )
+  // }
 
   // Send request to dmem
   
@@ -731,13 +722,11 @@ class LSU extends NOOPModule with HasLSUConst {
   io.out.valid := havePendingCDBCmt
 
   when(io.flush){
-    // FIXIT
-    loadHead := loadTail + 1.U
-    loadMid := loadTail + 1.U
-    loadTail := loadTail + 1.U
+    // loadTail := loadTail
+    // loadMid := loadMid
+    loadHead := Mux(loadQueueReqsend, loadMid + 1.U, loadMid)
     for(i <- 0 to (loadQueueSize - 1)){
       loadQueue(i).valid := false.B
-      loadQueue(i).finished := false.B
     }
   }
 
@@ -747,18 +736,18 @@ class LSU extends NOOPModule with HasLSUConst {
       dmem.resp.valid, dmem.resp.ready, dmem.resp.bits.rdata, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx,
       GTimer()
     )
+  }
+    val reqpc = Mux(havePendingDemReq, loadQueue(loadMid).pc, io.uopIn.decode.cf.pc)
     when(dmem.req.fire()){
       printf("[LSU DREQ] ")
       when(loadReadygo){printf("loadDMemReq")}
       when(storeReadygo){printf("storeDMemReq")}
       when(tlbReadygo){printf("tlbDMemReq")}
       when((!tlbReadygo && !loadReadygo && !storeReadygo)){printf("noDMemReq")}
-      printf(" addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b\n", dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op)
+      printf(" pc %x addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op, storeMid - storeTail, loadHead - loadMid, GTimer())
     }
-
     when(dmem.resp.fire()){
-      printf("[LSU DRESP] data %x fwddata %x ldqidx %x memop %b\n", dmem.resp.bits.rdata, dataBack, dmemUserOut.ldqidx, dmemUserOut.op)
+      printf("[LSU DRESP] data %x fwddata %x ldqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, dataBack, dmemUserOut.ldqidx, dmemUserOut.op, lsuMMIO, GTimer())
     }
-  }
 
 }
