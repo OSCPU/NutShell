@@ -730,6 +730,10 @@ class LSU extends NOOPModule with HasLSUConst {
     }
   }
 
+  BoringUtils.addSource(lsuMMIO && dmem.resp.fire(), "perfCntCondMmmioInstr")
+  BoringUtils.addSource(loadQueueFull, "perfCntCondMmemqFull")
+  BoringUtils.addSource(storeQueueFull, "perfCntCondMstqFull")
+
   val reqpc = Mux(storeReadygo, storeQueue(storeTail).pc, Mux(havePendingDemReq, loadQueue(loadMid).pc, io.uopIn.decode.cf.pc))
   Debug(){
     printf("[DMEM] req v %x r %x addr %x data %x op %b id %x  resp v %x r %x data %x op %b id %x time %x\n",

@@ -425,6 +425,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     srcALU2
   )
 
+  val cmtStrHaz = List(
+    alu1.io.out.valid.asUInt +& (mdu.io.out.valid && mdurs.io.out.valid).asUInt > 1.U,
+    alu2.io.out.valid.asUInt +& lsu.io.out.valid.asUInt > 1.U
+  )
+
   val cdbSrc1 = Src1Priority.foldRight(0.U)((i: Int, sum: UInt) => Mux(commitValid(i), i.U, sum))
   val cdbSrc2 = Src2Priority.foldRight(1.U)((i: Int, sum: UInt) => Mux(commitValid(i), i.U, sum))
   cdb(0).valid := commitValid(cdbSrc1)
@@ -450,7 +455,19 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   BoringUtils.addSource(alu1.io.out.fire() && isBru, "perfCntCondMbruInstr") //TODO: Fix it
   BoringUtils.addSource(lsu.io.out.fire(), "perfCntCondMlsuInstr")
   BoringUtils.addSource(mdu.io.out.fire(), "perfCntCondMmduInstr")
-  BoringUtils.addSource(csr.io.out.fire(), "perfCntCondMcsrInstr")
+
+  BoringUtils.addSource(!rob.io.in(0).ready, "perfCntCondMrobFull")
+  BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMalu1rsFull")
+  BoringUtils.addSource(!alu2rs.io.in.ready, "perfCntCondMalu2rsFull")
+  BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMbrursFull")
+  BoringUtils.addSource(!lsurs.io.in.ready, "perfCntCondMlsursFull")
+  BoringUtils.addSource(!mdurs.io.in.ready, "perfCntCondMmdursFull")
+  BoringUtils.addSource(rob.io.empty, "perfCntCondMrobEmpty")
+  BoringUtils.addSource(cmtStrHaz(0), "perfCntCondMcmtStrHaz1")
+  BoringUtils.addSource(cmtStrHaz(1), "perfCntCondMcmtStrHaz2")
+  BoringUtils.addSource(alu2.io.out.fire(), "perfCntCondMaluInstr2")
+  BoringUtils.addSource(rob.io.in(0).fire() ^ rob.io.in(1).fire(), "perfCntCondMdispatch1")
+  BoringUtils.addSource(rob.io.in(0).fire() & rob.io.in(1).fire(), "perfCntCondMdispatch2")
 
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")
