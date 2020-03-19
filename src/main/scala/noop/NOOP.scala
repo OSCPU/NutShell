@@ -15,7 +15,6 @@ trait HasNOOPParameter {
   val HasDiv = true
   val HasIcache = true
   val HasDcache = true
-  val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
   val VAddrBits = 39 // VAddrBits is Virtual Memory addr bits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
@@ -25,6 +24,7 @@ trait HasNOOPParameter {
   val EnableMultiIssue = true
   val EnableSuperScalarExec = true
   val EnableOutOfOrderExec = true
+  val EnableVirtualMemory = false
 }
 
 trait HasNOOPConst {
@@ -38,7 +38,7 @@ abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst
 
 case class NOOPConfig (
   FPGAPlatform: Boolean = true,
-  EnableDebug: Boolean = true
+  EnableDebug: Boolean = false
 )
 
 object AddressSpace {
@@ -100,8 +100,16 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     
     val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
-    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
-      CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
+
+    if(EnableVirtualMemory){
+      io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
+        CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
+    }else{
+      dmemXbar.io.in(0) := DontCare
+      dmemXbar.io.out := DontCare
+      io.dmem <> Cache(in = dtlb.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
+        CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
+    }
 
     // Make DMA access through L1 DCache to keep coherence
     val expender = Module(new SimpleBusUCExpender(userBits = DCacheUserBundleWidth, userVal = 0.U))
