@@ -622,14 +622,14 @@ class LSU extends NOOPModule with HasLSUConst {
   val dataBackVec = Wire(Vec(XLEN/8, (UInt((XLEN/8).W))))
   val dataBack = dataBackVec.asUInt
   val forwardVec = VecInit(List.tabulate(storeQueueSize)(i => {
-    i.U < storeHead && paddrBack === storeQueue(i).paddr
+    i.U < storeHead && paddrBack(PAddrBits-1, log2Up(XLEN/8)) === storeQueue(i).paddr(PAddrBits-1, log2Up(XLEN/8))
   }))
   for(j <- (0 to (XLEN/8 - 1))){
     dataBackVec(j) := MuxCase( 
       default = dmem.resp.bits.rdata(8*(j+1)-1, 8*j), 
       mapping = List.tabulate(storeQueueSize)(i => {
         (forwardVec(i) && storeQueue(i).wmask(j), storeQueue(i).data(8*(j+1)-1, 8*j))
-      })
+      }).reverse
     )
   }
 
@@ -730,14 +730,13 @@ class LSU extends NOOPModule with HasLSUConst {
     }
   }
 
+  val reqpc = Mux(storeReadygo, storeQueue(storeTail).pc, Mux(havePendingDemReq, loadQueue(loadMid).pc, io.uopIn.decode.cf.pc))
   Debug(){
     printf("[DMEM] req v %x r %x addr %x data %x op %b id %x  resp v %x r %x data %x op %b id %x time %x\n",
       dmem.req.valid, dmem.req.ready, dmem.req.bits.addr, dmem.req.bits.wdata, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx,
       dmem.resp.valid, dmem.resp.ready, dmem.resp.bits.rdata, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx,
       GTimer()
     )
-  }
-    val reqpc = Mux(havePendingDemReq, loadQueue(loadMid).pc, io.uopIn.decode.cf.pc)
     when(dmem.req.fire()){
       printf("[LSU DREQ] ")
       when(loadReadygo){printf("loadDMemReq")}
@@ -749,5 +748,6 @@ class LSU extends NOOPModule with HasLSUConst {
     when(dmem.resp.fire()){
       printf("[LSU DRESP] data %x fwddata %x ldqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, dataBack, dmemUserOut.ldqidx, dmemUserOut.op, lsuMMIO, GTimer())
     }
+  }
 
 }
