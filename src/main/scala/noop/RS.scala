@@ -12,7 +12,7 @@ trait HasRSConst{
 }
 
 // Reservation Station
-class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
+class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
@@ -130,6 +130,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, name: 
   }
 
   if(fifo){
+    require(!priority)
     val queue = Module(new FlushableQueue(UInt(log2Up(size).W), size))
     queue.io.flush := io.flush
     queue.io.enq.bits := enqueueSelect
@@ -140,6 +141,18 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, name: 
     io.in.ready := rsAllowin // && queue.enq.ready
     io.out.valid := rsReadygo && queue.io.deq.valid
     assert(!(rsAllowin && !queue.io.enq.ready))
+  }
+
+  if(priority){
+    require(!fifo)
+    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
+    dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
+      !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
+    }))
+    // update priorityMask
+    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
+    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
 
 }

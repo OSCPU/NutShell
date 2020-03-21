@@ -53,12 +53,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     rob.io.in(i).bits := io.in(i).bits
   })
 
-  val alu1rs = Module(new RS(name = "ALU1RS"))
-  val alu2rs = Module(new RS(name = "ALU2RS"))
-  val csrrs = Module(new RS(name = "CSRRS", size = 1)) // CSR & MOU
-  // val lsurs = Module(new RS(pipelined = true, name = "LSURS"))
-  val lsurs = Module(new RS(fifo = true, name = "LSURS")) // FIXIT: out of order l/s disabled
-  val mdurs = Module(new RS(pipelined = false, name = "MDURS"))
+  val alu1rs = Module(new RS(priority = true, name = "ALU1RS"))
+  val alu2rs = Module(new RS(priority = true, name = "ALU2RS"))
+  val csrrs  = Module(new RS(priority = true, name = "CSRRS", size = 1)) // CSR & MOU
+  val lsurs  = Module(new RS(fifo = true, name = "LSURS")) // FIXIT: out of order l/s disabled
+  val mdurs  = Module(new RS(priority = true, pipelined = false, name = "MDURS"))
 
   // ------------------------------------------------
   // Backend stage 1
