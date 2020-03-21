@@ -23,6 +23,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
     val flush = Input(Bool())
     val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
+    val dtlb = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
+
     val memMMU = Flipped(new MemMMUIO)
 
     // WBU
@@ -308,6 +310,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsu.io.wdata := lsuUop.decode.data.src2
   // lsu.io.instr := lsuUop.decode.cf.instr
   io.dmem <> lsu.io.dmem
+  io.dtlb <> lsu.io.dtlb
   lsu.io.out.ready := true.B //TODO
   lsucommit.decode := lsu.io.uopOut.decode
   lsucommit.isMMIO := lsu.io.isMMIO
