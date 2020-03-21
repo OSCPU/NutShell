@@ -114,3 +114,41 @@ class SimpleBusCrossbar(n: Int, addressSpace: List[(Long, Long)]) extends Module
   outXbar.io.in <> inXbar.io.out
   io.out <> outXbar.io.out
 }
+
+class SimpleBusAutoIDCrossbarNto1(n: Int, userBits: Int = 0) extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(Vec(n, new SimpleBusUC(userBits)))
+    val out = new SimpleBusUC(userBits, idBits = n)
+  })
+
+  val reqValid = WireInit(VecInit(List.tabulate(n)(i => io.in(i).req.valid)))
+  val reqSelect = PriorityEncoder(reqValid.asUInt)
+  val reqSelectVec = PriorityEncoderOH(reqValid.asUInt)
+
+  // ID will be automatically assigned for master devices
+  // TODO: use Mux1H?
+  io.out.req.bits.addr := io.in(reqSelect).req.bits.addr
+  io.out.req.bits.size := io.in(reqSelect).req.bits.size
+  io.out.req.bits.cmd := io.in(reqSelect).req.bits.cmd
+  io.out.req.bits.wmask := io.in(reqSelect).req.bits.wmask
+  io.out.req.bits.wdata := io.in(reqSelect).req.bits.wdata
+  if(userBits > 0){
+    io.out.req.bits.user.get := io.in(reqSelect).req.bits.user.get
+  }
+
+  io.out.req.valid := reqValid.asUInt.orR
+  io.out.req.bits.id.get := reqSelectVec.asUInt // Simple bus ID is OH 
+  io.out.resp.ready := io.in(reqSelect).resp.ready
+  assert(io.out.resp.ready)
+
+  for(i <- 0 until n){
+    io.in(i).req.ready := io.out.req.ready && reqSelectVec(i)
+    io.in(i).resp.valid := io.out.resp.valid && io.out.resp.bits.id.get(i)
+    io.in(i).resp.bits.cmd := io.out.resp.bits.cmd
+    io.in(i).resp.bits.rdata := io.out.resp.bits.rdata
+    if(userBits > 0){
+      io.in(i).resp.bits.user.get := io.out.resp.bits.user.get
+    }
+  }
+
+}

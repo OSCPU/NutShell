@@ -84,14 +84,15 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   }
 
   val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
-  val dmemXbar = Module(new SimpleBusCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
 
   if(EnableOutOfOrderExec){
+
     val backend = Module(new Backend)
-    // backend.io := DontCare // TODO: Delete it
     PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 16)
     backend.io.flush := ifu.io.flushVec(2)
     ifu.io.redirect <> backend.io.redirect
+
+    val dmemXbar = Module(new SimpleBusAutoIDCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
 
     val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
@@ -120,6 +121,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
       printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
     }
   }else{
+
     val isu  = Module(new ISU)
     val exu  = Module(new EXU)
     val wbu  = Module(new WBU)
@@ -154,6 +156,8 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     ifu.io.redirect <> wbu.io.redirect
     // forward
     isu.io.forward <> exu.io.forward
+
+    val dmemXbar = Module(new SimpleBusCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
 
     val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
