@@ -94,19 +94,22 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
 
     val dmemXbar = Module(new SimpleBusAutoIDCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
 
-    val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
+    val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(2), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
     
-    val dtlb = TLB(in = backend.io.dtlb, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
-    dmemXbar.io.in(0) <> dtlb.io.out
+    val dtlb = TLB(in = backend.io.dtlb, mem = dmemXbar.io.in(1), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
+    dtlb.io.out := DontCare //FIXIT
+    dtlb.io.out.req.ready := false.B //FIXIT
 
     if(EnableVirtualMemory){
-      io.dmem <> Cache(in = backend.io.dmem, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
+      dmemXbar.io.in(3) <> backend.io.dmem
+      io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
         CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
     }else{
-      dmemXbar.io.in(0) := DontCare
+      dmemXbar.io.in(1) := DontCare
+      dmemXbar.io.in(3) := DontCare
       dmemXbar.io.out := DontCare
       io.dmem <> Cache(in = backend.io.dmem, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
         CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
@@ -115,7 +118,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     // Make DMA access through L1 DCache to keep coherence
     val expender = Module(new SimpleBusUCExpender(userBits = DCacheUserBundleWidth, userVal = 0.U))
     expender.io.in <> io.frontend
-    dmemXbar.io.in(3) <> expender.io.out
+    dmemXbar.io.in(0) <> expender.io.out
 
     Debug(){
       printf("------------------------ BACKEND : %d ------------------------\n", GTimer())

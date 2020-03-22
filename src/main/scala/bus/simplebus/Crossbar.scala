@@ -139,7 +139,7 @@ class SimpleBusAutoIDCrossbarNto1(n: Int, userBits: Int = 0) extends Module {
   io.out.req.valid := reqValid.asUInt.orR
   io.out.req.bits.id.get := reqSelectVec.asUInt // Simple bus ID is OH 
   io.out.resp.ready := io.in(reqSelect).resp.ready
-  assert(io.out.resp.ready)
+  // assert(io.out.resp.ready)
 
   for(i <- 0 until n){
     io.in(i).req.ready := io.out.req.ready && reqSelectVec(i)
@@ -148,6 +148,15 @@ class SimpleBusAutoIDCrossbarNto1(n: Int, userBits: Int = 0) extends Module {
     io.in(i).resp.bits.rdata := io.out.resp.bits.rdata
     if(userBits > 0){
       io.in(i).resp.bits.user.get := io.out.resp.bits.user.get
+    }
+  }
+
+  Debug(){
+    when(io.out.req.fire()){
+      printf("[Crossbar REQ] addr %x cmd %x select %b\n", io.out.req.bits.addr, io.out.req.bits.cmd, reqSelectVec)
+    }
+    when(io.out.resp.fire()){
+      printf("[Crossbar RESP] data %x select %b\n", io.out.resp.bits.rdata, io.out.resp.bits.id.get)
     }
   }
 
