@@ -762,6 +762,30 @@ class LSU extends NOOPModule with HasLSUConst {
     when(dmem.resp.fire()){
       printf("[LSU DRESP] memdata %x fwddata %x:%b data %x ldqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, loadQueue(dmemUserOut.ldqidx).fdata, loadQueue(dmemUserOut.ldqidx).fmask, rdataFwdSel, dmemUserOut.ldqidx, dmemUserOut.op, lsuMMIO, GTimer())
     }
+    when(dmem.req.fire() && !MEMOpID.needStore(opReq) && forwardWmask.orR){
+      printf("[LSU FWD] dataBack %x forwardWmask %b\n", dataBack, forwardWmask)
+    }
+  }
+
+  val printMemTrace = false
+  val addrTrack = List(
+    "h12345678".U
+  )
+
+  when(printMemTrace.B || addrTrack.map(i => dmem.req.bits.addr === i).foldRight(false.B)((sum, i) => sum | i)){
+    when(dmem.req.fire()){
+      printf("[LSU DREQ] ")
+      when(loadReadygo){printf("loadDMemReq")}
+      when(storeReadygo){printf("storeDMemReq")}
+      when((!loadReadygo && !storeReadygo)){printf("noDMemReq")}
+      printf(" pc %x addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op, storeCmtPtr - storeReqPtr, loadHeadPtr - loadDmemPtr, GTimer())
+  }
+    when(dmem.resp.fire()){
+      printf("[LSU DRESP] memdata %x fwddata %x:%b data %x ldqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, loadQueue(dmemUserOut.ldqidx).fdata, loadQueue(dmemUserOut.ldqidx).fmask, rdataFwdSel, dmemUserOut.ldqidx, dmemUserOut.op, lsuMMIO, GTimer())
+    }
+    when(dmem.req.fire() && !MEMOpID.needStore(opReq) && forwardWmask.orR){
+      printf("[LSU FWD] dataBack %x forwardWmask %b\n", dataBack, forwardWmask)
+    }
   }
 
 }

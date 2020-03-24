@@ -12,6 +12,7 @@ case class CacheConfig (
   ro: Boolean = false,
   name: String = "cache",
   userBits: Int = 0,
+  idBits: Int = 0,
   cacheLevel: Int = 1,
 
   totalSize: Int = 32, // Kbytes
@@ -26,6 +27,7 @@ sealed trait HasCacheConst {
 
   val cacheName = cacheConfig.name
   val userBits = cacheConfig.userBits
+  val idBits = cacheConfig.idBits
 
   val ro = cacheConfig.ro
   val hasCoh = !ro
@@ -90,13 +92,13 @@ sealed class DataBundle(implicit val cacheConfig: CacheConfig) extends CacheBund
 }
 
 sealed class Stage1IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
-  val req = new SimpleBusReqBundle(userBits = userBits)
+  val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
 }
 
 // meta read
 sealed class CacheStage1(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits)))
+    val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val out = Decoupled(new Stage1IO)
     val metaReadBus = CacheMetaArrayReadBus()
     val dataReadBus = CacheDataArrayReadBus()
@@ -106,7 +108,7 @@ sealed class CacheStage1(implicit val cacheConfig: CacheConfig) extends CacheMod
   Debug(){
     if (debug) {
       when(io.in.fire()){
-        printf("[L1$] " +name+" cache stage1, addr in: %x, user: %x\n", io.in.bits.addr, io.in.bits.user.getOrElse(0.U))
+        printf("[L1$] " +name+" cache stage1, addr in: %x, user: %x id: %x\n", io.in.bits.addr, io.in.bits.user.getOrElse(0.U), io.in.bits.id.getOrElse(0.U))
       }
     }
   }
@@ -129,7 +131,7 @@ sealed class CacheStage1(implicit val cacheConfig: CacheConfig) extends CacheMod
 }
 
 sealed class Stage2IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
-  val req = new SimpleBusReqBundle(userBits = userBits)
+  val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
   val metas = Vec(Ways, new MetaBundle)
   val datas = Vec(Ways, new DataBundle)
   val hit = Output(Bool())
@@ -208,7 +210,7 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
 sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new Stage2IO))
-    val out = Decoupled(new SimpleBusRespBundle(userBits = userBits))
+    val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
     val isFinish = Output(Bool())
     val flush = Input(Bool())
     val dataReadBus = CacheDataArrayReadBus()
@@ -411,6 +413,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
     io.out.bits.cmd := Mux(io.in.bits.req.isRead(), SimpleBusCmd.readLast, Mux(io.in.bits.req.isWrite(), SimpleBusCmd.writeResp, DontCare))//DontCare, added by lemover
   }
   io.out.bits.user.zip(req.user).map { case (o,i) => o := i }
+  io.out.bits.id.zip(req.id).map { case (o,i) => o := i }
 
   io.out.valid := io.in.valid && Mux(req.isBurst() && (cacheLevel == 2).B,
     Mux(req.isWrite() && (hit || !hit && state === s_wait_resp), true.B, (state === s_memReadResp && io.mem.resp.fire() && req.cmd === SimpleBusCmd.readBurst)) || (respToL1Fire && respToL1Last && state === s_release),
@@ -447,7 +450,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
 
 class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val io = IO(new Bundle {
-    val in = Flipped(new SimpleBusUC(userBits = userBits))
+    val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
     val flush = Input(UInt(2.W))
     val out = new SimpleBusC
     val mmio = new SimpleBusUC
@@ -468,7 +471,7 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
     metaArray.reset := reset.asBool || flushICache
   }
 
-  val arb = Module(new Arbiter(new SimpleBusReqBundle(userBits = userBits), hasCohInt + 1))
+  val arb = Module(new Arbiter(new SimpleBusReqBundle(userBits = userBits, idBits = idBits), hasCohInt + 1))
   arb.io.in(hasCohInt + 0) <> io.in.req
 
   s1.io.in <> arb.io.out
@@ -490,7 +493,7 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
   if (hasCoh) {
     val cohReq = io.out.coh.req.bits
     // coh does not have user signal, any better code?
-    val coh = Wire(new SimpleBusReqBundle(userBits = userBits))
+    val coh = Wire(new SimpleBusReqBundle(userBits = userBits, idBits = idBits))
     coh.apply(addr = cohReq.addr, cmd = cohReq.cmd, size = cohReq.cmd, wdata = cohReq.wdata, wmask = cohReq.wmask)
     arb.io.in(0).bits := coh
     arb.io.in(0).valid := io.out.coh.req.valid

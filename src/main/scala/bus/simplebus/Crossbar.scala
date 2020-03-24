@@ -23,6 +23,7 @@ class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
   val outSelIdxResp = RegEnable(outSelIdx, outSel.req.fire() && (state === s_idle))
   val outSelResp = io.out(outSelIdxResp)
 
+  when(!(!io.in.req.valid || outSelVec.asUInt.orR) || !(!(io.in.req.valid && outSelVec.asUInt.andR))){printf("[ERROR] bad addr %x, time %d\n", addr, GTimer())}
   assert(!io.in.req.valid || outSelVec.asUInt.orR, "address decode error, bad addr = 0x%x\n", addr)
   assert(!(io.in.req.valid && outSelVec.asUInt.andR), "address decode error, bad addr = 0x%x\n", addr)
 

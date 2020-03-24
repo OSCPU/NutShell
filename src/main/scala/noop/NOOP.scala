@@ -24,7 +24,7 @@ trait HasNOOPParameter {
   val EnableMultiIssue = true
   val EnableSuperScalarExec = true
   val EnableOutOfOrderExec = true
-  val EnableVirtualMemory = false
+  val EnableVirtualMemory = true
 }
 
 trait HasNOOPConst {
@@ -106,7 +106,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     if(EnableVirtualMemory){
       dmemXbar.io.in(3) <> backend.io.dmem
       io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(
-        CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth))
+        CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth, idBits = 4))
     }else{
       dmemXbar.io.in(1) := DontCare
       dmemXbar.io.in(3) := DontCare
