@@ -162,8 +162,11 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
   val forwardMetaReg = RegEnable(io.metaWriteBus.req.bits, isForwardMeta)
 
   val metaWay = Wire(Vec(Ways, chiselTypeOf(forwardMetaReg.data)))
-  forwardMetaReg.waymask.getOrElse("b1".U).asBools.zipWithIndex.map { case (w, i) =>
-    metaWay(i) := Mux(isForwardMetaReg && w, forwardMetaReg.data, io.metaReadResp(i))
+  val pickForwardMeta = isForwardMetaReg || isForwardMeta
+  val forwardMeta = Mux(isForwardMeta, io.metaWriteBus.req.bits, forwardMetaReg)
+  val forwardWaymask = forwardMeta.waymask.getOrElse("1".U).asBools
+  forwardWaymask.zipWithIndex.map { case (w, i) =>
+    metaWay(i) := Mux(pickForwardMeta && w, forwardMeta.data, io.metaReadResp(i))
   }
 
   val hitVec = VecInit(metaWay.map(m => m.valid && (m.tag === addr.tag) && io.in.valid)).asUInt
