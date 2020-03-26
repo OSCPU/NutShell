@@ -7,11 +7,6 @@ import utils._
 import bus.simplebus._
 
 // Out Of Order Load/Store Unit
-// This version has not enable loadQueue / AtomInst
-
-// LSU    | AddrGen |        | Forward | LoadCmt/AtomALU |
-// DMEM   | Load 1  | Load 2 | Load 3  |                 |
-// TLB    | TLB  1  | TLB  2 | TLB  3  |                 |
 
 object LSUOpType { //TODO: refactor LSU fuop
   def lb   = "b0000000".U
@@ -102,9 +97,11 @@ class StoreQueueEntry extends NOOPBundle{
   val vaddr    = UInt(VAddrBits.W)
   val paddr    = UInt(PAddrBits.W)
   val func     = UInt(7.W)
+  val size     = UInt(2.W)
   val op       = UInt(7.W)
   val data     = UInt(XLEN.W)
   val isMMIO   = Bool()
+  // val awidthW  = Bool() // atomWidthW
   // val valid    = Bool()
   // val finished = Bool()
 }
@@ -115,12 +112,13 @@ class LoadQueueEntry extends NOOPBundle{
   val vaddr    = UInt(VAddrBits.W) // for debug
   val paddr    = UInt(PAddrBits.W)
   val func     = UInt(7.W)
+  val size     = UInt(2.W)
   val op       = UInt(7.W)
   val data     = UInt(XLEN.W)
   val fdata    = UInt(XLEN.W) // forwarding data
   val fmask    = UInt((XLEN/8).W) // forwarding mask
   val asrc     = UInt(XLEN.W) // alusrc2 for atom inst
-  val awidthW  = Bool() // atomWidthW
+  // val awidthW  = Bool() // atomWidthW
   val rfWen    = Bool()
   val isMMIO   = Bool()
   val valid    = Bool()
@@ -224,21 +222,6 @@ class LSU extends NOOPModule with HasLSUConst {
   val findLoadAddrMisaligned = Wire(Bool())
   val findStoreAddrMisaligned = Wire(Bool())
 
-  val addr = src1 + src2
-  val data = io.uopIn.decode.data.src2
-  val size = func(1,0)
-  val memop = Wire(UInt(7.W))
-  memop := Cat(
-    false.B, // commitToVPU
-    false.B, // commitToTLB
-    false.B, // commitToSTQ
-    io.in.valid, // commitToCDB
-    amoReq, // needAlu
-    !findStoreAddrMisaligned && (storeReq || amoReq || scReq), // needStore
-    loadReq || amoReq || lrReq // needLoad
-    // TODO: Fix findStoreAddrMisaligned
-  )
-
   // Atom LR/SC Control Bits
   val setLr = Wire(Bool())
   val setLrVal = Wire(Bool())
@@ -265,6 +248,22 @@ class LSU extends NOOPModule with HasLSUConst {
   BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
   BoringUtils.addSink(dtlbPF, "DTLBPF")
   BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+
+  val addr = Mux(atomReq || lrReq || scReq, src1, src1 + src2)
+  val data = io.uopIn.decode.data.src2
+  val size = Mux(LSUOpType.isAtom(func), Mux(atomWidthW, "b10".U, "b11".U), func(1,0))
+  val memop = Wire(UInt(7.W))
+  memop := Cat(
+    false.B, // commitToVPU
+    false.B, // commitToTLB
+    false.B, // commitToSTQ
+    io.in.valid, // commitToCDB
+    amoReq, // needAlu
+    (storeReq || amoReq || scReq && !scInvalid), // needStore
+    (loadReq || amoReq || lrReq) // needLoad
+  )
+  // If a LSU inst triggers an exception, it has no difference compared with other normal insts 
+  // except it will be canceled by redirect bit
 
   // L/S Queue
 
@@ -314,8 +313,8 @@ class LSU extends NOOPModule with HasLSUConst {
 
   
   // write data to loadqueue
-  val paddrIsMMIO = AddressSpace.isMMIO(addr)
-  val vaddrIsMMIO = AddressSpace.isMMIO(io.dtlb.resp.bits.rdata)
+  val vaddrIsMMIO = AddressSpace.isMMIO(addr)
+  val paddrIsMMIO = AddressSpace.isMMIO(io.dtlb.resp.bits.rdata)
 
   when(loadQueueEnqueue){
     loadQueue(loadHeadPtr).pc := io.uopIn.decode.cf.pc
@@ -323,12 +322,12 @@ class LSU extends NOOPModule with HasLSUConst {
     loadQueue(loadHeadPtr).vaddr := addr
     loadQueue(loadHeadPtr).paddr := addr
     loadQueue(loadHeadPtr).func := func
+    loadQueue(loadHeadPtr).size := size
     loadQueue(loadHeadPtr).op := memop
     loadQueue(loadHeadPtr).data := genWdata(io.wdata, size)
     loadQueue(loadHeadPtr).asrc := io.wdata // FIXIT
-    loadQueue(loadHeadPtr).awidthW := atomWidthW // FIXIT
     loadQueue(loadHeadPtr).rfWen := io.uopIn.decode.ctrl.rfWen
-    loadQueue(loadHeadPtr).isMMIO := paddrIsMMIO // FIXIT
+    loadQueue(loadHeadPtr).isMMIO := vaddrIsMMIO // FIXIT
     loadQueue(loadHeadPtr).valid := true.B
     loadQueue(loadHeadPtr).tlbfin := !dtlbEnable
     loadQueue(loadHeadPtr).finished := false.B
@@ -425,10 +424,11 @@ class LSU extends NOOPModule with HasLSUConst {
   when(storeQueueEnqueue){
     storeQueue(storeQueueEnqPtr).pc := loadQueue(loadDmemPtr).pc
     storeQueue(storeQueueEnqPtr).prfidx := loadQueue(loadDmemPtr).prfidx
-    storeQueue(storeQueueEnqPtr).wmask := genWmask(loadQueue(loadDmemPtr).vaddr, loadQueue(loadDmemPtr).func(1,0))
+    storeQueue(storeQueueEnqPtr).wmask := genWmask(loadQueue(loadDmemPtr).vaddr, loadQueue(loadDmemPtr).size)
     storeQueue(storeQueueEnqPtr).vaddr := loadQueue(loadDmemPtr).vaddr
     storeQueue(storeQueueEnqPtr).paddr := loadQueue(loadDmemPtr).paddr
     storeQueue(storeQueueEnqPtr).func := loadQueue(loadDmemPtr).func
+    storeQueue(storeQueueEnqPtr).size := loadQueue(loadDmemPtr).size
     storeQueue(storeQueueEnqPtr).op := loadQueue(loadDmemPtr).op
     storeQueue(storeQueueEnqPtr).data := loadQueue(loadDmemPtr).data
     storeQueue(storeQueueEnqPtr).isMMIO := loadQueue(loadDmemPtr).isMMIO
@@ -469,7 +469,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // Exception check, fix mop
   // Misalign exception generation 
-  val addrAligned = LookupTree(func(1,0), List(
+  val addrAligned = LookupTree(size, List(
     "b00".U   -> true.B,              //b
     "b01".U   -> (addr(0) === 0.U),   //h
     "b10".U   -> (addr(1,0) === 0.U), //w
@@ -502,7 +502,7 @@ class LSU extends NOOPModule with HasLSUConst {
   when(io.dtlb.resp.fire()){
     loadQueue(tlbRespLdqidx).paddr := io.dtlb.resp.bits.rdata // FIXIT
     loadQueue(tlbRespLdqidx).tlbfin := true.B
-    loadQueue(tlbRespLdqidx).isMMIO := vaddrIsMMIO
+    loadQueue(tlbRespLdqidx).isMMIO := paddrIsMMIO
   }
   assert(!io.dtlb.resp.fire())
   assert(!(!dtlbEnable && io.dtlb.resp.fire()))
@@ -560,27 +560,27 @@ class LSU extends NOOPModule with HasLSUConst {
   storeSideUserBundle.ldqidx := DontCare
   storeSideUserBundle.op := MEMOpID.storec
 
-  // TODO: fix atom addr src
-
   // loadDMemReq
-  // TODO: store should not access cache here
   loadDMemReq.addr := loadQueue(loadDmemPtr).paddr
-  loadDMemReq.size := loadQueue(loadDmemPtr).func(1,0)
+  loadDMemReq.size := loadQueue(loadDmemPtr).size
   loadDMemReq.wdata := loadQueue(loadDmemPtr).data
   loadDMemReq.valid := havePendingDmemReq
   loadDMemReq.wmask := genWmask(loadDMemReq.addr, loadDMemReq.size)
-  loadDMemReq.cmd := SimpleBusCmd.read //TODO: only MEMOpID.needLoad(memop) need load
+  loadDMemReq.cmd := SimpleBusCmd.read
   loadDMemReq.user := loadSideUserBundle
 
   // storeDMemReq
   // TODO: store queue
-  storeDMemReq.addr := storeQueue(storeReqPtr).vaddr //TODO: fixit
-  storeDMemReq.size := storeQueue(storeReqPtr).func(1,0)
-  storeDMemReq.wdata := genWdata(storeQueue(storeReqPtr).data, storeQueue(storeReqPtr).func(1,0))
-  storeDMemReq.wmask := genWmask(storeQueue(storeReqPtr).vaddr, storeQueue(storeReqPtr).func(1,0))
+  storeDMemReq.addr := storeQueue(storeReqPtr).paddr
+  storeDMemReq.size := storeQueue(storeReqPtr).size
+  storeDMemReq.wdata := genWdata(storeQueue(storeReqPtr).data, storeQueue(storeReqPtr).size)
+  storeDMemReq.wmask := storeQueue(storeReqPtr).wmask
   storeDMemReq.cmd := SimpleBusCmd.write
   storeDMemReq.user := storeSideUserBundle
   storeDMemReq.valid := haveUnrequiredStore
+  when(LSUOpType.isAMO(storeQueue(storeReqPtr).func)){
+    storeDMemReq.wdata := io.atomData
+  }
 
   // noDMemReq
   noDMemReq := DontCare
@@ -659,12 +659,6 @@ class LSU extends NOOPModule with HasLSUConst {
     loadQueue(loadDmemPtr).fmask := forwardWmask
   }
 
-  Debug(){
-    when(dmem.req.fire() && !MEMOpID.needStore(opReq)){
-      printf("[LSU FWD] dataBack %x forwardWmask %b\n", dataBack, forwardWmask)
-    }
-  }
-  
   val rdataFwdSelVec = Wire(Vec(XLEN/8, (UInt((XLEN/8).W))))
   val rdataFwdSel = rdataFwdSelVec.asUInt
   for(j <- (0 until (XLEN/8))){
@@ -683,18 +677,6 @@ class LSU extends NOOPModule with HasLSUConst {
   // Atom ALU gets data and writes its result to temp reg
   //-------------------------------------------------------
 
-  // Atom
-  val atomALU = Module(new AtomALU)
-  atomALU.io.src1 := loadQueue(loadTailPtr).data//atomMemReg
-  atomALU.io.src2 := loadQueue(loadTailPtr).asrc//io.wdata
-  atomALU.io.func := loadQueue(loadTailPtr).func//func
-  atomALU.io.isWordOp := loadQueue(loadTailPtr).awidthW //atomWidthW
-  // When an atom inst reaches here, store its result to store buffer,
-  // then commit it to CDB, set atom-on-the-fly to false
-  io.atomData := atomALU.io.result
-
-  // Commit to CDB
-  
   // Load Data Selection
   val rdata = loadQueue(loadTailPtr).data
   val rdataSel = LookupTree(loadQueue(loadTailPtr).vaddr(2, 0), List(
@@ -716,9 +698,21 @@ class LSU extends NOOPModule with HasLSUConst {
       LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), XLEN),
       LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN)
   ))
-  io.out.bits := rdataPartialLoad
 
-  //TODO: other CDB wires
+  // Atom
+  val atomALU = Module(new AtomALU)
+  atomALU.io.src1 := rdataPartialLoad//atomMemReg
+  atomALU.io.src2 := loadQueue(loadTailPtr).asrc//io.wdata FIXIT: use a single reg
+  atomALU.io.func := loadQueue(loadTailPtr).func//func
+  atomALU.io.isWordOp := !loadQueue(loadTailPtr).size(0)  //recover atomWidthW from size
+  // When an atom inst reaches here, store its result to store buffer,
+  // then commit it to CDB, set atom-on-the-fly to false
+  val atomDataReg = RegEnable(atomALU.io.result, io.out.fire() && LSUOpType.isAMO(loadQueue(loadTailPtr).func))
+  io.atomData := atomDataReg
+
+  // Commit to CDB
+  io.out.bits := Mux(LSUOpType.isSC(loadQueue(loadTailPtr).func), !MEMOpID.needStore(loadQueue(loadTailPtr).op), Mux(LSUOpType.isAMO(loadQueue(loadTailPtr).func), atomALU.io.result, rdataPartialLoad))
+
   io.uopOut := DontCare
   io.isMMIO := loadQueue(loadTailPtr).isMMIO
   io.exceptionVec.map(_ := false.B)
