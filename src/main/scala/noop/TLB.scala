@@ -253,7 +253,6 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
 
   // tlb exec
   val tlbExec = Module(new TLBExec)
-  val tlbEmpty = Module(new TLBEmpty)
   val mdTLB = Module(new TLBMD)
   val mdUpdate = Wire(Bool())
   
@@ -279,7 +278,7 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   }
 
   // VM enable && io
-  val vmEnable = satp.asTypeOf(satpBundle).mode === 8.U && (io.csrMMU.priviledgeMode < ModeM)
+  val vmEnable = true.B || satp.asTypeOf(satpBundle).mode === 8.U && (io.csrMMU.priviledgeMode < ModeM)
 
   def PipelineConnectTLB[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T], update: Bool, rightOutFire: Bool, isFlush: Bool, vmEnable: Bool) = {
     val valid = RegInit(false.B)
@@ -294,15 +293,9 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
     update := left.valid && right.ready
   }
 
-  tlbEmpty.io.in <> DontCare
-  tlbEmpty.io.out.ready := DontCare
   PipelineConnectTLB(io.in.req, tlbExec.io.in, mdUpdate, tlbExec.io.isFinish, io.flush, vmEnable)
-  if(tlbname == "dtlb") {
-    PipelineConnect(tlbExec.io.out, tlbEmpty.io.in, tlbEmpty.io.out.fire(), io.flush)
-  }
   when(!vmEnable) {
     tlbExec.io.out.ready := true.B // let existed request go out
-    if( tlbname == "dtlb") { tlbEmpty.io.out.ready := true.B }
     io.out.req.valid := io.in.req.valid
     io.in.req.ready := io.out.req.ready
     io.out.req.bits.addr := io.in.req.bits.addr(PAddrBits-1, 0)
@@ -312,15 +305,20 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
     io.out.req.bits.wdata := io.in.req.bits.wdata
     io.out.req.bits.user.map(_ := io.in.req.bits.user.getOrElse(0.U))
   }.otherwise {
-    if (tlbname == "dtlb") { io.out.req <> tlbEmpty.io.out}
-    else { io.out.req <> tlbExec.io.out }
+    io.out.req <> tlbExec.io.out
   }
-  io.out.resp <> io.in.resp
 
   // lsu need dtlb signals
   if(tlbname == "dtlb") {
+    // io.in.resp <> TLBExec.io.in.resp
+    io.out.resp.ready := true.B
+    io.in.resp.valid := tlbExec.io.out.valid
+    io.in.resp.bits.rdata := tlbExec.io.out.bits.addr
+    io.in.resp.bits.cmd := DontCare
+    io.in.resp.bits.user.map(_ := tlbExec.io.out.bits.user.getOrElse(0.U))
     val alreadyOutFinish = RegEnable(true.B, init=false.B, tlbExec.io.out.valid && !tlbExec.io.out.ready)
-    when(alreadyOutFinish && tlbExec.io.out.fire()) { alreadyOutFinish := false.B}
+    // when(alreadyOutFinish && tlbExec.io.out.fire()) { alreadyOutFinish := false.B}
+    when(alreadyOutFinish && tlbExec.io.out.valid) { alreadyOutFinish := false.B}//???
     val tlbFinish = (tlbExec.io.out.valid && !alreadyOutFinish) || tlbExec.io.pf.isPF()
     BoringUtils.addSource(tlbFinish, "DTLBFINISH")
     BoringUtils.addSource(io.csrMMU.isPF(), "DTLBPF")
@@ -329,6 +327,7 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
 
   // instruction page fault
   if (tlbname == "itlb") {
+    io.out.resp <> io.in.resp
     when (tlbExec.io.ipf && vmEnable) {
       tlbExec.io.out.ready := io.cacheEmpty && io.in.resp.ready
       io.out.req.valid := false.B
@@ -412,19 +411,15 @@ class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val hitExec = hitCheck && hitFlag.x
   val hitLoad = hitCheck && (hitFlag.r || pf.status_mxr && hitFlag.x)
   val hitStore = hitCheck && hitFlag.w
-  
-  val isAMO = WireInit(false.B)
-  if (tlbname == "dtlb") {
-    BoringUtils.addSink(isAMO, "ISAMO")
-  }
 
-  io.pf.loadPF := RegNext(loadPF, init =false.B)
-  io.pf.storePF := RegNext(storePF, init = false.B)
+  io.pf.loadPF := loadPF //RegNext(loadPF, init =false.B)
+  io.pf.storePF := storePF //RegNext(storePF, init = false.B)
 
   if (tlbname == "itlb") { hitinstrPF := !hitExec  && hit}
   if (tlbname == "dtlb") { 
-    loadPF := !hitLoad && req.isRead() && hit && !isAMO
-    storePF := (!hitStore && req.isWrite() && hit) || (!hitLoad && req.isRead() && hit && isAMO)
+    loadPF := !hitLoad && req.isRead() && hit
+    storePF := (!hitStore && req.isWrite() && hit)
+    // AMO pagefault type will be fixed in LSU
   }
 
   // miss
@@ -439,14 +434,19 @@ class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val missRefillFlag = WireInit(0.U(8.W))
   val memRdata = io.mem.resp.bits.rdata.asTypeOf(pteBundle)
   val raddr = Reg(UInt(PAddrBits.W))
-  val alreadyOutFire = RegEnable(true.B, init = false.B, io.out.fire)
+  val alreadyOutFire = RegEnable(true.B, init = false.B, if(tlbname == "itlb") io.out.fire else io.out.valid)
 
   //handle flush
   val needFlush = RegInit(false.B)
   val ioFlush = io.flush
   val isFlush = needFlush || ioFlush
   when (ioFlush && (state =/= s_idle)) { needFlush := true.B}
-  when (io.out.fire() && needFlush) { needFlush := false.B}
+  if(tlbname == "itlb"){
+    when (io.out.fire() && needFlush) { needFlush := false.B}
+  }
+  if(tlbname == "dtlb"){
+    when (io.out.valid && needFlush) { needFlush := false.B}
+  }
 
   val missIPF = RegInit(false.B)
 
@@ -484,8 +484,8 @@ class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
             if(tlbname == "itlb") { state := s_wait_resp } else { state := s_miss_slpf }
             if(tlbname == "itlb") { missIPF := true.B }
             if(tlbname == "dtlb") { 
-              loadPF := req.isRead() && !isAMO 
-              storePF := req.isWrite() || isAMO 
+              loadPF := req.isRead()
+              storePF := req.isWrite() 
             }  
             Debug() {
               if(debug) {
@@ -518,8 +518,8 @@ class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
           if(tlbname == "dtlb") {
             when((!permLoad && req.isRead()) || (!permStore && req.isWrite())) { 
               state := s_miss_slpf
-              loadPF := req.isRead() && !isAMO
-              storePF := req.isWrite() || isAMO
+              loadPF := req.isRead()
+              storePF := req.isWrite()
             }.otherwise {
               state := Mux(updateAD, s_write_pte, s_wait_resp)
               missMetaRefill := true.B
@@ -539,11 +539,20 @@ class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
       }.elsewhen (io.mem.req.fire()) { state := s_wait_resp }
     }
 
-    is (s_wait_resp) { when (io.out.fire() || ioFlush || alreadyOutFire){
-      state := s_idle
-      missIPF := false.B
-      alreadyOutFire := false.B
-    }}
+    is (s_wait_resp) { 
+      if(tlbname == "itlb"){
+        when (io.out.fire() || ioFlush || alreadyOutFire){
+          state := s_idle
+          missIPF := false.B
+          alreadyOutFire := false.B
+        }
+      }
+      if(tlbname == "dtlb"){
+        state := s_idle
+        missIPF := false.B
+        alreadyOutFire := false.B
+      }
+    }
 
     is (s_miss_slpf) {
       state := s_idle
@@ -573,11 +582,16 @@ class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   io.ipf := Mux(hit, hitinstrPF, missIPF)
   io.isFinish := io.out.fire() || io.pf.isPF()
 
+  if(tlbname == "dtlb") {
+    io.isFinish := io.out.valid || io.pf.isPF()
+    io.out.valid := io.in.valid && (Mux(hit && !hitWB, true.B, state === s_wait_resp) || loadPF || storePF)// && !alreadyOutFire
+  }
+
   Debug() {
     if (debug) {
       printf("[TLBExec-"  + tlbname+ "]: Timer:%d---------\n", GTimer())
       printf("[TLBExec-"  + tlbname+ "]: In(%d, %d) Out(%d, %d) InAddr:%x OutAddr:%x cmd:%d \n", io.in.valid, io.in.ready, io.out.valid, io.out.ready, req.addr, io.out.bits.addr, req.cmd)
-      printf("[TLBExec-"  + tlbname+ "]: isAMO:%d io.Flush:%d needFlush:%d alreadyOutFire:%d isFinish:%d\n",isAMO, io.flush, needFlush, alreadyOutFire, io.isFinish)
+      printf("[TLBExec-"  + tlbname+ "]: io.Flush:%d needFlush:%d alreadyOutFire:%d isFinish:%d\n", io.flush, needFlush, alreadyOutFire, io.isFinish)
       printf("[TLBExec-"  + tlbname+ "]: hit:%d hitWB:%d hitVPN:%x hitFlag:%x hitPPN:%x hitRefillFlag:%x hitWBStore:%x hitCheck:%d hitExec:%d hitLoad:%d hitStore:%d\n", hit, hitWB, hitMeta.vpn, hitFlag.asUInt, hitData.ppn, hitRefillFlag, hitWBStore, hitCheck, hitExec, hitLoad, hitStore)
       printf("[TLBExec-"  + tlbname+ "]: miss:%d state:%d level:%d raddr:%x memRdata:%x missMask:%x missRefillFlag:%x missMetaRefill:%d\n", miss, state, level, raddr, memRdata.asUInt, missMask, missRefillFlag, missMetaRefill)
       printf("[TLBExec-"  + tlbname+ "]: meta/data: (0)%x|%b|%x (1)%x|%b|%x (2)%x|%b|%x (3)%x|%b|%x rread:%d\n", md(0).asTypeOf(tlbBundle).vpn, md(0).asTypeOf(tlbBundle).flag, md(0).asTypeOf(tlbBundle).ppn, md(1).asTypeOf(tlbBundle).vpn, md(1).asTypeOf(tlbBundle).flag, md(1).asTypeOf(tlbBundle).ppn, md(2).asTypeOf(tlbBundle).vpn, md(2).asTypeOf(tlbBundle).flag, md(2).asTypeOf(tlbBundle).ppn, md(3).asTypeOf(tlbBundle).vpn, md(3).asTypeOf(tlbBundle).flag, md(3).asTypeOf(tlbBundle).ppn, io.mdReady)
