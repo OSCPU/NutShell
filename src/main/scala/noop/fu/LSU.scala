@@ -41,6 +41,8 @@ object LSUOpType { //TODO: refactor LSU fuop
   def isSC(func: UInt): Bool = func === sc
   def isAMO(func: UInt): Bool = isAtom(func) && !isLR(func) && !isSC(func)
 
+  def raiseStorePagefault(func: UInt): Bool = isStore(func) && isAMO(func) && isSC(func)
+
   def atomW = "010".U
   def atomD = "011".U
 }
@@ -83,10 +85,6 @@ class LSUIO extends FunctionUnitIO {
   val exceptionVec = Output(Vec(16, Bool()))
   val scommit = Input(Bool())
   val atomData = Output(UInt(XLEN.W))
-  // val loadPageFault = Output(Bool()) 
-  // val storePageFault = Output(Bool()) 
-  // val loadAddrMisaligned = Output(Bool()) 
-  // val storeAddrMisaligned = Output(Bool())
   val flush = Input(Bool())
 }
 
@@ -287,9 +285,10 @@ class LSU extends NOOPModule with HasLSUConst {
   val loadQueueFull = loadHeadPtr === (loadTailPtr - 1.U) //TODO: fix it with maybe_full logic
   val loadQueueEmpty = loadHeadPtr === loadTailPtr //TODO: fix it with maybe_full logic
   val havePendingDtlbReq = loadDtlbPtr =/= loadHeadPtr
-  val havePendingDmemReq = loadDmemPtr =/= loadDtlbPtr && loadQueue(loadDmemPtr).tlbfin && !loadQueue(loadDmemPtr).finished && MEMOpID.needLoad(loadQueue(loadDmemPtr).op)
+  val havePendingDmemReq = loadDmemPtr =/= loadDtlbPtr && loadQueue(loadDmemPtr).tlbfin && !loadQueue(loadDmemPtr).finished && MEMOpID.needLoad(loadQueue(loadDmemPtr).op) && !loadQueue(loadDmemPtr).loadPageFault && !loadQueue(loadDmemPtr).storePageFault
   val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
   val havePendingStoreEnq = MEMOpID.needStore(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
+  val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault)
 
   // load queue enqueue
   val loadQueueEnqueue = io.in.fire()
@@ -300,7 +299,7 @@ class LSU extends NOOPModule with HasLSUConst {
   // move loadDmemPtr
   val loadQueueReqsend = dmem.req.fire() && MEMOpID.commitToCDB(opReq)
   val nextLoadDmemPtr = WireInit(loadDmemPtr)
-  when(loadQueueReqsend || storeQueueEnqueue){
+  when(loadQueueReqsend || storeQueueEnqueue || skipAInst){
     nextLoadDmemPtr := loadDmemPtr + 1.U
   }
   loadDmemPtr := nextLoadDmemPtr
@@ -337,7 +336,7 @@ class LSU extends NOOPModule with HasLSUConst {
     loadQueue(loadHeadPtr).storeAddrMisaligned := findStoreAddrMisaligned
   }
 
-  when(storeQueueEnqueue){
+  when(storeQueueEnqueue || skipAInst){
     loadQueue(loadDmemPtr).finished := true.B
     // store inst does not need to access mem until it is commited
   }
@@ -492,19 +491,38 @@ class LSU extends NOOPModule with HasLSUConst {
   val dtlbUserBundle = Wire(new DCacheUserBundle)
   dtlbUserBundle.ldqidx := loadDtlbPtr
   dtlbUserBundle.op := MEMOpID.idle
+  val pfType = LSUOpType.raiseStorePagefault(loadQueue(loadDtlbPtr).func)// 0: load pf 1: store pf
 
   io.dtlb.req.bits.apply(addr = loadQueue(loadDtlbPtr).vaddr(VAddrBits-1, 0), size = 0.U, wdata = 0.U,
-    wmask = 0.U, cmd = 0.U, user = dtlbUserBundle.asUInt)
+    wmask = 0.U, cmd = pfType, user = dtlbUserBundle.asUInt)
   io.dtlb.req.valid := havePendingDtlbReq
   io.dtlb.resp.ready := true.B
 
-  val tlbRespLdqidx =  io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx
+  val tlbRespLdqidx = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx
+  val loadPF = WireInit(false.B)
+  val storePF = WireInit(false.B)
+  BoringUtils.addSink(loadPF, "loadPF") // FIXIT: this is nasty
+  BoringUtils.addSink(storePF, "storePF") // FIXIT: this is nasty
+  // val dtlbPF = loadPF || storePF
+  Debug(){
+    when(io.flush){
+      printf("[DTLB FLUSH] %d\n", GTimer())
+    }
+    when(io.dtlb.req.fire()){
+      printf("[DTLB REQ] %d: req paddr for %x ldqid %x\n", GTimer(), io.dtlb.req.bits.addr, loadDtlbPtr)
+    }
+    when(io.dtlb.resp.fire()){
+      printf("[DTLB RESP] %d: get paddr: %x for %x ldqid %x exc l %b s %b\n", GTimer(), io.dtlb.resp.bits.rdata, loadQueue(tlbRespLdqidx).vaddr, tlbRespLdqidx, loadPF, storePF)
+    }
+  }
   when(io.dtlb.resp.fire()){
     loadQueue(tlbRespLdqidx).paddr := io.dtlb.resp.bits.rdata // FIXIT
     loadQueue(tlbRespLdqidx).tlbfin := true.B
     loadQueue(tlbRespLdqidx).isMMIO := paddrIsMMIO
+    loadQueue(tlbRespLdqidx).loadPageFault := loadPF
+    loadQueue(tlbRespLdqidx).storePageFault := storePF
   }
-  assert(!io.dtlb.resp.fire())
+  assert(loadQueue(tlbRespLdqidx).valid && !loadQueue(tlbRespLdqidx).tlbfin || !io.dtlb.resp.fire())
   assert(!(!dtlbEnable && io.dtlb.resp.fire()))
 
   //-------------------------------------------------------
@@ -732,6 +750,7 @@ class LSU extends NOOPModule with HasLSUConst {
     loadDtlbPtr := nextLoadDmemPtr
     for(i <- 0 to (loadQueueSize - 1)){
       loadQueue(i).valid := false.B
+      loadQueue(i).tlbfin := false.B
     }
   }
 

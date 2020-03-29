@@ -511,10 +511,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     hasLoadAddrMisaligned  := valid && io.cfIn.exceptionVec(loadAddrMisaligned)
   }else{
     hasInstrPageFault := io.cfIn.exceptionVec(instrPageFault) && valid
-    hasLoadPageFault := io.dmemMMU.loadPF   // TODO: fix it for Hercules backend: io.cfIn.exceptionVec(loadPageFault) && valid
-    hasStorePageFault := io.dmemMMU.storePF // TODO: fix it for Hercules backend: io.cfIn.exceptionVec(storePageFault) && valid
-    hasStoreAddrMisaligned := io.cfIn.exceptionVec(storeAddrMisaligned) // TODO: fix it for Hercules backend: && valid 
-    hasLoadAddrMisaligned := io.cfIn.exceptionVec(loadAddrMisaligned)   // TODO: fix it for Hercules backend: && valid
+    hasStorePageFault := io.dmemMMU.storePF
   }
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){

@@ -99,9 +99,9 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
     
-    val dtlb = TLB(in = backend.io.dtlb, mem = dmemXbar.io.in(1), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
+    val dtlb = TLB(in = backend.io.dtlb, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(3), csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
     dtlb.io.out := DontCare //FIXIT
-    dtlb.io.out.req.ready := false.B //FIXIT
+    dtlb.io.out.req.ready := true.B //FIXIT
 
     if(EnableVirtualMemory){
       dmemXbar.io.in(3) <> backend.io.dmem

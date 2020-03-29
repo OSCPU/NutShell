@@ -2,7 +2,7 @@ ARCH = ARCH=riscv64-noop
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
 SINGLETEST = ALL=recursion
 
-CPU_TEST_RESULT = $(shell cat cpu.log | grep different)
+CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
 MB_RESULT = $(shell cat microbench.log | grep IPC)
 MBT_RESULT = $(shell cat microbench-train.log | grep IPC)
 
@@ -24,7 +24,7 @@ ifeq ($(CPU_TEST_RESULT),)
 	@echo "simple CPU test passed"
 else
 	@echo $(CPU_TEST_RESULT)
-	@echo "simple CPU test falied"
+	@echo "simple CPU test failed"
 endif
 
 bputest:

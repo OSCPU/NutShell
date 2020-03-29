@@ -311,6 +311,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // lsu.io.instr := lsuUop.decode.cf.instr
   io.dmem <> lsu.io.dmem
   io.dtlb <> lsu.io.dtlb
+  BoringUtils.addSource(io.memMMU.dmem.loadPF, "loadPF") // FIXIT: this is nasty
+  BoringUtils.addSource(io.memMMU.dmem.storePF, "storePF") // FIXIT: this is nasty
   lsu.io.out.ready := true.B //TODO
   lsucommit.decode := lsu.io.uopOut.decode
   lsucommit.isMMIO := lsu.io.isMMIO
@@ -319,7 +321,6 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsucommit.decode.cf.redirect.valid := false.B
   lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
   // fix exceptionVec
-  // TODO: refactor
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
   // backend exceptions only come from LSU
