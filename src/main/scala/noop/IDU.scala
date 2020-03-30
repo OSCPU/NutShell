@@ -142,8 +142,7 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   io.out.bits.ctrl.isPipeLined := PipeLineList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
   io.out.bits.ctrl.isBlocked :=
   (
-    // io.out.bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.out.bits.ctrl.fuOpType) ||  // TODO: decouple LS
-    // io.out.bits.ctrl.fuType === FuType.lsu && !LSUOpType.isLoad(io.out.bits.ctrl.fuOpType) ||  // TODO: decouple LS
+    io.out.bits.ctrl.fuType === FuType.lsu && LSUOpType.isAtom(io.out.bits.ctrl.fuOpType) ||
     BlockList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
   )
 

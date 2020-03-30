@@ -222,7 +222,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.scommit := List.tabulate(robWidth)(i => 
     valid(ringBufferTail)(i) && 
     decode(ringBufferTail)(i).ctrl.fuType === FuType.lsu && 
-    LSUOpType.isStore(decode(ringBufferTail)(i).ctrl.fuOpType) && 
+    LSUOpType.needMemWrite(decode(ringBufferTail)(i).ctrl.fuOpType) && 
     List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k)
   ).foldRight(false.B)((sum, i) => sum || i) && retireATerm
 

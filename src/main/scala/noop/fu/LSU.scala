@@ -41,7 +41,7 @@ object LSUOpType { //TODO: refactor LSU fuop
   def isSC(func: UInt): Bool = func === sc
   def isAMO(func: UInt): Bool = isAtom(func) && !isLR(func) && !isSC(func)
 
-  def raiseStorePagefault(func: UInt): Bool = isStore(func) && isAMO(func) && isSC(func)
+  def needMemWrite(func: UInt): Bool = isStore(func) || isAMO(func) || isSC(func)
 
   def atomW = "010".U
   def atomD = "011".U
@@ -287,7 +287,8 @@ class LSU extends NOOPModule with HasLSUConst {
   val havePendingDtlbReq = loadDtlbPtr =/= loadHeadPtr
   val havePendingDmemReq = loadDmemPtr =/= loadDtlbPtr && loadQueue(loadDmemPtr).tlbfin && !loadQueue(loadDmemPtr).finished && MEMOpID.needLoad(loadQueue(loadDmemPtr).op) && !loadQueue(loadDmemPtr).loadPageFault && !loadQueue(loadDmemPtr).storePageFault
   val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
-  val havePendingStoreEnq = MEMOpID.needStore(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
+  val havePendingStoreEnq = MEMOpID.needStore(loadQueue(loadDmemPtr).op) && !MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
+  val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault)
 
   // load queue enqueue
@@ -390,6 +391,8 @@ class LSU extends NOOPModule with HasLSUConst {
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
   // after a store inst get its paddr from TLB, add it to store queue
   storeQueueEnqueue := havePendingStoreEnq && !storeQueueFull
+  val storeQueueAMOEnqueue = havePendingAMOStoreEnq && loadQueueReqsend
+  assert(!(storeQueueAMOEnqueue && storeQueueFull))
   // when a store inst is retired, commit 1 term in Store Queue
   val storeQueueConfirm = io.scommit // TODO: Argo only support 1 scommit / cycle
   // when a store inst actually writes data to dmem, mark it as `waiting for dmem resp`
@@ -414,13 +417,14 @@ class LSU extends NOOPModule with HasLSUConst {
   storeCmtPtr := nextStoreCmtPtr
   
   // move storeHeadPtr ptr
-  when(storeQueueDequeue && !storeQueueEnqueue){storeHeadPtr := storeHeadPtr - 1.U}
-  when(!storeQueueDequeue && storeQueueEnqueue){storeHeadPtr := storeHeadPtr + 1.U}
+  when(storeQueueDequeue && !(storeQueueEnqueue || storeQueueAMOEnqueue)){storeHeadPtr := storeHeadPtr - 1.U}
+  when(!storeQueueDequeue && (storeQueueEnqueue || storeQueueAMOEnqueue)){storeHeadPtr := storeHeadPtr + 1.U}
   when(io.flush){storeHeadPtr := nextStoreCmtPtr}
+  assert(!(storeQueueEnqueue && storeQueueAMOEnqueue))
 
   // write data to store queue
   val storeQueueEnqPtr = Mux(storeQueueDequeue, storeHeadPtr - 1.U, storeHeadPtr)
-  when(storeQueueEnqueue){
+  when(storeQueueEnqueue || storeQueueAMOEnqueue){
     storeQueue(storeQueueEnqPtr).pc := loadQueue(loadDmemPtr).pc
     storeQueue(storeQueueEnqPtr).prfidx := loadQueue(loadDmemPtr).prfidx
     storeQueue(storeQueueEnqPtr).wmask := genWmask(loadQueue(loadDmemPtr).vaddr, loadQueue(loadDmemPtr).size)
@@ -434,7 +438,7 @@ class LSU extends NOOPModule with HasLSUConst {
   }
 
   Debug(){
-    when(storeQueueEnqueue){
+    when(storeQueueEnqueue || storeQueueAMOEnqueue){
       printf("[ENSTQ] pc %x ldqidx %x valid %x enqp %x head %x time %x\n", loadQueue(ldqidxResp).pc, ldqidxResp, loadQueue(ldqidxResp).valid, storeQueueEnqPtr, storeHeadPtr, GTimer())
     }
   }
@@ -491,7 +495,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val dtlbUserBundle = Wire(new DCacheUserBundle)
   dtlbUserBundle.ldqidx := loadDtlbPtr
   dtlbUserBundle.op := MEMOpID.idle
-  val pfType = LSUOpType.raiseStorePagefault(loadQueue(loadDtlbPtr).func)// 0: load pf 1: store pf
+  val pfType = LSUOpType.needMemWrite(loadQueue(loadDtlbPtr).func)// 0: load pf 1: store pf
 
   io.dtlb.req.bits.apply(addr = loadQueue(loadDtlbPtr).vaddr(VAddrBits-1, 0), size = 0.U, wdata = 0.U,
     wmask = 0.U, cmd = pfType, user = dtlbUserBundle.asUInt)
@@ -730,6 +734,9 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // Commit to CDB
   io.out.bits := Mux(LSUOpType.isSC(loadQueue(loadTailPtr).func), !MEMOpID.needStore(loadQueue(loadTailPtr).op), rdataPartialLoad)
+  // when(LSUOpType.isAMO(loadQueue(loadTailPtr).func) && io.out.fire()){
+  //   printf("[AMO] %d: pc %x %x %x func %b word %b op %b res %x addr %x:%x\n", GTimer(), loadQueue(loadTailPtr).pc, atomALU.io.src1, atomALU.io.src2, loadQueue(loadTailPtr).func, atomALU.io.isWordOp, loadQueue(loadTailPtr).op, atomALU.io.result, loadQueue(loadTailPtr).vaddr, loadQueue(loadTailPtr).paddr)
+  // }
 
   io.uopOut := DontCare
   io.isMMIO := loadQueue(loadTailPtr).isMMIO
