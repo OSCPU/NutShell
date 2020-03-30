@@ -729,7 +729,7 @@ class LSU extends NOOPModule with HasLSUConst {
   io.atomData := atomDataReg
 
   // Commit to CDB
-  io.out.bits := Mux(LSUOpType.isSC(loadQueue(loadTailPtr).func), !MEMOpID.needStore(loadQueue(loadTailPtr).op), Mux(LSUOpType.isAMO(loadQueue(loadTailPtr).func), atomALU.io.result, rdataPartialLoad))
+  io.out.bits := Mux(LSUOpType.isSC(loadQueue(loadTailPtr).func), !MEMOpID.needStore(loadQueue(loadTailPtr).op), rdataPartialLoad)
 
   io.uopOut := DontCare
   io.isMMIO := loadQueue(loadTailPtr).isMMIO
