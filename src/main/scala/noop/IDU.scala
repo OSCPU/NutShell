@@ -18,7 +18,7 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   val instr = io.in.bits.instr(31, 0)
   val decodeList = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val instrType :: fuType :: fuOpType :: Nil = // insert Instructions.DecodeDefault when interrupt comes
-    Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault), intr, dec)}
+    Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault) || io.out.bits.cf.exceptionVec(instrAccessFault), intr, dec)}
   // val instrType :: fuType :: fuOpType :: Nil = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val isRVC = instr(1,0) =/= "b11".U
   val rvcImmType :: rvcSrc1Type :: rvcSrc2Type :: rvcDestType :: Nil =
@@ -161,9 +161,13 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   io.out.bits.cf.intrVec.zip(intrVec.asBools).map{ case(x, y) => x := y }
   hasIntr := intrVec.orR
 
+  val vmEnable = WireInit(false.B)
+  BoringUtils.addSink(vmEnable, "DTLBENABLE")
+
   io.out.bits.cf.exceptionVec.map(_ := false.B)
   io.out.bits.cf.exceptionVec(illegalInstr) := (instrType === InstrN && !hasIntr) && io.in.valid
   io.out.bits.cf.exceptionVec(instrPageFault) := io.in.bits.exceptionVec(instrPageFault)
+  io.out.bits.cf.exceptionVec(instrAccessFault) := io.in.bits.pc(VAddrBits - 1, PAddrBits).orR && !vmEnable
 
   io.out.bits.ctrl.isNoopTrap := (instr === NOOPTrap.TRAP) && io.in.valid
   io.isWFI := (instr === Priviledged.WFI) && io.in.valid
