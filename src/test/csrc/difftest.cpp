@@ -161,6 +161,8 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   ref_r[DIFFTEST_THIS_PC] = nemu_this_pc;
   nemu_this_pc = next_pc;
 
+  ref_r[0] = 0;
+
   if (memcmp(reg_scala, ref_r, sizeof(ref_r)) != 0) {
     printf("\n==============Retire Trace==============\n");
     int j;
