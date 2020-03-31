@@ -325,6 +325,8 @@ class LSU extends NOOPModule with HasLSUConst {
     loadQueue(loadHeadPtr).size := size
     loadQueue(loadHeadPtr).op := memop
     loadQueue(loadHeadPtr).data := genWdata(io.wdata, size)
+    loadQueue(loadHeadPtr).fdata := 0.U
+    loadQueue(loadHeadPtr).fmask := 0.U
     loadQueue(loadHeadPtr).asrc := io.wdata // FIXIT
     loadQueue(loadHeadPtr).rfWen := io.uopIn.decode.ctrl.rfWen
     loadQueue(loadHeadPtr).isMMIO := vaddrIsMMIO // FIXIT
