@@ -737,8 +737,8 @@ class LSU extends NOOPModule with HasLSUConst {
   io.uopOut := DontCare
   io.isMMIO := loadQueue(loadTailPtr).isMMIO
   io.exceptionVec.map(_ := false.B)
-  io.exceptionVec(loadPageFault) := false.B // TODO: fixit
-  io.exceptionVec(storePageFault) := false.B // TODO: fixit
+  io.exceptionVec(loadPageFault) := loadQueue(loadTailPtr).loadPageFault
+  io.exceptionVec(storePageFault) := loadQueue(loadTailPtr).storePageFault
   io.exceptionVec(loadAddrMisaligned) := loadQueue(loadTailPtr).loadAddrMisaligned
   io.exceptionVec(storeAddrMisaligned) := loadQueue(loadTailPtr).storeAddrMisaligned
   io.uopOut.decode.cf.pc := loadQueue(loadTailPtr).pc
