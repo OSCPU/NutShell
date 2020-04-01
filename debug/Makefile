@@ -81,6 +81,9 @@ xv6-debug:
 linux:
 	$(MAKE) -C $(BBL_LINUX_HOME) noop
 
+linux-debug:
+	$(MAKE) -C $(BBL_LINUX_HOME) noop 2>&1 | tee > linux.log
+
 # ------------------------------------------------------------------
 # test set
 # ------------------------------------------------------------------
