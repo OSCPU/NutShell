@@ -85,6 +85,7 @@ class LSUIO extends FunctionUnitIO {
   val exceptionVec = Output(Vec(16, Bool()))
   val scommit = Input(Bool())
   val atomData = Output(UInt(XLEN.W))
+  val haveUnfinishedStore = Output(Bool())
   val flush = Input(Bool())
 }
 
@@ -379,6 +380,8 @@ class LSU extends NOOPModule with HasLSUConst {
   val haveUnrequiredStore = storeCmtPtr =/= storeReqPtr
   val haveUnfinishedStore = 0.U =/= storeReqPtr
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
+
+  io.haveUnfinishedStore := 0.U =/= storeHeadPtr
 
   // alloc a slot when a store tlb request is sent
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)

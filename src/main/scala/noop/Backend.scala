@@ -166,7 +166,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   }
 
   val blockReg = RegInit(false.B)
-  when(rob.io.empty || io.flush ){ blockReg := false.B }
+  val haveUnfinishedStore = Wire(Bool())
+  when((rob.io.empty || io.flush) && !haveUnfinishedStore){ blockReg := false.B }
   when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire()){ blockReg := true.B }
 
   instCango(0) := 
@@ -312,6 +313,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   )
   lsu.io.uopIn := lsuUop
   lsu.io.scommit := rob.io.scommit
+  haveUnfinishedStore := lsu.io.haveUnfinishedStore
   lsu.io.flush := io.flush
   lsu.io.wdata := lsuUop.decode.data.src2
   // lsu.io.instr := lsuUop.decode.cf.instr

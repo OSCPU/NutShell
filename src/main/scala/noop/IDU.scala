@@ -123,23 +123,16 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   io.out.bits.ctrl.src1Type := Mux(instr(6,0) === "b0110111".U, SrcType.reg, src1Type)
   io.out.bits.ctrl.src2Type := src2Type
 
-  val PipeLineList = Seq(
-    FuType.alu,
+  val NoSpecList = Seq(
     FuType.csr,
     FuType.mou
-    // FuType.lsu
   )
 
   val BlockList = Seq(
-    FuType.csr,
-    FuType.mou
-    // FuType.lsu
   )
 
-  // io.out.bits.ctrl.isInvOpcode := (instrType === InstrN) && io.in.valid
   io.out.bits.ctrl.isNoopTrap := (instr(31,0) === NOOPTrap.TRAP) && io.in.valid
-  io.out.bits.ctrl.isSpecExec := io.out.bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.out.bits.ctrl.fuOpType) //TODO
-  io.out.bits.ctrl.isPipeLined := PipeLineList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
+  io.out.bits.ctrl.noSpecExec := NoSpecList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
   io.out.bits.ctrl.isBlocked :=
   (
     io.out.bits.ctrl.fuType === FuType.lsu && LSUOpType.isAtom(io.out.bits.ctrl.fuOpType) ||
