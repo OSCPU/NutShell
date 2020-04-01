@@ -503,34 +503,42 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val hasStoreAddrMisaligned = Wire(Bool())
   val hasLoadAddrMisaligned = Wire(Bool())
 
+  val dmemPagefaultAddr = Wire(UInt(VAddrBits.W))
+  val dmemAddrMisalignedAddr = Wire(UInt(VAddrBits.W))
+  val lsuAddr = WireInit(0.U(64.W))
+  BoringUtils.addSink(lsuAddr, "LSUADDR")
   if(EnableOutOfOrderExec){
     hasInstrPageFault      := valid && io.cfIn.exceptionVec(instrPageFault)
     hasLoadPageFault       := valid && io.cfIn.exceptionVec(loadPageFault)
     hasStorePageFault      := valid && io.cfIn.exceptionVec(storePageFault)
     hasStoreAddrMisaligned := valid && io.cfIn.exceptionVec(storeAddrMisaligned)
     hasLoadAddrMisaligned  := valid && io.cfIn.exceptionVec(loadAddrMisaligned)
+    dmemPagefaultAddr := src1 // LSU -> wbresult -> prf -> beUop.data.src1
+    dmemAddrMisalignedAddr := src1
   }else{
     hasInstrPageFault := io.cfIn.exceptionVec(instrPageFault) && valid
     hasLoadPageFault := io.dmemMMU.loadPF
     hasStorePageFault := io.dmemMMU.storePF
     hasStoreAddrMisaligned := io.cfIn.exceptionVec(storeAddrMisaligned)
     hasLoadAddrMisaligned := io.cfIn.exceptionVec(loadAddrMisaligned)
+    dmemPagefaultAddr := io.dmemMMU.addr
+    dmemAddrMisalignedAddr := lsuAddr
   }
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
-    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt(io.cfIn.pc + 2.U, XLEN), SignExt(io.cfIn.pc, XLEN)), SignExt(io.dmemMMU.addr, XLEN))
+    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt(io.cfIn.pc + 2.U, XLEN), SignExt(io.cfIn.pc, XLEN)), SignExt(dmemPagefaultAddr, XLEN))
     when(priviledgeMode === ModeM){
       mtval := tval
     }.otherwise{
       stval := tval
     }
+    printf("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
   }
 
-  val lsuAddr = WireInit(0.U(64.W))
-  BoringUtils.addSink(lsuAddr, "LSUADDR")
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
-      mtval := SignExt(lsuAddr, XLEN)
+      mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
+      printf("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
   }
 
   // Exception and Intr
@@ -566,8 +574,6 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
-  // csrExceptionVec(instrPageFault) := hasInstrPageFault
-  // TODO: FIXIT
   csrExceptionVec(illegalInstr) := isIllegalAddr && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault

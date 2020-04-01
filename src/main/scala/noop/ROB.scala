@@ -210,6 +210,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.beUop.decode.cf.exceptionVec(storePageFault) := intrNO(ringBufferTail)(exceptionSelect)(storePageFault)
   io.beUop.decode.cf.exceptionVec(loadAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(loadAddrMisaligned)
   io.beUop.decode.cf.exceptionVec(storeAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(storeAddrMisaligned)
+  io.beUop.decode.data.src1 := prf(Cat(ringBufferTail, exceptionSelect)) //FIXIT
   io.beUop.prfDest := Cat(ringBufferTail, exceptionSelect)
 
   assert(!(exception(ringBufferTail)(0) && exception(ringBufferTail)(1) && valid(ringBufferTail)(0) && valid(ringBufferTail)(1)))

@@ -732,7 +732,15 @@ class LSU extends NOOPModule with HasLSUConst {
   io.atomData := atomDataReg
 
   // Commit to CDB
-  io.out.bits := Mux(LSUOpType.isSC(loadQueue(loadTailPtr).func), !MEMOpID.needStore(loadQueue(loadTailPtr).op), Mux(LSUOpType.isAtom(loadQueue(loadTailPtr).func), atomDataPartialLoad, rdataPartialLoad))
+  io.out.bits := MuxCase(
+      default = rdataPartialLoad,
+      mapping = List(
+        (loadQueue(loadTailPtr).loadPageFault || loadQueue(loadTailPtr).storePageFault) -> loadQueue(loadTailPtr).vaddr,
+        LSUOpType.isSC(loadQueue(loadTailPtr).func) -> !MEMOpID.needStore(loadQueue(loadTailPtr).op),
+        LSUOpType.isAtom(loadQueue(loadTailPtr).func) -> atomDataPartialLoad
+      )
+  )
+
   // when(LSUOpType.isAMO(loadQueue(loadTailPtr).func) && io.out.fire()){
   //   printf("[AMO] %d: pc %x %x %x func %b word %b op %b res %x addr %x:%x\n", GTimer(), loadQueue(loadTailPtr).pc, atomALU.io.src1, atomALU.io.src2, loadQueue(loadTailPtr).func, atomALU.io.isWordOp, loadQueue(loadTailPtr).op, atomALU.io.result, loadQueue(loadTailPtr).vaddr, loadQueue(loadTailPtr).paddr)
   // }
