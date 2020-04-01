@@ -7,6 +7,7 @@ import chisel3.util.experimental.BoringUtils
 import bus.simplebus._
 import bus.axi4._
 import utils._
+import top.Settings
 
 trait HasNOOPParameter {
   val XLEN = 64
@@ -17,19 +18,19 @@ trait HasNOOPParameter {
   val HasDcache = true
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
-  val VAddrBits = 39 // VAddrBits is Virtual Memory addr bits
+  val VAddrBits = Settings.VAddrBits // VAddrBits is Virtual Memory addr bits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN
   val DataBytes = DataBits / 8
   val EnableMultiIssue = true
   val EnableSuperScalarExec = true
-  val EnableOutOfOrderExec = true
+  val EnableOutOfOrderExec = Settings.EnableOutOfOrderExec
 }
 
 trait HasNOOPConst {
   val CacheReadWidth = 8
-  val ICacheUserBundleWidth = 39*2 + 9 // TODO: this const depends on VAddrBits
+  val ICacheUserBundleWidth = Settings.VAddrBits*2 + 9
 }
 
 abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO

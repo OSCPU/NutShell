@@ -61,6 +61,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   csr.io.cfIn.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
   csr.io.cfIn.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
   csr.io.instrValid := io.in.valid && !io.flush
+  csr.io.isBackendException := false.B
   io.out.bits(0).intrNO := csr.io.intrNO
   csr.io.out.ready := true.B
 

@@ -4,15 +4,16 @@ import noop._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import device.AXI4Timer
+import top.Settings
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 trait HasSoCParameter {
-  val EnableILA = true
-  val HasL2cache = true
-  val HasPrefetch = true
+  val EnableILA = Settings.EnableILA
+  val HasL2cache = Settings.HasL2cache
+  val HasPrefetch = Settings.HasL2cache
 }
 
 class ILABundle extends Bundle {
