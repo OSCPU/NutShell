@@ -116,7 +116,6 @@ class LoadQueueEntry extends NOOPBundle{
   val fdata    = UInt(XLEN.W) // forwarding data
   val fmask    = UInt((XLEN/8).W) // forwarding mask
   val asrc     = UInt(XLEN.W) // alusrc2 for atom inst
-  // val awidthW  = Bool() // atomWidthW
   val rfWen    = Bool()
   val isMMIO   = Bool()
   val valid    = Bool()
@@ -129,15 +128,9 @@ class LoadQueueEntry extends NOOPBundle{
 }
 
 class DCacheUserBundle extends NOOPBundle {
-  // val pc       = UInt(VAddrBits.W)
-  // val prfidx   = UInt(prfAddrWidth.W)
   val ldqidx   = UInt(5.W) //TODO
   val op       = UInt(7.W)
-  // val func     = UInt(7.W)
-  // val loadAddrMisaligned  = Bool()
-  // val storeAddrMisaligned = Bool()
 }
-// or use LoadQueueEntry instead
 
 class MemReq extends NOOPBundle {
   val addr = UInt(VAddrBits.W)
@@ -232,11 +225,9 @@ class LSU extends NOOPModule with HasLSUConst {
   BoringUtils.addSink(lr, "lr")
   BoringUtils.addSink(lrAddr, "lr_addr")
   val scInvalid = !(src1 === lrAddr) && scReq
-  setLr := DontCare
-  setLrVal := DontCare
-  setLrAddr := DontCare
-  lr := DontCare
-  lrAddr := DontCare
+  setLr := (lrReq || scReq) && io.in.fire()
+  setLrVal := lrReq
+  setLrAddr := src1
 
   // PF signal from TLB
   // TODO: add a TLB bus instead of using BoringUtils.addSink/Src
@@ -289,7 +280,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
   val havePendingStoreEnq = MEMOpID.needStore(loadQueue(loadDmemPtr).op) && !MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
-  val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault)
+  val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || !loadQueue(loadDmemPtr).op(2,0).orR)
 
   // load queue enqueue
   val loadQueueEnqueue = io.in.fire()
@@ -400,7 +391,9 @@ class LSU extends NOOPModule with HasLSUConst {
   // when a store inst actually writes data to dmem, mark it as `waiting for dmem resp`
   val storeQueueReqsend = dmem.req.fire() && MEMOpID.commitToSTQ(opReq)
   // when dmem try to commit to store queue, i.e. dmem report a write op is finished, dequeue
-  val storeQueueDequeue = dmem.resp.fire() && MEMOpID.commitToSTQ(opResp)
+  // FIXIT: in current case, we can always assume a store is succeed after req.fire()
+  // therefore storeQueueDequeue is not necessary 
+  val storeQueueDequeue = dmem.resp.fire() && MEMOpID.commitToSTQ(opResp) && !MEMOpID.needLoad(opResp) //&& MEMOpID.needStore(opResp)
   when(storeQueueDequeue){
     // storeQueue := Cat(storeQueue(0), storeQueue(storeQueueSize-1, 1))
     List.tabulate(storeQueueSize - 1)(i => {
@@ -691,7 +684,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   when(dmem.resp.fire()){
     when(MEMOpID.commitToCDB(opResp) || MEMOpID.commitToVPU(opResp)){
-      when(!MEMOpID.needStore(opResp)){loadQueue(ldqidxResp).data := rdataFwdSel}
+      when(MEMOpID.needLoad(opResp)){loadQueue(ldqidxResp).data := rdataFwdSel}
       loadQueue(ldqidxResp).finished := true.B
     }
   }
@@ -722,20 +715,21 @@ class LSU extends NOOPModule with HasLSUConst {
       LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), XLEN),
       LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN)
   ))
+  val atomDataPartialLoad = Mux(loadQueue(loadTailPtr).size(0), SignExt(rdataSel(63, 0), XLEN), SignExt(rdataSel(31, 0), XLEN))
 
   // Atom
   val atomALU = Module(new AtomALU)
-  atomALU.io.src1 := rdataPartialLoad//atomMemReg
+  atomALU.io.src1 := atomDataPartialLoad
   atomALU.io.src2 := loadQueue(loadTailPtr).asrc//io.wdata FIXIT: use a single reg
-  atomALU.io.func := loadQueue(loadTailPtr).func//func
+  atomALU.io.func := loadQueue(loadTailPtr).func
   atomALU.io.isWordOp := !loadQueue(loadTailPtr).size(0)  //recover atomWidthW from size
   // When an atom inst reaches here, store its result to store buffer,
   // then commit it to CDB, set atom-on-the-fly to false
-  val atomDataReg = RegEnable(atomALU.io.result, io.out.fire() && LSUOpType.isAMO(loadQueue(loadTailPtr).func))
+  val atomDataReg = RegEnable(genWdata(atomALU.io.result, loadQueue(loadTailPtr).size), io.out.fire() && LSUOpType.isAMO(loadQueue(loadTailPtr).func))
   io.atomData := atomDataReg
 
   // Commit to CDB
-  io.out.bits := Mux(LSUOpType.isSC(loadQueue(loadTailPtr).func), !MEMOpID.needStore(loadQueue(loadTailPtr).op), rdataPartialLoad)
+  io.out.bits := Mux(LSUOpType.isSC(loadQueue(loadTailPtr).func), !MEMOpID.needStore(loadQueue(loadTailPtr).op), Mux(LSUOpType.isAtom(loadQueue(loadTailPtr).func), atomDataPartialLoad, rdataPartialLoad))
   // when(LSUOpType.isAMO(loadQueue(loadTailPtr).func) && io.out.fire()){
   //   printf("[AMO] %d: pc %x %x %x func %b word %b op %b res %x addr %x:%x\n", GTimer(), loadQueue(loadTailPtr).pc, atomALU.io.src1, atomALU.io.src2, loadQueue(loadTailPtr).func, atomALU.io.isWordOp, loadQueue(loadTailPtr).op, atomALU.io.result, loadQueue(loadTailPtr).vaddr, loadQueue(loadTailPtr).paddr)
   // }
