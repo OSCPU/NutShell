@@ -15,7 +15,7 @@ class CtrlSignalIO extends NOOPBundle {
   val isNoopTrap = Output(Bool())
   val isSrc1Forward = Output(Bool())
   val isSrc2Forward = Output(Bool())
-  val isSpecExec = Output(Bool())  // This inst is a branch inst, and this branch is speculated
+  val noSpecExec = Output(Bool())  // This inst is a branch inst, and this branch is speculated
   val isPipeLined = Output(Bool()) // Function unti for this inst is pipelined
   val isBlocked = Output(Bool())   // This inst requires pipeline to be blocked
 }

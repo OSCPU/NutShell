@@ -155,7 +155,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   //TODO: refactor src gen with Mux1H
 
   // We have to block store inst before we decouple load and store
-  val hasBlockInst = List.tabulate(DispatchWidth)(i => io.in(i).bits.ctrl.isBlocked)
+  val hasBlockInst = List.tabulate(DispatchWidth)(i => io.in(i).bits.ctrl.noSpecExec || io.in(i).bits.ctrl.isBlocked)
   val pipeLineEmpty = rob.io.empty && alu1rs.io.empty && alu2rs.io.empty && csrrs.io.empty && lsurs.io.empty && mdurs.io.empty
 
   // Chicken Bit
@@ -165,10 +165,15 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     hasBlockInst(1) := true.B
   }
 
+  val blockReg = RegInit(false.B)
+  when(rob.io.empty || io.flush ){ blockReg := false.B }
+  when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire()){ blockReg := true.B }
+
   instCango(0) := 
     io.in(0).valid &&
     rob.io.in(0).ready && // rob has empty slot
     !(hasBlockInst(0) && !pipeLineEmpty) &&
+    !blockReg &&
     LookupTree(io.in(0).bits.ctrl.fuType, List(
       FuType.alu -> alu1rs.io.in.ready,
       FuType.lsu -> lsurs.io.in.ready,
@@ -182,6 +187,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     rob.io.in(1).ready && // rob has empty slot
     !hasBlockInst(0) && // there is no block inst
     !hasBlockInst(1) &&
+    !blockReg &&
     LookupTree(io.in(1).bits.ctrl.fuType, List(
       FuType.alu -> (alu2rs.io.in.ready && !ALUOpType.isBru(inst(1).decode.ctrl.fuOpType)),
       FuType.lsu -> (lsurs.io.in.ready && (lsuCnt < 2.U)),

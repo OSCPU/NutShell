@@ -166,10 +166,10 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // when speculated branch enters ROB, add current reg map into rmq
   // when a speculated branch inst retires, delete it from rmq
   // TODO
-  rmq.io.enq.valid := List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.isSpecExec).foldRight(false.B)((sum, i) => sum | i) // when(io.in(0).ctrl.isSpecExec)
+  rmq.io.enq.valid := List.tabulate(robWidth)(i => io.in(i).valid).foldRight(false.B)((sum, i) => sum | i) // when(io.in(0).ctrl.isSpecExec)
   rmq.io.enq.bits := DontCare //TODO
   rmq.io.deq.ready := List.tabulate(robWidth)(i => 
-    valid(ringBufferTail)(i) && decode(ringBufferTail)(i).ctrl.isSpecExec
+    valid(ringBufferTail)(i)
   ).foldRight(false.B)((sum, i) => sum || i)
 
   // rmap recover := rmq.io.deq.bits
