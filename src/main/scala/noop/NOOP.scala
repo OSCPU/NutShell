@@ -16,6 +16,7 @@ trait HasNOOPParameter {
   val HasDiv = true
   val HasIcache = true
   val HasDcache = true
+  val HasITLB = Settings.HasITLB
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
   val VAddrBits = Settings.VAddrBits // VAddrBits is Virtual Memory addr bits
@@ -38,7 +39,7 @@ abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst
 
 case class NOOPConfig (
   FPGAPlatform: Boolean = true,
-  EnableDebug: Boolean = false
+  EnableDebug: Boolean = Settings.EnableDebug
 )
 
 object AddressSpace {
@@ -85,19 +86,18 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     when (idu.io.in(1).valid) { printf("IDU2: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in(1).bits.pc, idu.io.in(1).bits.instr, idu.io.in(1).bits.pnpc) }
   }
 
-  val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
-  val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
-
   // Backend
 
   val backend = if (EnableOutOfOrderExec) Module(new Backend) else Module(new Backend_seq)
-  
   PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 16)
+
+  val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
+  val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
   
   // itlb
-  val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
+  val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem, enable = HasITLB)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
   ifu.io.ipf := itlb.io.ipf
-  io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(    CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
+  io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
   
   // dtlb
   val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
@@ -113,12 +113,12 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     backend.io.flush := ifu.io.flushVec(3,2)
   }
 
-  Debug() {
-    printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
-  }
-
   // Make DMA access through L1 DCache to keep coherence
   dmemXbar.io.in(3) <> io.frontend
 
   io.mmio <> mmioXbar.io.out
+  
+  Debug() {
+    printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
+  }
 }

@@ -597,13 +597,40 @@ class TLBEmpty(implicit val tlbConfig: TLBConfig) extends TlbModule {
   io.out <> io.in
 }
 
+class TLB_fake(implicit val tlbConfig: TLBConfig) extends TlbModule{
+  val io = IO(new Bundle {
+    val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
+    val out = new SimpleBusUC(userBits = userBits)
+    val flush = Input(Bool()) 
+    val csrMMU = new MMUIO
+    val cacheEmpty = Input(Bool())
+    val ipf = Output(Bool())
+  })
+  
+  io.out <> io.in
+  io.csrMMU.loadPF := false.B
+  io.csrMMU.storePF := false.B
+  io.csrMMU.addr := io.in.req.bits.addr
+  io.ipf := false.B
+}
+
+
 object TLB {
-  def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO)(implicit tlbConfig: TLBConfig) = {
-    val tlb = Module(new TLB)
-    tlb.io.in <> in
-    tlb.io.mem <> mem
-    tlb.io.flush := flush
-    tlb.io.csrMMU <> csrMMU
-    tlb
+  def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO, enable: Boolean = true)(implicit tlbConfig: TLBConfig) = {
+    if (enable) {
+      val tlb = Module(new TLB)
+      tlb.io.in <> in
+      tlb.io.mem <> mem
+      tlb.io.flush := flush
+      tlb.io.csrMMU <> csrMMU
+      tlb
+    } else {
+      val tlb = Module(new TLB_fake)
+      tlb.io.in <> in
+      tlb.io.flush := flush
+      tlb.io.csrMMU <> csrMMU
+      mem := DontCare
+      tlb
+    }
   }
 }
