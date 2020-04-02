@@ -111,7 +111,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   val dequeueSize1 = Mux(io.out(0).fire(), Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
   Debug(){
     when(io.out(0).fire()){printf("[IBUF] dequeue: bufferhead %x buffertail %x time %d\n", ringBufferHead, ringBufferTail, GTimer())}
-    when(io.out(0).fire()){printf("[IBUF]     dequeue1: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out(0).bits.instr, io.out(0).bits.pc, io.out(0).bits.pnpc, io.out(0).bits.brIdx, io.out(0).bits.exceptionVec(instrPageFault), GTimer())}
+    when(io.out(0).fire()){printf("[IBUF]     dequeue1: inst %x pc %x npc %x br %x ipf %x(%x) time %d\n", io.out(0).bits.instr, io.out(0).bits.pc, io.out(0).bits.pnpc, io.out(0).bits.brIdx, io.out(0).bits.exceptionVec(instrPageFault), io.out(0).bits.crossPageIPFFix, GTimer())}
   }
 
   //dequeue socket 2
@@ -134,7 +134,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out(1).bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex) || !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
   val dequeueSize2 = Mux(io.out(1).fire(), Mux(dequeueIsRVC(dequeueSize1), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
   Debug(){
-    when(io.out(1).fire()){printf("[IBUF]     dequeue2: inst %x pc %x npc %x br %x ipf %x time %d\n", io.out(1).bits.instr, io.out(1).bits.pc, io.out(1).bits.pnpc, io.out(1).bits.brIdx, io.out(1).bits.exceptionVec(instrPageFault), GTimer())}
+    when(io.out(1).fire()){printf("[IBUF]     dequeue2: inst %x pc %x npc %x br %x ipf %x(%x) time %d\n", io.out(1).bits.instr, io.out(1).bits.pc, io.out(1).bits.pnpc, io.out(1).bits.brIdx, io.out(1).bits.exceptionVec(instrPageFault), io.out(1).bits.crossPageIPFFix, GTimer())}
   }
 
   val dequeueSize = dequeueSize1 +& dequeueSize2

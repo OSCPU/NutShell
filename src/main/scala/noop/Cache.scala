@@ -205,6 +205,7 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
   Debug() {
     if (debug) {
       printf("%d: [" + cacheName + " S2]: isFD:%d isFDreg:%d inFire:%d invalid:%d \n", GTimer(), isForwardData, isForwardDataReg, io.in.fire(), io.in.valid)
+      printf("%d: [" + cacheName + " S2]: isFM:%d isFMreg:%d metawreq:%x widx:%x ridx:%x \n", GTimer(), isForwardMeta, isForwardMetaReg, io.metaWriteBus.req.valid, io.metaWriteBus.req.bits.setIdx, getMetaIdx(req.addr))
     }
   }
 }
@@ -241,6 +242,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
   val meta = Mux1H(io.in.bits.waymask, io.in.bits.metas)
   assert(!(mmio && hit), "MMIO request should not hit in cache")
 
+  
   // this is ugly
   if (cacheName == "dcache") {
     BoringUtils.addSource(mmio, "lsuMMIO")
@@ -439,15 +441,35 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
   assert(!(!ro.B && io.flush), "only allow to flush icache")
   Debug() {
     if (debug) {
+    printf("%d: [" + cacheName + " S3]: metaread idx %x waymask %b metas %x%x:%x %x%x:%x %x%x:%x %x%x:%x %x\n", 
+    GTimer(), getMetaIdx(req.addr), io.in.bits.waymask.asUInt, io.in.bits.metas(0).valid, io.in.bits.metas(0).dirty, io.in.bits.metas(0).tag, io.in.bits.metas(1).valid, io.in.bits.metas(1).dirty, io.in.bits.metas(1).tag, io.in.bits.metas(2).valid, io.in.bits.metas(2).dirty, io.in.bits.metas(2).tag, io.in.bits.metas(3).valid, io.in.bits.metas(3).dirty, io.in.bits.metas(3).tag, io.in.bits.datas.asUInt)
+    when(io.metaWriteBus.req.fire()){
+      printf("%d: [" + cacheName + " S3]: metawrite idx %x wmask %b meta %x%x:%x\n", GTimer(), io.metaWriteBus.req.bits.setIdx, io.metaWriteBus.req.bits.waymask.get, io.metaWriteBus.req.bits.data.valid, io.metaWriteBus.req.bits.data.dirty, io.metaWriteBus.req.bits.data.tag)
+    }
     printf("%d: [" + cacheName + " S3]: in.ready = %d, in.valid = %d, hit = %x, state = %d, addr = %x cmd:%d probe:%d isFinish:%d\n",
     GTimer(), io.in.ready, io.in.valid, hit, state, req.addr, req.cmd, probe, io.isFinish)
-    printf("%d: [" + cacheName + " S3]: out.valid:%d rdata:%x cmd:%d user:%x \n", 
-    GTimer(), io.out.valid, io.out.bits.rdata, io.out.bits.cmd, io.out.bits.user.getOrElse(0.U))
-    printf("%d: [" + cacheName + " S3]: DHW: (%d, %d), data:%x MHW:(%d, %d)\n", 
-    GTimer(), dataHitWriteBus.req.valid, dataHitWriteBus.req.ready, dataHitWriteBus.req.bits.data.asUInt, metaHitWriteBus.req.valid, metaHitWriteBus.req.ready)
+    printf("%d: [" + cacheName + " S3]: out.valid:%d rdata:%x cmd:%d user:%x id:%x \n", 
+    GTimer(), io.out.valid, io.out.bits.rdata, io.out.bits.cmd, io.out.bits.user.getOrElse(0.U), io.out.bits.id.getOrElse(0.U))
+    printf("%d: [" + cacheName + " S3]: DHW: (%d, %d), data:%x setIdx:%x MHW:(%d, %d)\n", 
+    GTimer(), dataHitWriteBus.req.valid, dataHitWriteBus.req.ready, dataHitWriteBus.req.bits.data.asUInt, dataHitWriteBus.req.bits.setIdx, metaHitWriteBus.req.valid, metaHitWriteBus.req.ready)
+    printf("%d: [" + cacheName + " S3]: DreadCache: %x \n",
+    GTimer(), io.in.bits.datas.asUInt)
     printf("%d: [" + cacheName + " S3]: useFD:%d isFD:%d FD:%x DreadArray:%x dataRead:%x inwaymask:%x FDwaymask:%x \n", 
     GTimer(), useForwardData, io.in.bits.isForwardData, io.in.bits.forwardData.data.data, dataReadArray, dataRead, io.in.bits.waymask, io.in.bits.forwardData.waymask.getOrElse("b1".U))
+    when(io.dataWriteBus.req.fire()){
+    printf("%d: [" + cacheName + " WB] waymask: %b data:%x setIdx:%x\n", 
+    GTimer(), io.dataWriteBus.req.bits.waymask.get.asUInt, io.dataWriteBus.req.bits.data.asUInt, io.dataWriteBus.req.bits.setIdx)
     }
+    }
+      when((state === s_memWriteReq) && io.mem.req.fire()){
+        printf("[COUTW] cnt %x addr %x data %x cmd %x size %x wmask %x tag %x idx %x waymask %b time %d\n", writeBeatCnt.value, io.mem.req.bits.addr, io.mem.req.bits.wdata, io.mem.req.bits.cmd, io.mem.req.bits.size, io.mem.req.bits.wmask, addr.tag, getMetaIdx(req.addr), io.in.bits.waymask, GTimer())
+      }
+      when((state === s_memReadReq) && io.mem.req.fire()){
+        printf("[COUTR] addr %x tag %x idx %x waymask %b time %d\n", io.mem.req.bits.addr, addr.tag, getMetaIdx(req.addr), io.in.bits.waymask, GTimer())
+      }
+      when((state === s_memReadResp) && io.mem.resp.fire()){
+        printf("[COUTR] cnt %x data %x tag %x idx %x waymask %b time %d\n", readBeatCnt.value, io.mem.resp.bits.rdata, addr.tag, getMetaIdx(req.addr), io.in.bits.waymask, GTimer())
+      }
   }
 }
 

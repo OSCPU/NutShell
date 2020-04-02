@@ -601,6 +601,9 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     when(io.redirect.valid){
       printf("[CSR] redirect to %x\n", io.redirect.target)
     }
+    when(resetSatp){
+      printf("[CSR] satp reset at %x\n", GTimer())
+    }
   }
 
   // Debug(false){
