@@ -525,7 +525,7 @@ class LSU extends NOOPModule with HasLSUConst {
     loadQueue(tlbRespLdqidx).storePageFault := storePF
   }
   assert(loadQueue(tlbRespLdqidx).valid && !loadQueue(tlbRespLdqidx).tlbfin || !io.dtlb.resp.fire())
-  assert(!(!dtlbEnable && io.dtlb.resp.fire()))
+  // assert(!(!dtlbEnable && io.dtlb.resp.fire()))
 
   //-------------------------------------------------------
   // Mem Req
@@ -735,7 +735,7 @@ class LSU extends NOOPModule with HasLSUConst {
   io.out.bits := MuxCase(
       default = rdataPartialLoad,
       mapping = List(
-        (loadQueue(loadTailPtr).loadPageFault || loadQueue(loadTailPtr).storePageFault) -> loadQueue(loadTailPtr).vaddr,
+        (loadQueue(loadTailPtr).loadPageFault || loadQueue(loadTailPtr).storePageFault || loadQueue(loadTailPtr).loadAddrMisaligned || loadQueue(loadTailPtr).storeAddrMisaligned) -> loadQueue(loadTailPtr).vaddr,
         LSUOpType.isSC(loadQueue(loadTailPtr).func) -> !MEMOpID.needStore(loadQueue(loadTailPtr).op),
         LSUOpType.isAtom(loadQueue(loadTailPtr).func) -> atomDataPartialLoad
       )

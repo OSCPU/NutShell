@@ -224,7 +224,8 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     valid(ringBufferTail)(i) && 
     decode(ringBufferTail)(i).ctrl.fuType === FuType.lsu && 
     LSUOpType.needMemWrite(decode(ringBufferTail)(i).ctrl.fuOpType) && 
-    List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k)
+    List.tabulate(i+1)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
+    List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k)
   ).foldRight(false.B)((sum, i) => sum || i) && retireATerm
 
   // In current version, only one l/s inst can be sent to agu in a cycle
