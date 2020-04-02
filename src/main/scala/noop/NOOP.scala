@@ -17,6 +17,7 @@ trait HasNOOPParameter {
   val HasIcache = true
   val HasDcache = true
   val HasITLB = Settings.HasITLB
+  val HasDTLB = Settings.HasDTLB
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
   val VAddrBits = Settings.VAddrBits // VAddrBits is Virtual Memory addr bits
@@ -100,7 +101,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
   
   // dtlb
-  val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
+  val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", totalEntry = 64))
   dmemXbar.io.in(0) <> dtlb.io.out
   io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
 

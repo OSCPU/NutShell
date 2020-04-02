@@ -5,6 +5,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import top.Settings
 
 object LSUOpType {
   def lb   = "b0000000".U
@@ -120,7 +121,9 @@ class LSU extends NOOPModule with HasLSUConst {
     val amoReq   = valid & LSUOpType.isAMO(func)
     val lrReq   = valid & LSUOpType.isLR(func)
     val scReq   = valid & LSUOpType.isSC(func)
-    BoringUtils.addSource(amoReq, "ISAMO")
+    if (Settings.HasDTLB) {
+      BoringUtils.addSource(amoReq, "ISAMO")
+    }
     BoringUtils.addSource(amoReq, "ISAMO2")
 
     val aq = io.instr(26)

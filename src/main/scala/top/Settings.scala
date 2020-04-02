@@ -13,6 +13,7 @@ trait BigCore {
   val EnableSuperScalarExec = true
   val EnableOutOfOrderExec = true
   val HasITLB = true
+  val HasDTLB = true
 }
 
 trait SmallCore {
@@ -23,6 +24,7 @@ trait SmallCore {
   val EnableSuperScalarExec = false
   val EnableOutOfOrderExec = false
   val HasITLB = false
+  val HasDTLB = false
 }
 
 object Settings extends Common with SmallCore {}

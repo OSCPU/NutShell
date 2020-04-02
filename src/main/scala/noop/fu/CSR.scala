@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import top.Settings
 
 object CSROpType {
   def jmp  = "b000".U
@@ -312,7 +313,10 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val stval = Reg(UInt(XLEN.W))
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
-  BoringUtils.addSource(satp, "CSRSATP")
+
+  if (Settings.HasDTLB) {
+    BoringUtils.addSource(satp, "CSRSATP")
+  }
 
   // User-Level CSRs
   val uepc = Reg(UInt(XLEN.W))
