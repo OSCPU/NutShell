@@ -15,7 +15,7 @@ trait HasNOOPParameter {
   val HasCExtension = true
   val HasDiv = true
   val HasIcache = true
-  val HasDcache = true
+  val HasDcache = Settings.HasDcache
   val HasITLB = Settings.HasITLB
   val HasDTLB = Settings.HasDTLB
   val EnableStoreQueue = false
@@ -92,7 +92,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   val backend = if (EnableOutOfOrderExec) Module(new Backend) else Module(new Backend_seq)
   PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 16)
 
-  val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
+  val mmioXbar = Module(new SimpleBusCrossbarNto1(2))
   val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
   
   // itlb

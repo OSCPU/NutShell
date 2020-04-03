@@ -7,6 +7,7 @@ import chisel3.util.experimental.BoringUtils
 import bus.simplebus._
 import bus.axi4._
 import utils._
+import top.Settings
 
 case class CacheConfig (
   ro: Boolean = false,
@@ -532,26 +533,92 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
   }
 }
 
+class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
+  val io = IO(new Bundle {
+    val in = Flipped(new SimpleBusUC(userBits = userBits))
+    val flush = Input(UInt(2.W))
+    val out = new SimpleBusC
+    val mmio = new SimpleBusUC
+    val empty = Output(Bool())
+  })
+  
+  val s_idle :: s_memReq :: s_memResp :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(6)
+  val state = RegInit(s_idle)
+  
+  when (io.flush =/= "b00".U) {
+    printf("DCache doesn't need flush\n");
+  }
+
+  val ismmio = AddressSpace.isMMIO(io.in.req.bits.addr)
+  val ismmioRec = RegEnable(ismmio, io.in.req.fire())
+  if (cacheConfig.name == "dcache") {
+    BoringUtils.addSource(ismmio, "lsuMMIO")
+  }
+
+  val alreadyOutFire = RegEnable(true.B, init = false.B, io.in.resp.fire())
+
+  switch (state) {
+    is (s_idle) {
+      alreadyOutFire := false.B
+      when (io.in.req.fire()) { state := Mux(ismmio, s_mmioReq, s_memReq) }
+    }
+    is (s_memReq) {
+      when (io.out.mem.req.fire()) { state := s_memResp }
+    }
+    is (s_memResp) {
+      when (io.out.mem.resp.fire()) { state := s_wait_resp }
+    }
+    is (s_wait_resp) {
+      when (io.in.resp.fire() || alreadyOutFire) { state := s_idle }
+    }
+    is (s_mmioReq) {
+      when (io.mmio.req.fire()) { state := s_mmioResp }
+    }
+    is (s_mmioResp) {
+      when (io.mmio.resp.fire()) { state := s_wait_resp }
+    }
+  }
+
+  val reqaddr = RegEnable(io.in.req.bits.addr, io.in.req.fire())
+  val cmd = RegEnable(io.in.req.bits.cmd, io.in.req.fire())
+  val size = RegEnable(io.in.req.bits.size, io.in.req.fire())
+  val wdata = RegEnable(io.in.req.bits.wdata, io.in.req.fire())
+  val wmask = RegEnable(io.in.req.bits.wmask, io.in.req.fire())
+
+  io.in.req.ready := (state === s_idle)
+  io.in.resp.valid := (state === s_wait_resp)
+
+  val mmiordata = RegEnable(io.mmio.resp.bits.rdata, io.mmio.resp.fire())
+  val mmiocmd = RegEnable(io.mmio.resp.bits.cmd, io.mmio.resp.fire())
+  val memrdata = RegEnable(io.out.mem.resp.bits.rdata, io.out.mem.resp.fire())
+  val memcmd = RegEnable(io.out.mem.resp.bits.cmd, io.out.mem.resp.fire())
+
+  io.in.resp.bits.rdata := Mux(ismmioRec, mmiordata, memrdata)
+  io.in.resp.bits.cmd := Mux(ismmioRec, mmiocmd, memcmd)
+
+  io.out.mem.req.bits.apply(addr = reqaddr,
+    cmd = cmd, size = size,
+    wdata = wdata, wmask = wmask)
+  io.out.mem.req.valid := (state === s_memReq)
+  io.out.mem.resp.ready := true.B
+  
+  io.mmio.req.bits.apply(addr = reqaddr,
+    cmd = cmd, size = size,
+    wdata = wdata, wmask = wmask)
+  io.mmio.req.valid := (state === s_mmioReq)
+  io.mmio.resp.ready := true.B
+
+  io.empty := false.B
+  io.out.coh := DontCare
+}
+
 object Cache {
   def apply(in: SimpleBusUC, mmio: Seq[SimpleBusUC], flush: UInt, empty: Bool, enable: Boolean = true)(implicit cacheConfig: CacheConfig) = {
-    if (enable) {
-      val cache = Module(new Cache)
-      cache.io.flush := flush
-      cache.io.in <> in
-      mmio(0) <> cache.io.mmio
-      empty := cache.io.empty
-      cache.io.out
-    } else {
-      val addrspace = List(AddressSpace.dram) ++ AddressSpace.mmio
-      val xbar = Module(new SimpleBusCrossbar1toN(addrspace))
-      val busC = WireInit(0.U.asTypeOf(new SimpleBusC))
-      busC.mem <> xbar.io.out(0)
-      xbar.io.in <> in
-      (mmio zip xbar.io.out.drop(1)) foreach { case (mmio_in, xbar_out) =>
-        mmio_in <> xbar_out
-      }
-      empty := false.B
-      busC
-    }
+    val cache = if (enable) Module(new Cache) else Module(new Cache_fake)
+    cache.io.flush := flush
+    cache.io.in <> in
+    mmio(0) <> cache.io.mmio
+    empty := cache.io.empty
+    cache.io.out
   }
 }
