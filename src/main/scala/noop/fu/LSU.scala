@@ -491,13 +491,17 @@ class LSU extends NOOPModule with HasLSUConst {
   //-------------------------------------------------------
   // Send request to dtlb
   val dtlbUserBundle = Wire(new DCacheUserBundle)
-  dtlbUserBundle.ldqidx := loadDtlbPtr
+  dtlbUserBundle.ldqidx :=  Mux(havePendingDtlbReq, loadDtlbPtr, loadHeadPtr)
   dtlbUserBundle.op := MEMOpID.idle
-  val pfType = LSUOpType.needMemWrite(loadQueue(loadDtlbPtr).func)// 0: load pf 1: store pf
+  val pfType = Mux(havePendingDtlbReq, LSUOpType.needMemWrite(loadQueue(loadDtlbPtr).func), LSUOpType.needMemWrite(func)) // 0: load pf 1: store pf
 
-  io.dtlb.req.bits.apply(addr = loadQueue(loadDtlbPtr).vaddr(VAddrBits-1, 0), size = 0.U, wdata = 0.U,
-    wmask = 0.U, cmd = pfType, user = dtlbUserBundle.asUInt)
-  io.dtlb.req.valid := havePendingDtlbReq
+  io.dtlb.req.bits.apply(
+    addr = Mux(havePendingDtlbReq, loadQueue(loadDtlbPtr).vaddr(VAddrBits-1, 0), addr(VAddrBits-1, 0)), 
+    size = 0.U, wdata = 0.U, wmask = 0.U, 
+    cmd = pfType, 
+    user = dtlbUserBundle.asUInt
+  )
+  io.dtlb.req.valid := havePendingDtlbReq || io.in.fire() && dtlbEnable
   io.dtlb.resp.ready := true.B
 
   val tlbRespLdqidx = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx
