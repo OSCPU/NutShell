@@ -584,6 +584,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // loadDMemReq
   val loadDMemReqSrcPick = Mux(havePendingDmemReq, loadDmemPtr, io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx)
+  val loadDTlbResqReqValid = dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue && !loadPF && !storePF && !loadQueue(tlbRespLdqidx).loadAddrMisaligned && !loadQueue(tlbRespLdqidx).storeAddrMisaligned
   val loadSideUserBundle = Wire(new DCacheUserBundle)
   loadSideUserBundle.ldqidx := loadDMemReqSrcPick
   loadSideUserBundle.op := loadQueue(loadDMemReqSrcPick).op
@@ -591,7 +592,7 @@ class LSU extends NOOPModule with HasLSUConst {
   loadDMemReq.addr := Mux(havePendingDmemReq, loadQueue(loadDmemPtr).paddr, io.dtlb.resp.bits.rdata)
   loadDMemReq.size := loadQueue(loadDMemReqSrcPick).size
   loadDMemReq.wdata := loadQueue(loadDMemReqSrcPick).data
-  loadDMemReq.valid := havePendingDmemReq || dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue
+  loadDMemReq.valid := havePendingDmemReq || loadDTlbResqReqValid
   loadDMemReq.wmask := genWmask(loadDMemReq.addr, loadDMemReq.size)
   loadDMemReq.cmd := SimpleBusCmd.read
   loadDMemReq.user := loadSideUserBundle
