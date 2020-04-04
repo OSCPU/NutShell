@@ -192,6 +192,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   val dmem = io.dmem
   // Gen result
+  val tlbRespLdqidx = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx
   val dmemUserOut = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle)
   val opResp = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val opReq = dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op
@@ -282,6 +283,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val dmemReqFromLoadQueue = havePendingDmemReq || havePendingStoreEnq || havePendingAMOStoreEnq
   val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || !loadQueue(loadDmemPtr).op(2,0).orR)
+  val haveLoadResp = io.dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && (tlbRespLdqidx === loadTailPtr) //FIXIT: to use non blocking dcache, set it to false
   val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
 
   // load queue enqueue
@@ -298,7 +300,7 @@ class LSU extends NOOPModule with HasLSUConst {
   }
   loadDmemPtr := nextLoadDmemPtr
   // load queue dequeue
-  when(io.out.fire() || (loadQueue(loadTailPtr).finished && !loadQueue(loadTailPtr).valid)){
+  when(io.out.fire() || (loadTailPtr =/= loadDmemPtr) && !loadQueue(loadTailPtr).valid && loadQueue(loadTailPtr).finished){
     loadTailPtr := loadTailPtr + 1.U
     loadQueue(loadTailPtr).valid := false.B
     loadQueue(loadTailPtr).finished := false.B
@@ -510,7 +512,6 @@ class LSU extends NOOPModule with HasLSUConst {
   io.dtlb.req.valid := havePendingDtlbReq || io.in.fire() && dtlbEnable
   io.dtlb.resp.ready := true.B
 
-  val tlbRespLdqidx = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx
   val loadPF = WireInit(false.B)
   val storePF = WireInit(false.B)
   BoringUtils.addSink(loadPF, "loadPF") // FIXIT: this is nasty
@@ -584,7 +585,8 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // loadDMemReq
   val loadDMemReqSrcPick = Mux(havePendingDmemReq, loadDmemPtr, io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx)
-  val loadDTlbResqReqValid = dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue && !loadPF && !storePF && !loadQueue(tlbRespLdqidx).loadAddrMisaligned && !loadQueue(tlbRespLdqidx).storeAddrMisaligned
+  val loadDTlbResqReqValid = dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue && 
+    !loadPF && !storePF && !loadQueue(tlbRespLdqidx).loadAddrMisaligned && !loadQueue(tlbRespLdqidx).storeAddrMisaligned
   val loadSideUserBundle = Wire(new DCacheUserBundle)
   loadSideUserBundle.ldqidx := loadDMemReqSrcPick
   loadSideUserBundle.op := loadQueue(loadDMemReqSrcPick).op
@@ -709,7 +711,7 @@ class LSU extends NOOPModule with HasLSUConst {
   //-------------------------------------------------------
 
   // Load Data Selection
-  val rdata = loadQueue(loadTailPtr).data
+  val rdata = Mux(haveLoadResp, rdataFwdSel, loadQueue(loadTailPtr).data)
   val rdataSel = LookupTree(loadQueue(loadTailPtr).vaddr(2, 0), List(
     "b000".U -> rdata(63, 0),
     "b001".U -> rdata(63, 8),
@@ -768,7 +770,7 @@ class LSU extends NOOPModule with HasLSUConst {
   io.uopOut.decode.ctrl.rfWen := loadQueue(loadTailPtr).rfWen && !loadQueue(loadTailPtr).loadAddrMisaligned && !loadQueue(loadTailPtr).storeAddrMisaligned && !loadQueue(loadTailPtr).loadPageFault && !loadQueue(loadTailPtr).storePageFault
 
   io.in.ready := !loadQueueFull
-  io.out.valid := havePendingCDBCmt
+  io.out.valid := havePendingCDBCmt || haveLoadResp
 
   when(io.flush){
     loadHeadPtr := nextLoadDmemPtr
