@@ -122,6 +122,8 @@ class SimpleBusAutoIDCrossbarNto1(n: Int, userBits: Int = 0) extends Module {
     val out = new SimpleBusUC(userBits, idBits = n)
   })
 
+  // Note: to use SimpleBusAutoIDCrossbarNto1, every master device must ensure resp.ready is always true 
+
   val reqValid = WireInit(VecInit(List.tabulate(n)(i => io.in(i).req.valid)))
   val reqSelect = PriorityEncoder(reqValid.asUInt)
   val reqSelectVec = PriorityEncoderOH(reqValid.asUInt)
@@ -139,7 +141,7 @@ class SimpleBusAutoIDCrossbarNto1(n: Int, userBits: Int = 0) extends Module {
 
   io.out.req.valid := reqValid.asUInt.orR
   io.out.req.bits.id.get := reqSelectVec.asUInt // Simple bus ID is OH 
-  io.out.resp.ready := io.in(reqSelect).resp.ready
+  io.out.resp.ready := true.B // io.in(reqSelect).resp.ready
   // assert(io.out.resp.ready)
 
   for(i <- 0 until n){
