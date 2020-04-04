@@ -277,11 +277,12 @@ class LSU extends NOOPModule with HasLSUConst {
   val loadQueueFull = loadHeadPtr === (loadTailPtr - 1.U) //TODO: fix it with maybe_full logic
   val loadQueueEmpty = loadHeadPtr === loadTailPtr //TODO: fix it with maybe_full logic
   val havePendingDtlbReq = loadDtlbPtr =/= loadHeadPtr
-  val havePendingDmemReq = loadDmemPtr =/= loadDtlbPtr && loadQueue(loadDmemPtr).tlbfin && !loadQueue(loadDmemPtr).finished && MEMOpID.needLoad(loadQueue(loadDmemPtr).op) && !loadQueue(loadDmemPtr).loadPageFault && !loadQueue(loadDmemPtr).storePageFault
-  val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
+  val havePendingDmemReq = MEMOpID.needLoad(loadQueue(loadDmemPtr).op) && !loadQueue(loadDmemPtr).loadPageFault && !loadQueue(loadDmemPtr).storePageFault && !loadQueue(loadDmemPtr).finished && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val havePendingStoreEnq = MEMOpID.needStore(loadQueue(loadDmemPtr).op) && !MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
+  val dmemReqFromLoadQueue = havePendingDmemReq || havePendingStoreEnq || havePendingAMOStoreEnq
   val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || !loadQueue(loadDmemPtr).op(2,0).orR)
+  val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
 
   // load queue enqueue
   val loadQueueEnqueue = io.in.fire()
@@ -386,8 +387,11 @@ class LSU extends NOOPModule with HasLSUConst {
   // alloc a slot when a store tlb request is sent
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
   // after a store inst get its paddr from TLB, add it to store queue
-  storeQueueEnqueue := havePendingStoreEnq && !storeQueueFull
-  val storeQueueAMOEnqueue = havePendingAMOStoreEnq && loadQueueReqsend
+  val dtlbRespUser = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle)
+  val tlbRespStoreEnq = io.dtlb.resp.fire() && MEMOpID.needStore(dtlbRespUser.op) && !MEMOpID.needAlu(dtlbRespUser.op)
+  storeQueueEnqueue := havePendingStoreEnq && !storeQueueFull || !havePendingDmemReq && tlbRespStoreEnq && !storeQueueFull
+  val tlbRespAMOStoreEnq = io.dtlb.resp.fire() && MEMOpID.needAlu(dtlbRespUser.op)
+  val storeQueueAMOEnqueue = havePendingAMOStoreEnq && loadQueueReqsend || tlbRespAMOStoreEnq && loadQueueReqsend
   assert(!(storeQueueAMOEnqueue && storeQueueFull))
   // when a store inst is retired, commit 1 term in Store Queue
   val storeQueueConfirm = io.scommit // TODO: Argo only support 1 scommit / cycle
@@ -422,17 +426,19 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // write data to store queue
   val storeQueueEnqPtr = Mux(storeQueueDequeue, storeHeadPtr - 1.U, storeHeadPtr)
+  val havePendingStqEnq = havePendingStoreEnq || havePendingAMOStoreEnq
+  val storeQueueEnqSrcPick = Mux(havePendingStqEnq, loadDmemPtr, dtlbRespUser.ldqidx)
   when(storeQueueEnqueue || storeQueueAMOEnqueue){
-    storeQueue(storeQueueEnqPtr).pc := loadQueue(loadDmemPtr).pc
-    storeQueue(storeQueueEnqPtr).prfidx := loadQueue(loadDmemPtr).prfidx
-    storeQueue(storeQueueEnqPtr).wmask := genWmask(loadQueue(loadDmemPtr).vaddr, loadQueue(loadDmemPtr).size)
-    storeQueue(storeQueueEnqPtr).vaddr := loadQueue(loadDmemPtr).vaddr
-    storeQueue(storeQueueEnqPtr).paddr := loadQueue(loadDmemPtr).paddr
-    storeQueue(storeQueueEnqPtr).func := loadQueue(loadDmemPtr).func
-    storeQueue(storeQueueEnqPtr).size := loadQueue(loadDmemPtr).size
-    storeQueue(storeQueueEnqPtr).op := loadQueue(loadDmemPtr).op
-    storeQueue(storeQueueEnqPtr).data := loadQueue(loadDmemPtr).data
-    storeQueue(storeQueueEnqPtr).isMMIO := loadQueue(loadDmemPtr).isMMIO
+    storeQueue(storeQueueEnqPtr).pc := loadQueue(storeQueueEnqSrcPick).pc
+    storeQueue(storeQueueEnqPtr).prfidx := loadQueue(storeQueueEnqSrcPick).prfidx
+    storeQueue(storeQueueEnqPtr).wmask := genWmask(loadQueue(storeQueueEnqSrcPick).vaddr, loadQueue(loadDmemPtr).size)
+    storeQueue(storeQueueEnqPtr).vaddr := loadQueue(storeQueueEnqSrcPick).vaddr
+    storeQueue(storeQueueEnqPtr).paddr := Mux(havePendingStqEnq, loadQueue(loadDmemPtr).paddr, io.dtlb.resp.bits.rdata)
+    storeQueue(storeQueueEnqPtr).func := loadQueue(storeQueueEnqSrcPick).func
+    storeQueue(storeQueueEnqPtr).size := loadQueue(storeQueueEnqSrcPick).size
+    storeQueue(storeQueueEnqPtr).op := loadQueue(storeQueueEnqSrcPick).op
+    storeQueue(storeQueueEnqPtr).data := loadQueue(storeQueueEnqSrcPick).data
+    storeQueue(storeQueueEnqPtr).isMMIO := Mux(havePendingStqEnq, loadQueue(loadDmemPtr).isMMIO, paddrIsMMIO)
   }
 
   Debug(){
@@ -492,7 +498,7 @@ class LSU extends NOOPModule with HasLSUConst {
   // Send request to dtlb
   val dtlbUserBundle = Wire(new DCacheUserBundle)
   dtlbUserBundle.ldqidx :=  Mux(havePendingDtlbReq, loadDtlbPtr, loadHeadPtr)
-  dtlbUserBundle.op := MEMOpID.idle
+  dtlbUserBundle.op := Mux(havePendingDtlbReq, loadQueue(loadDtlbPtr).op, memop)
   val pfType = Mux(havePendingDtlbReq, LSUOpType.needMemWrite(loadQueue(loadDtlbPtr).func), LSUOpType.needMemWrite(func)) // 0: load pf 1: store pf
 
   io.dtlb.req.bits.apply(
@@ -576,25 +582,25 @@ class LSU extends NOOPModule with HasLSUConst {
     (!loadReadygo && !storeReadygo) -> noDMemReq
   ))
 
-  val loadSideUserBundle = Wire(new DCacheUserBundle)
-  loadSideUserBundle.ldqidx := loadDmemPtr
-  loadSideUserBundle.op := loadQueue(loadDmemPtr).op
-
-  val storeSideUserBundle = Wire(new DCacheUserBundle)
-  storeSideUserBundle.ldqidx := DontCare
-  storeSideUserBundle.op := MEMOpID.storec
-
   // loadDMemReq
-  loadDMemReq.addr := loadQueue(loadDmemPtr).paddr
-  loadDMemReq.size := loadQueue(loadDmemPtr).size
-  loadDMemReq.wdata := loadQueue(loadDmemPtr).data
-  loadDMemReq.valid := havePendingDmemReq
+  val loadDMemReqSrcPick = Mux(havePendingDmemReq, loadDmemPtr, io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx)
+  val loadSideUserBundle = Wire(new DCacheUserBundle)
+  loadSideUserBundle.ldqidx := loadDMemReqSrcPick
+  loadSideUserBundle.op := loadQueue(loadDMemReqSrcPick).op
+
+  loadDMemReq.addr := Mux(havePendingDmemReq, loadQueue(loadDmemPtr).paddr, io.dtlb.resp.bits.rdata)
+  loadDMemReq.size := loadQueue(loadDMemReqSrcPick).size
+  loadDMemReq.wdata := loadQueue(loadDMemReqSrcPick).data
+  loadDMemReq.valid := havePendingDmemReq || dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue
   loadDMemReq.wmask := genWmask(loadDMemReq.addr, loadDMemReq.size)
   loadDMemReq.cmd := SimpleBusCmd.read
   loadDMemReq.user := loadSideUserBundle
 
   // storeDMemReq
-  // TODO: store queue
+  val storeSideUserBundle = Wire(new DCacheUserBundle)
+  storeSideUserBundle.ldqidx := DontCare
+  storeSideUserBundle.op := MEMOpID.storec
+
   storeDMemReq.addr := storeQueue(storeReqPtr).paddr
   storeDMemReq.size := storeQueue(storeReqPtr).size
   storeDMemReq.wdata := genWdata(storeQueue(storeReqPtr).data, storeQueue(storeReqPtr).size)
