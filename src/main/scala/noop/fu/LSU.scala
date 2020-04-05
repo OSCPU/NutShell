@@ -283,7 +283,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val dmemReqFromLoadQueue = havePendingDmemReq || havePendingStoreEnq || havePendingAMOStoreEnq
   val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || !loadQueue(loadDmemPtr).op(2,0).orR)
-  val haveLoadResp = io.dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && (tlbRespLdqidx === loadTailPtr) //FIXIT: to use non blocking dcache, set it to false
+  val haveLoadResp = io.dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && (tlbRespLdqidx === loadTailPtr) && loadQueue(loadTailPtr).valid//FIXIT: to use non blocking dcache, set it to false
   val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
 
   // load queue enqueue
