@@ -14,7 +14,7 @@ trait HasNOOPParameter {
   val HasMExtension = true
   val HasCExtension = true
   val HasDiv = true
-  val HasIcache = true
+  val HasIcache = Settings.HasIcache
   val HasDcache = Settings.HasDcache
   val HasITLB = Settings.HasITLB
   val HasDTLB = Settings.HasDTLB
@@ -98,7 +98,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   // itlb
   val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem, enable = HasITLB)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
   ifu.io.ipf := itlb.io.ipf
-  io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
+  io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty, enable = HasIcache)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
   
   // dtlb
   val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", totalEntry = 64))

@@ -544,10 +544,6 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
   
   val s_idle :: s_memReq :: s_memResp :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(6)
   val state = RegInit(s_idle)
-  
-  when (io.flush =/= "b00".U) {
-    printf("DCache doesn't need flush\n");
-  }
 
   val ismmio = AddressSpace.isMMIO(io.in.req.bits.addr)
   val ismmioRec = RegEnable(ismmio, io.in.req.fire())
@@ -555,12 +551,16 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
     BoringUtils.addSource(ismmio, "lsuMMIO")
   }
 
+  val needFlush = RegInit(false.B)
+  when (io.flush(0) && (state =/= s_idle)) { needFlush := true.B }
+  when (state === s_idle && needFlush) { needFlush := false.B }
+
   val alreadyOutFire = RegEnable(true.B, init = false.B, io.in.resp.fire())
 
   switch (state) {
     is (s_idle) {
       alreadyOutFire := false.B
-      when (io.in.req.fire()) { state := Mux(ismmio, s_mmioReq, s_memReq) }
+      when (io.in.req.fire() && !io.flush(0)) { state := Mux(ismmio, s_mmioReq, s_memReq) }
     }
     is (s_memReq) {
       when (io.out.mem.req.fire()) { state := s_memResp }
@@ -568,14 +568,14 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
     is (s_memResp) {
       when (io.out.mem.resp.fire()) { state := s_wait_resp }
     }
-    is (s_wait_resp) {
-      when (io.in.resp.fire() || alreadyOutFire) { state := s_idle }
-    }
     is (s_mmioReq) {
       when (io.mmio.req.fire()) { state := s_mmioResp }
     }
     is (s_mmioResp) {
-      when (io.mmio.resp.fire()) { state := s_wait_resp }
+      when (io.mmio.resp.fire() || alreadyOutFire) { state := s_wait_resp }
+    }
+    is (s_wait_resp) {
+      when (io.in.resp.fire() || needFlush || alreadyOutFire) { state := s_idle }
     }
   }
 
@@ -586,7 +586,7 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val wmask = RegEnable(io.in.req.bits.wmask, io.in.req.fire())
 
   io.in.req.ready := (state === s_idle)
-  io.in.resp.valid := (state === s_wait_resp)
+  io.in.resp.valid := (state === s_wait_resp) && (!needFlush)
 
   val mmiordata = RegEnable(io.mmio.resp.bits.rdata, io.mmio.resp.fire())
   val mmiocmd = RegEnable(io.mmio.resp.bits.cmd, io.mmio.resp.fire())
@@ -595,6 +595,9 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
 
   io.in.resp.bits.rdata := Mux(ismmioRec, mmiordata, memrdata)
   io.in.resp.bits.cmd := Mux(ismmioRec, mmiocmd, memcmd)
+
+  val memuser = RegEnable(io.in.req.bits.user.getOrElse(0.U), io.in.req.fire())
+  io.in.resp.bits.user.zip(if (userBits > 0) Some(memuser) else None).map { case (o,i) => o := i }
 
   io.out.mem.req.bits.apply(addr = reqaddr,
     cmd = cmd, size = size,
@@ -610,6 +613,21 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
 
   io.empty := false.B
   io.out.coh := DontCare
+
+  Debug() {
+    when (io.in.req.fire()) {
+      printf(p"${GTimer()}: in.req: ${io.in.req.bits}\n")
+    }
+    when (io.out.mem.req.fire()) {
+      printf(p"${GTimer()}: out.mem.req: ${io.out.mem.req.bits}\n")
+    }
+    when (io.out.mem.resp.fire()) {
+      printf(p"${GTimer()}: out.mem.resp: ${io.out.mem.resp.bits}\n")
+    }
+    when (io.in.resp.fire()) {
+      printf(p"${GTimer()}: in.resp: ${io.in.resp.bits}\n")
+    }
+  }
 }
 
 object Cache {

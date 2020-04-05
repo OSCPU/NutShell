@@ -12,9 +12,10 @@ trait BigCore {
   val EnableMultiIssue = true
   val EnableSuperScalarExec = true
   val EnableOutOfOrderExec = true
-  val HasITLB = true
   val HasDTLB = true
+  val HasITLB = true
   val HasDcache = true
+  val HasIcache = true
 }
 
 trait SmallCore {
@@ -24,9 +25,10 @@ trait SmallCore {
   val EnableMultiIssue = false
   val EnableSuperScalarExec = false
   val EnableOutOfOrderExec = false
-  val HasITLB = false
   val HasDTLB = false
+  val HasITLB = false
   val HasDcache = false
+  val HasIcache = false
 }
 
 object Settings extends Common with SmallCore {}
