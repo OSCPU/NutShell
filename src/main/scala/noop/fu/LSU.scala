@@ -100,9 +100,7 @@ class StoreQueueEntry extends NOOPBundle{
   val op       = UInt(7.W)
   val data     = UInt(XLEN.W)
   val isMMIO   = Bool()
-  // val awidthW  = Bool() // atomWidthW
-  // val valid    = Bool()
-  // val finished = Bool()
+  val valid    = Bool()
 }
 
 class LoadQueueEntry extends NOOPBundle{
@@ -377,14 +375,12 @@ class LSU extends NOOPModule with HasLSUConst {
   // val storeAlloc   = RegInit(0.U((log2Up(storeQueueSize)+1).W))
   val storeHeadPtr    = RegInit(0.U((log2Up(storeQueueSize)+1).W))
   val storeCmtPtr     = RegInit(0.U((log2Up(storeQueueSize)+1).W))
-  val storeReqPtr     = RegInit(0.U((log2Up(storeQueueSize)+1).W))
   val nextStoreCmtPtr = Wire(UInt((log2Up(storeQueueSize)+1).W))
   val haveUnconfirmedStore = storeHeadPtr =/= storeCmtPtr
-  val haveUnrequiredStore = storeCmtPtr =/= storeReqPtr
-  val haveUnfinishedStore = 0.U =/= storeReqPtr
+  val haveUnrequiredStore = storeCmtPtr =/= 0.U && storeQueue(0).valid
+  val haveUnfinishedStore = 0.U =/= storeHeadPtr
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
-
-  io.haveUnfinishedStore := 0.U =/= storeHeadPtr
+  io.haveUnfinishedStore := haveUnfinishedStore
 
   // alloc a slot when a store tlb request is sent
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
@@ -399,10 +395,11 @@ class LSU extends NOOPModule with HasLSUConst {
   val storeQueueConfirm = io.scommit // TODO: Argo only support 1 scommit / cycle
   // when a store inst actually writes data to dmem, mark it as `waiting for dmem resp`
   val storeQueueReqsend = dmem.req.fire() && MEMOpID.commitToSTQ(opReq)
+  val storeQueueSkipInst = !storeQueue(0).valid && storeCmtPtr =/= 0.U
   // when dmem try to commit to store queue, i.e. dmem report a write op is finished, dequeue
   // FIXIT: in current case, we can always assume a store is succeed after req.fire()
   // therefore storeQueueDequeue is not necessary 
-  val storeQueueDequeue = dmem.resp.fire() && MEMOpID.commitToSTQ(opResp) && !MEMOpID.needLoad(opResp) //&& MEMOpID.needStore(opResp)
+  val storeQueueDequeue = storeQueueReqsend || storeQueueSkipInst // dmem.resp.fire() && MEMOpID.commitToSTQ(opResp) && !MEMOpID.needLoad(opResp) //&& MEMOpID.needStore(opResp)
   when(storeQueueDequeue){
     // storeQueue := Cat(storeQueue(0), storeQueue(storeQueueSize-1, 1))
     List.tabulate(storeQueueSize - 1)(i => {
@@ -441,6 +438,7 @@ class LSU extends NOOPModule with HasLSUConst {
     storeQueue(storeQueueEnqPtr).op := loadQueue(storeQueueEnqSrcPick).op
     storeQueue(storeQueueEnqPtr).data := loadQueue(storeQueueEnqSrcPick).data
     storeQueue(storeQueueEnqPtr).isMMIO := Mux(havePendingStqEnq, loadQueue(loadDmemPtr).isMMIO, paddrIsMMIO)
+    storeQueue(storeQueueEnqPtr).valid := true.B
   }
 
   Debug(){
@@ -449,7 +447,7 @@ class LSU extends NOOPModule with HasLSUConst {
     }
   }
 
-  // printf("[PSTQ] time %x alloc %x head %x mid %x tail %x flush %x\n", GTimer(), storeAlloc, storeHeadPtr, storeCmtPtr, storeReqPtr, io.flush)
+  // printf("[PSTQ] time %x alloc %x head %x mid %x flush %x\n", GTimer(), storeAlloc, storeHeadPtr, storeCmtPtr, io.flush)
 
   Debug(){
     printf("[LSU STQ] time %d\n", GTimer())
@@ -462,7 +460,7 @@ class LSU extends NOOPModule with HasLSUConst {
       // when(storeAlloc === i.U){printf(" alloc")}
       when(storeHeadPtr === i.U){printf(" head")}
       when(storeCmtPtr === i.U){printf(" cmt")}
-      when(storeReqPtr === i.U){printf(" req")}
+      // when(storeReqPtr === i.U){printf(" req")}
       printf("\n")
     }
   }
@@ -604,14 +602,14 @@ class LSU extends NOOPModule with HasLSUConst {
   storeSideUserBundle.ldqidx := DontCare
   storeSideUserBundle.op := MEMOpID.storec
 
-  storeDMemReq.addr := storeQueue(storeReqPtr).paddr
-  storeDMemReq.size := storeQueue(storeReqPtr).size
-  storeDMemReq.wdata := genWdata(storeQueue(storeReqPtr).data, storeQueue(storeReqPtr).size)
-  storeDMemReq.wmask := storeQueue(storeReqPtr).wmask
+  storeDMemReq.addr := storeQueue(0.U).paddr
+  storeDMemReq.size := storeQueue(0.U).size
+  storeDMemReq.wdata := genWdata(storeQueue(0.U).data, storeQueue(0.U).size)
+  storeDMemReq.wmask := storeQueue(0.U).wmask
   storeDMemReq.cmd := SimpleBusCmd.write
   storeDMemReq.user := storeSideUserBundle
   storeDMemReq.valid := haveUnrequiredStore
-  when(LSUOpType.isAMO(storeQueue(storeReqPtr).func)){
+  when(LSUOpType.isAMO(storeQueue(0.U).func)){
     storeDMemReq.wdata := io.atomData
   }
 
@@ -785,7 +783,7 @@ class LSU extends NOOPModule with HasLSUConst {
   BoringUtils.addSource(loadQueueFull, "perfCntCondMmemqFull")
   BoringUtils.addSource(storeQueueFull, "perfCntCondMstqFull")
 
-  val reqpc = Mux(storeReadygo, storeQueue(storeReqPtr).pc, Mux(havePendingDmemReq, loadQueue(loadDmemPtr).pc, io.uopIn.decode.cf.pc))
+  val reqpc = Mux(storeReadygo, storeQueue(0.U).pc, Mux(havePendingDmemReq, loadQueue(loadDmemPtr).pc, io.uopIn.decode.cf.pc))
   Debug(){
     printf("[DMEM] req v %x r %x addr %x data %x op %b id %x  resp v %x r %x data %x op %b id %x time %x\n",
       dmem.req.valid, dmem.req.ready, dmem.req.bits.addr, dmem.req.bits.wdata, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx,
@@ -797,7 +795,7 @@ class LSU extends NOOPModule with HasLSUConst {
       when(loadReadygo){printf("loadDMemReq")}
       when(storeReadygo){printf("storeDMemReq")}
       when((!loadReadygo && !storeReadygo)){printf("noDMemReq")}
-      printf(" pc %x addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op, storeCmtPtr - storeReqPtr, loadHeadPtr - loadDmemPtr, GTimer())
+      printf(" pc %x addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op, storeCmtPtr - 0.U, loadHeadPtr - loadDmemPtr, GTimer())
     }
     when(dmem.resp.fire()){
       printf("[LSU DRESP] memdata %x fwddata %x:%b data %x ldqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, loadQueue(dmemUserOut.ldqidx).fdata, loadQueue(dmemUserOut.ldqidx).fmask, rdataFwdSel, dmemUserOut.ldqidx, dmemUserOut.op, lsuMMIO, GTimer())
@@ -818,7 +816,7 @@ class LSU extends NOOPModule with HasLSUConst {
       when(loadReadygo){printf("loadDMemReq")}
       when(storeReadygo){printf("storeDMemReq")}
       when((!loadReadygo && !storeReadygo)){printf("noDMemReq")}
-      printf(" pc %x addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op, storeCmtPtr - storeReqPtr, loadHeadPtr - loadDmemPtr, GTimer())
+      printf(" pc %x addr 0x%x size %x wdata %x cmd %x ldqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.ldqidx, memReq.user.op, storeCmtPtr - 0.U, loadHeadPtr - loadDmemPtr, GTimer())
   }
     when(dmem.resp.fire()){
       printf("[LSU DRESP TRACE] memdata %x fwddata %x:%b data %x ldqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, loadQueue(dmemUserOut.ldqidx).fdata, loadQueue(dmemUserOut.ldqidx).fmask, rdataFwdSel, dmemUserOut.ldqidx, dmemUserOut.op, lsuMMIO, GTimer())
