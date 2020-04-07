@@ -1,12 +1,12 @@
 package top
 
 trait Common {
+  val EnableILA = true
   val VAddrBits = 39
   val EnableDebug = false
 }
 
 trait OoOCore {
-  val EnableILA = true
   val HasL2cache = true
   val HasPrefetch = true
   val EnableMultiIssue = true
@@ -20,7 +20,6 @@ trait OoOCore {
 }
 
 trait SeqCore {
-  val EnableILA = true
   val HasL2cache = false
   val HasPrefetch = false
   val EnableMultiIssue = false
@@ -30,11 +29,10 @@ trait SeqCore {
   val HasITLB = true
   val HasDcache = true
   val HasIcache = true
-  val MmodeOnly = true
+  val MmodeOnly = false
 }
 
 trait SmallCore {
-  val EnableILA = true
   val HasL2cache = false
   val HasPrefetch = false
   val EnableMultiIssue = false
