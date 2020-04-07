@@ -181,7 +181,7 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
 
   def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
   def getMisaExt(ext: Char): UInt = {1.U << (ext.toInt - 'a'.toInt)} 
-  var extList = List('a', 's', 'i', 'u')
+  var extList = List('a', 'i')
   if(HasMExtension){ extList = extList :+ 'm'}
   if(HasCExtension){ extList = extList :+ 'c'}
   val misaInitVal = getMisaMxl(2) | extList.foldLeft(0.U)((sum, i) => sum | getMisaExt(i)) //"h8000000000141105".U 
@@ -193,12 +193,11 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
   val marchid = RegInit(UInt(XLEN.W), 0.U) // return 0 to indicate the field is not implemented
   val mimpid = RegInit(UInt(XLEN.W), 0.U) // provides a unique encoding of the version of the processor implementation
   val mhartid = RegInit(UInt(XLEN.W), 0.U) // the hardware thread running the code
-  val mstatus = RegInit(UInt(XLEN.W), "h00001800".U)
-  // val mstatus = RegInit(UInt(XLEN.W), "h8000c0100".U)
+  val mstatus = RegInit(UInt(XLEN.W), "h00001800".U) //"h8000c0100".U
   // mstatus Value Table
   // | sd   |
   // | pad1 |
-  // | sxl  | hardlinked to 10, use 00 to pass xv6 test  
+  // | sxl  | hardlinked to 00
   // | uxl  | hardlinked to 00
   // | pad0 |
   // | tsr  |
@@ -221,8 +220,8 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
     mstatusNew
   }
 
-  val medeleg = RegInit(UInt(XLEN.W), 0.U)
-  val mideleg = RegInit(UInt(XLEN.W), 0.U)
+  // val medeleg = RegInit(UInt(XLEN.W), 0.U)
+  // val mideleg = RegInit(UInt(XLEN.W), 0.U)
   val mscratch = RegInit(UInt(XLEN.W), 0.U)
 
   val pmpcfg0 = RegInit(UInt(XLEN.W), 0.U)
@@ -344,8 +343,8 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
     // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
     MaskedRegMap(Mstatus, mstatus, "hffffffffffffffff".U, mstatusUpdateSideEffect),
     MaskedRegMap(Misa, misa), // now MXL, EXT is not changeable
-    MaskedRegMap(Medeleg, medeleg, "hbbff".U),
-    MaskedRegMap(Mideleg, mideleg, "h222".U),
+    // MaskedRegMap(Medeleg, medeleg, "hbbff".U),
+    // MaskedRegMap(Mideleg, mideleg, "h222".U),
     MaskedRegMap(Mie, mie),
     MaskedRegMap(Mtvec, mtvec),
     MaskedRegMap(Mcounteren, mcounteren), 
@@ -382,7 +381,6 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
   ))
 
   val wen = (valid && func =/= CSROpType.jmp)
-  // Debug() {when(wen) {printf("[CSR] addr %x wdata %x func %x rdata %x\n", addr, wdata, func, rdata)}}
   MaskedRegMap.generate(mapping, addr, rdata, wen, wdata)
   val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
   io.out.bits := rdata
@@ -390,7 +388,6 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
   // Fix Mip/Sip write
   val fixMapping = Map(
     MaskedRegMap(Mip, mipReg.asUInt, mipFixMask)
-    // MaskedRegMap(Sip, mipReg.asUInt, sipMask, MaskedRegMap.NoSideEffect, sipMask)
   )
   val rdataDummy = Wire(UInt(XLEN.W))
   MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen, wdata)
@@ -399,13 +396,11 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
   val ret = Wire(Bool())
   val isEcall = addr === privEcall && func === CSROpType.jmp && !io.isBackendException
   val isMret = addr === privMret   && func === CSROpType.jmp && !io.isBackendException
-  // val isSret = addr === privSret   && func === CSROpType.jmp && !io.isBackendException
-  // val isUret = addr === privUret   && func === CSROpType.jmp && !io.isBackendException
 
   Debug(false){
     when(wen){
       printf("[CSR] csr write: pc %x addr %x rdata %x wdata %x func %x\n", io.cfIn.pc, addr, rdata, wdata, func)
-      printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
+      printf("[MST] time %d pc %x mstatus %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, priviledgeMode)
     }
   }
 
@@ -477,11 +472,8 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
 
   // interrupts
   
-  val ideleg =  (mideleg & mip.asUInt)
-  def priviledgedEnableDetect(x: Bool): Bool = Mux(x, false.B, mstatusStruct.ie.m)
-
   val intrVecEnable = Wire(Vec(12, Bool()))
-  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
+  intrVecEnable.map{case x => x := mstatusStruct.ie.m}
   val intrVec = mie(11,0) & mip.asUInt & intrVecEnable.asUInt
   BoringUtils.addSource(intrVec, "intrVecIDU")
   // val intrNO = PriorityEncoder(intrVec)
@@ -529,39 +521,18 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
     when(raiseExceptionIntr){
       printf("[CSR] excin %b excgen %b", csrExceptionVec.asUInt(), iduExceptionVec.asUInt())
       printf("[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-      printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
+      printf("[MST] time %d pc %x mstatus %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, priviledgeMode)
     }
     when(io.redirect.valid){
       printf("[CSR] redirect to %x\n", io.redirect.target)
     }
   }
 
-  // Debug(false){
-    // when(raiseExceptionIntr){
-    //   printf("[CSR] raiseExceptionIntr!\n[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-    //   printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    // }
-
-    // when(valid && isMret){
-    //   printf("[CSR] Mret to %x!\n[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",retTarget, io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-    //   printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    // }
-
-    // when(valid && isSret){
-    //   printf("[CSR] Sret to %x!\n[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",retTarget, io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-    //   printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    // }
-    //printf("[CSR] Red(%d, %x) raiseExcepIntr:%d valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, valid, io.instrValid)
-  // }
-
   // Branch control
 
-  val deleg = Mux(raiseIntr, mideleg, medeleg)
-  // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
-  // val delegS = (deleg(causeNO(3,0))) && (priviledgeMode < ModeM)
   val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in noop-riscv64, no exception will come together with PF
 
-  ret := isMret //|| isSret || isUret
+  ret := isMret
   trapTarget := mtvec(VAddrBits-1, 0)
   retTarget := DontCare
   // TODO redirect target
@@ -573,35 +544,11 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
     // mstatusNew.mpp.m := ModeU //TODO: add mode U
     mstatusNew.ie.m := mstatusOld.pie.m
     mstatusNew.pie.m := true.B
-    mstatusNew.mpp := ModeU
+    mstatusNew.mpp := ModeM
     mstatus := mstatusNew.asUInt
     lr := false.B
     retTarget := mepc(VAddrBits-1, 0)
   }
-
-  // when (valid && isSret) {
-  //   val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
-  //   val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
-  //   // mstatusNew.mpp.m := ModeU //TODO: add mode U
-  //   mstatusNew.ie.s := mstatusOld.pie.s
-  //   priviledgeMode := Cat(0.U(1.W), mstatusOld.spp)
-  //   mstatusNew.pie.s := true.B
-  //   mstatusNew.spp := ModeU
-  //   mstatus := mstatusNew.asUInt
-  //   lr := false.B
-  //   retTarget := sepc(VAddrBits-1, 0)
-  // }
-
-  // when (valid && isUret) {
-  //   val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
-  //   val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
-  //   // mstatusNew.mpp.m := ModeU //TODO: add mode U
-  //   mstatusNew.ie.u := mstatusOld.pie.u
-  //   priviledgeMode := ModeU
-  //   mstatusNew.pie.u := true.B
-  //   mstatus := mstatusNew.asUInt
-  //   retTarget := uepc(VAddrBits-1, 0)
-  // }
 
   when (raiseExceptionIntr) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
@@ -627,17 +574,6 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRMConst wit
 
   io.in.ready := true.B
   io.out.valid := valid
-
-  // Debug(false) {
-  //   printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x delegs:%d deleg:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, delegS, deleg, io.cfIn.pc, valid, io.instrValid)
-  // }
-
-  // Debug(false) {
-  //   when(raiseExceptionIntr && delegS ) {
-  //     printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x delegs:%d deleg:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, delegS, deleg, io.cfIn.pc, valid, io.instrValid)
-  //     printf("[CSR3] sepc is writen!!! pc:%x time:%d\n", io.cfIn.pc, GTimer())
-  //   }
-  // }
 
   // perfcnt
 
