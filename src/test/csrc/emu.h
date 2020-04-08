@@ -30,7 +30,7 @@ class Emulator {
   static const struct option long_options[];
   static void print_help(const char *file);
 
-  void read_emu_regs(uint64_t *r) {
+  void read_emu_regs(rtlreg_t *r) {
 #define macro(x) r[x] = dut_ptr->io_difftest_r_##x
     macro(0); macro(1); macro(2); macro(3); macro(4); macro(5); macro(6); macro(7);
     macro(8); macro(9); macro(10); macro(11); macro(12); macro(13); macro(14); macro(15);
@@ -132,18 +132,18 @@ class Emulator {
 
       if (!hascommit && dut_ptr->io_difftest_thisPC == 0x80000000u) {
         hascommit = 1;
-        extern void init_difftest(uint64_t *reg);
-        uint64_t reg[DIFFTEST_NR_REG];
+        extern void init_difftest(rtlreg_t *reg);
+        rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
         init_difftest(reg);
       }
 
       // difftest
       if (dut_ptr->io_difftest_commit && hascommit) {
-        uint64_t reg[DIFFTEST_NR_REG];
+        rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
 
-        extern int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
+        extern int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
           int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, int isMultiCommit);
         if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
               dut_ptr->io_difftest_isMMIO, dut_ptr->io_difftest_isRVC, dut_ptr->io_difftest_isRVC2,

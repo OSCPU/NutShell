@@ -36,7 +36,7 @@ void difftest_skip_dut() {
   is_skip_dut = true;
 }
 
-void init_difftest(uint64_t *reg) {
+void init_difftest(rtlreg_t *reg) {
   void *handle;
   handle = dlopen(REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
   assert(handle);
@@ -79,7 +79,7 @@ static const char *reg_name[DIFFTEST_NR_REG] = {
   "sstatus", "scause", "sepc"
 };
 
-int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
+int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
   int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, 
   int isMultiCommit
   ) {
@@ -92,12 +92,12 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
 
   #define DEBUG_RETIRE_TRACE_SIZE 16
 
-  uint64_t ref_r[DIFFTEST_NR_REG];
-  uint64_t this_pc = reg_scala[DIFFTEST_THIS_PC];
+  rtlreg_t ref_r[DIFFTEST_NR_REG];
+  rtlreg_t this_pc = reg_scala[DIFFTEST_THIS_PC];
   // ref_difftest_getregs() will get the next pc,
   // therefore we must keep track this one
-  static uint64_t nemu_this_pc = 0x80000000;
-  static uint64_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+  static rtlreg_t nemu_this_pc = 0x80000000;
+  static rtlreg_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t multi_commit_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t skip_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
@@ -138,7 +138,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
 
   ref_difftest_getregs(&ref_r);
 
-  uint64_t next_pc = ref_r[32];
+  rtlreg_t next_pc = ref_r[32];
   pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
   pc_retire_queue[pc_retire_pointer] = this_pc;
   inst_retire_queue[pc_retire_pointer] = this_inst;
