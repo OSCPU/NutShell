@@ -304,10 +304,10 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     src2 = alu1rs.io.out.bits.decode.data.src2, 
     func = alu1rs.io.out.bits.decode.ctrl.fuOpType
   )
-  val alu1Writeback = Wire(Bool())
+  val alu1WritebackReady = Wire(Bool())
   alu1.io.cfIn := alu1rs.io.out.bits.decode.cf
   alu1.io.offset := alu1rs.io.out.bits.decode.data.imm
-  alu1.io.out.ready := alu1Writeback
+  alu1.io.out.ready := alu1WritebackReady
   alu1commit.decode := alu1rs.io.out.bits.decode
   alu1commit.isMMIO := false.B
   alu1commit.intrNO := 0.U
@@ -335,10 +335,10 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     src2 = alu2rs.io.out.bits.decode.data.src2, 
     func = alu2rs.io.out.bits.decode.ctrl.fuOpType
   )
-  val alu2Writeback = Wire(Bool())
+  val alu2WritebackReady = Wire(Bool())
   alu2.io.cfIn :=  alu2rs.io.out.bits.decode.cf
   alu2.io.offset := alu2rs.io.out.bits.decode.data.imm
-  alu2.io.out.ready := alu2Writeback
+  alu2.io.out.ready := alu2WritebackReady
   alu2commit.decode := alu2rs.io.out.bits.decode
   alu2commit.isMMIO := false.B
   alu2commit.intrNO := 0.U
@@ -476,36 +476,57 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   // CDB arbit
   val (srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU) = (0, 1, 2, 3, 4, 5)
-  val commit = VecInit(List(alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit))
-  val commitValid = VecInit(List(alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid))
+  val commit = List(alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit)
+  val commitValid = List(alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid)
 
-  val Src1Priority = Seq(
+  val WritebackPriority = Seq(
     srcCSR,
     srcMOU,
-    srcMDU,
-    srcALU1
-  )
-  val Src2Priority = Seq(
     srcLSU,
+    srcMDU,
+    srcALU1,
     srcALU2
   )
 
-  val cmtStrHaz = List(
-    alu1.io.out.valid.asUInt +& (mdu.io.out.valid && mdurs.io.out.valid).asUInt > 1.U,
-    alu2.io.out.valid.asUInt +& lsu.io.out.valid.asUInt > 1.U
-  )
+  val commitPriority = VecInit(WritebackPriority.map(i => commit(i)))
+  val commitValidPriority = VecInit(WritebackPriority.map(i => commitValid(i)))
+  // val secondValidMask = VecInit((0 until WritebackPriority.size).map(i => WritebackPriority(0 until i).map(j => commitValid(j)).reduceLeft(_ ^ _)))
+  val notFirstMask = Wire(Vec(WritebackPriority.size, Bool()))
+  notFirstMask(0) := false.B
+  for(i <- 0 until WritebackPriority.size){
+    if(i != 0){notFirstMask(i) := notFirstMask(i-1) | commitValidPriority(i-1)}
+  }
+  val secondCommitValid = commitValidPriority.asUInt & notFirstMask.asUInt
+  val notSecondMask = Wire(Vec(WritebackPriority.size, Bool()))
+  notSecondMask(0) := false.B
+  for(i <- 0 until WritebackPriority.size){
+    if(i != 0){notSecondMask(i) := notSecondMask(i-1) | secondCommitValid(i-1)}
+  }
+  val commitValidVec = commitValidPriority.asUInt & ~notSecondMask.asUInt
 
-  val cdbSrc1 = Src1Priority.foldRight(0.U)((i: Int, sum: UInt) => Mux(commitValid(i), i.U, sum))
-  val cdbSrc2 = Src2Priority.foldRight(1.U)((i: Int, sum: UInt) => Mux(commitValid(i), i.U, sum))
-  cdb(0).valid := commitValid(cdbSrc1)
-  cdb(0).bits := commit(cdbSrc1)
+  // printf("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
+
+  val cdbSrc1 = PriorityMux(commitValidPriority, commitPriority)
+  val cdbSrc1Valid = PriorityMux(commitValidPriority, commitValidPriority)
+  val cdbSrc2 = PriorityMux(secondCommitValid, commitPriority)
+  val cdbSrc2Valid = PriorityMux(secondCommitValid, commitValidPriority)
+
+  val cmtStrHaz = List(
+    PopCount(commitValidPriority.asUInt) > 2.U,
+    PopCount(commitValidPriority.asUInt) > 3.U
+  )
+  val commitValidPriorityUInt = commitValidPriority.asUInt
+  assert(!(PopCount(commitValidPriorityUInt(3,0)) > 2.U))
+
+  cdb(0).valid := cdbSrc1Valid
+  cdb(0).bits := cdbSrc1
   // cdb(0).ready := true.B
-  cdb(1).valid := commitValid(cdbSrc2)
-  cdb(1).bits := commit(cdbSrc2)
+  cdb(1).valid := cdbSrc2Valid
+  cdb(1).bits := cdbSrc2
   // cdb(1).ready := true.B
 
-  alu1Writeback := cdbSrc1 === srcALU1.U
-  alu2Writeback := cdbSrc2 === srcALU2.U
+  alu1WritebackReady := commitValidVec(4)
+  alu2WritebackReady := commitValidVec(5)
 
   alu1rs.io.out.ready := alu1.io.in.ready
   alu2rs.io.out.ready := alu2.io.in.ready
