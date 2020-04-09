@@ -292,11 +292,11 @@ class LSU extends NOOPModule with HasLSUConst {
   val loadQueueFull = loadHeadPtr === (loadTailPtr - 1.U) //TODO: fix it with maybe_full logic
   val loadQueueEmpty = loadHeadPtr === loadTailPtr //TODO: fix it with maybe_full logic
   val havePendingDtlbReq = loadDtlbPtr =/= loadHeadPtr
-  val havePendingDmemReq = MEMOpID.needLoad(loadQueue(loadDmemPtr).op) && !loadQueue(loadDmemPtr).loadPageFault && !loadQueue(loadDmemPtr).storePageFault && !loadQueue(loadDmemPtr).finished && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
+  val havePendingDmemReq = MEMOpID.needLoad(loadQueue(loadDmemPtr).op) && !loadQueue(loadDmemPtr).loadPageFault && !loadQueue(loadDmemPtr).storePageFault && !loadQueue(loadDmemPtr).loadAddrMisaligned && !loadQueue(loadDmemPtr).storeAddrMisaligned && !loadQueue(loadDmemPtr).finished && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val havePendingStoreEnq = MEMOpID.needStore(loadQueue(loadDmemPtr).op) && !MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val dmemReqFromLoadQueue = havePendingDmemReq || havePendingStoreEnq || havePendingAMOStoreEnq
-  val skipAInst = !loadQueue(loadDmemPtr).valid && loadDmemPtr =/= loadDtlbPtr || loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || !loadQueue(loadDmemPtr).op(2,0).orR)
+  val skipAInst = !loadQueue(loadDmemPtr).valid && loadDmemPtr =/= loadDtlbPtr || loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || loadQueue(loadDmemPtr).loadAddrMisaligned || loadQueue(loadDmemPtr).storeAddrMisaligned || !loadQueue(loadDmemPtr).op(2,0).orR)
   val haveLoadResp = io.dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && (tlbRespLdqidx === loadTailPtr) && loadQueue(loadTailPtr).valid//FIXIT: to use non blocking dcache, set it to false
   val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
 
