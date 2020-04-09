@@ -33,7 +33,7 @@ trait HasNOOPConst {
   val DCacheUserBundleWidth = 16
 }
 
-abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO
+abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO with HasBackendConst
 abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst with HasBackendConst
 
 case class NOOPConfig (

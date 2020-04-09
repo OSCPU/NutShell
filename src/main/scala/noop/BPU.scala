@@ -163,6 +163,7 @@ class NLP extends NOOPModule {
   (0 to 3).map(i => io.brIdx(i) := btbHit(i) && pcLatchValid(i).asBool && Mux(btbRead(i)._type === BTBtype.B, phtTaken(i), true.B) && btbRead(i).valid)
   io.out.target := PriorityMux(io.brIdx, io.target)
   io.out.valid := io.brIdx.asUInt.orR
+  io.out.rtype := 0.U
   Debug()
   {
     when(io.out.valid){
@@ -202,4 +203,5 @@ class BPU2 extends NOOPModule {
 
   io.out.target := io.in.bits.pc + offset
   io.out.valid := io.in.valid && predict(0)
+  io.out.rtype := 0.U
 }

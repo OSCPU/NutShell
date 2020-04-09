@@ -16,6 +16,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
+    val brMaskIn = Input(UInt(robInstCapacity.W))
+    val brMaskOut = Output(UInt(robInstCapacity.W))
     val cdb = Vec(rsCommitWidth, Flipped(Valid(new OOCommitIO)))
     val flush = Input(Bool())
     val empty = Output(Bool())
@@ -28,13 +30,13 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val valid   = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src1Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src2Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
-  // val prfDest = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
+  val brMask  = RegInit(VecInit(Seq.fill(rsSize)(0.U(robInstCapacity.W))))
   val prfSrc1 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val prfSrc2 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val src1    = Reg(Vec(rsSize, UInt(XLEN.W)))
   val src2    = Reg(Vec(rsSize, UInt(XLEN.W)))
-//   val imm = Vec(rsSize, Reg(UInt(XLEN.W)))
 
+  val validNext = WireInit(valid)
   val instRdy = WireInit(VecInit(List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i))))
   val rsEmpty = !valid.asUInt.orR
   val rsFull = valid.asUInt.andR
@@ -43,6 +45,18 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   rsReadygo := instRdy.foldRight(false.B)((sum, i) => sum|i)
 
   val forceDequeue = WireInit(false.B)
+
+  def needMispredictionRecovery(brMask: UInt) = {
+    io.cdb(0).bits.decode.cf.redirect.valid && (io.cdb(0).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(0).bits.prfidx)
+    // List.tabulate(CommitWidth)(i => {
+      // io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx)
+    // }).foldRight(false.B)((sum, i) => sum | i)
+  }
+
+  def updateBrMask(brMask: UInt) = {
+    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+  }
+
   // Listen to Common Data Bus
   // Here we listen to commit signal chosen by ROB?
   // If prf === src, mark it as `ready`
@@ -61,6 +75,10 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
             src2(i) := io.cdb(j).bits.commits
         }
       )
+      // Update RS according to brMask
+      // If a branch inst is canceled by BRU, the following insts with subject to this branch should also be canceled
+      brMask(i) := updateBrMask(brMask(i))
+      when(needMispredictionRecovery(brMask(i))){ valid(i):= false.B }
     }
   )
 
@@ -79,17 +97,19 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     src2Rdy(enqueueSelect) := io.in.bits.src2Rdy
     src1(enqueueSelect) := io.in.bits.decode.data.src1
     src2(enqueueSelect) := io.in.bits.decode.data.src2
+    brMask(enqueueSelect) := io.brMaskIn
   }
 
   // RS dequeue
-  io.out.valid := rsReadygo
   val dequeueSelect = Wire(UInt(log2Up(size).W))
-  dequeueSelect := PriorityEncoder(instRdy) // TODO: replace PriorityEncoder with other logic
+  dequeueSelect := PriorityEncoder(instRdy)
   when(io.out.fire() || forceDequeue){
     valid(dequeueSelect) := false.B
   }
 
+  io.out.valid := rsReadygo // && validNext(dequeueSelect)
   io.out.bits := decode(dequeueSelect)
+  io.brMaskOut := brMask(dequeueSelect)
   io.out.bits.decode.data.src1 := src1(dequeueSelect)
   io.out.bits.decode.data.src2 := src2(dequeueSelect)
 
@@ -109,7 +129,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     for(i <- 0 to (size -1)){
       printf("[RS " + name + "] 0x%x %x %x %x %x %x", decode(i).decode.cf.pc, valid(i), src1Rdy(i), src1(i), src2Rdy(i), src2(i))
       when(valid(i)){printf("  valid")}
-      printf("\n")
+      printf("mask %x\n", brMask(i))
+      // printf("\n")
     }
   }
 
@@ -118,29 +139,34 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   // if an unpipelined fu can store uop itself, set `pipelined` to true (it behaves just like a pipelined FU)
   if(!pipelined){
     val fuValidReg = RegInit(false.B)
+    val brMaskPReg = RegInit(0.U(robInstCapacity.W))
     val fuFlushReg = RegInit(false.B)
     val fuDecodeReg = RegEnable(io.out.bits, io.out.fire())
-    when(io.out.fire()){ fuValidReg := true.B }
+    val needFlush = io.flush || needMispredictionRecovery(brMaskPReg)
+    brMaskPReg := updateBrMask(brMaskPReg)
+    when(io.out.fire()){ 
+      fuValidReg := true.B 
+      brMaskPReg := io.brMaskOut
+    }
     when(io.commit.get){ fuValidReg := false.B }
-    when(io.flush && (fuValidReg || io.out.fire())){ fuFlushReg := true.B }
+    when(needFlush && (fuValidReg || io.out.fire())){ fuFlushReg := true.B }
     when(io.commit.get){ fuFlushReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
-    assert(!(io.out.fire() && io.commit.get && fuValidReg && !io.flush))
+    assert(!(io.out.fire() && io.commit.get && fuValidReg && !needFlush))
   }
 
   if(fifo){
     require(!priority)
-    val queue = Module(new FlushableQueue(UInt(log2Up(size).W), size))
-    queue.io.flush := io.flush
-    queue.io.enq.bits := enqueueSelect
-    queue.io.enq.valid := io.in.fire()
-    queue.io.deq.ready := io.out.fire()
-    dequeueSelect := queue.io.deq.bits
-    rsReadygo := instRdy(dequeueSelect)
-    io.in.ready := rsAllowin // && queue.enq.ready
-    io.out.valid := rsReadygo && queue.io.deq.valid
-    assert(!(rsAllowin && !queue.io.enq.ready))
+    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
+    dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
+      !priorityMask(i).asUInt.orR && valid(i)
+    }))
+    // update priorityMask
+    io.out.valid := instRdy(dequeueSelect)
+    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
+    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
 
   if(priority){

@@ -180,6 +180,13 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
   
   // val waymask = Mux(io.out.bits.hit, hitVec, victimWaymask)
   val waymask = Mux(io.out.bits.hit, hitVec, Mux(hasInvalidWay, refillInvalidWaymask, victimWaymask))
+  when(PopCount(waymask) > 1.U){
+    metaWay.map(m => printf("[ERROR] metaWay %x metat %x reqt %x\n", m.valid, m.tag, addr.tag))
+    io.metaReadResp.map(m => printf("[ERROR] metaReadResp %x metat %x reqt %x\n", m.valid, m.tag, addr.tag))
+    printf("[ERROR] forwardMetaReg isForwardMetaReg %x %x metat %x wm %b\n", isForwardMetaReg, forwardMetaReg.data.valid, forwardMetaReg.data.tag, forwardMetaReg.waymask.get)
+    printf("[ERROR] forwardMeta isForwardMeta %x %x metat %x wm %b\n", isForwardMeta, io.metaWriteBus.req.bits.data.valid, io.metaWriteBus.req.bits.data.tag, io.metaWriteBus.req.bits.waymask.get)
+  }
+  when(PopCount(waymask) > 1.U){printf("[ERROR] hit %b wmask %b hitvec %b\n", io.out.bits.hit, forwardMeta.waymask.getOrElse("1".U), hitVec)}
   assert(!(io.in.valid && PopCount(waymask) > 1.U))
 
   io.out.bits.metas := metaWay
@@ -242,7 +249,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
   val meta = Mux1H(io.in.bits.waymask, io.in.bits.metas)
   assert(!(mmio && hit), "MMIO request should not hit in cache")
 
-  
+
   // this is ugly
   if (cacheName == "dcache") {
     BoringUtils.addSource(mmio, "lsuMMIO")
@@ -457,8 +464,8 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
     printf("%d: [" + cacheName + " S3]: useFD:%d isFD:%d FD:%x DreadArray:%x dataRead:%x inwaymask:%x FDwaymask:%x \n", 
     GTimer(), useForwardData, io.in.bits.isForwardData, io.in.bits.forwardData.data.data, dataReadArray, dataRead, io.in.bits.waymask, io.in.bits.forwardData.waymask.getOrElse("b1".U))
     when(io.dataWriteBus.req.fire()){
-    printf("%d: [" + cacheName + " WB] waymask: %b data:%x setIdx:%x\n", 
-    GTimer(), io.dataWriteBus.req.bits.waymask.get.asUInt, io.dataWriteBus.req.bits.data.asUInt, io.dataWriteBus.req.bits.setIdx)
+      printf("%d: [" + cacheName + " WB] waymask: %b data:%x setIdx:%x\n", 
+      GTimer(), io.dataWriteBus.req.bits.waymask.get.asUInt, io.dataWriteBus.req.bits.data.asUInt, io.dataWriteBus.req.bits.setIdx)
     }
     }
       when((state === s_memWriteReq) && io.mem.req.fire()){
