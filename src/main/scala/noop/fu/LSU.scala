@@ -490,11 +490,9 @@ class LSU extends NOOPModule with HasLSUConst {
   List.tabulate(storeQueueSize)(i => {
     when(storeQueueDequeue){
       when(storeQueue(i).brMask(branchIndex) && bruFlush){
-        if(i != 0){
-          storeQueue(i-1).valid := false.B
-        }
+        if(i != 0){ storeQueue(i-1).valid := false.B }
       }
-      storeQueue(i-1).brMask := updateBrMask(storeQueue(i).brMask)
+      if(i != 0){ storeQueue(i-1).brMask := updateBrMask(storeQueue(i).brMask) }
     }.otherwise{
       when(storeQueue(i).brMask(branchIndex) && bruFlush){
         storeQueue(i).valid := false.B

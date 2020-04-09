@@ -45,10 +45,6 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val cdb = Wire(Vec(CommitWidth, Valid(new OOCommitIO)))
   val rf = new RegFile
   val rob = Module(new ROB)
-  rob.io.cdb <> cdb
-  rob.io.flush := io.flush
-  when (rob.io.wb(0).rfWen) { rf.write(rob.io.wb(0).rfDest, rob.io.wb(0).rfData) }
-  when (rob.io.wb(1).rfWen) { rf.write(rob.io.wb(1).rfDest, rob.io.wb(1).rfData) }
 
   val alu1rs = Module(new RS(priority = true, name = "ALU1RS"))
   val alu2rs = Module(new RS(priority = true, name = "ALU2RS"))
@@ -58,7 +54,13 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
-  io.redirect := Mux(rob.io.redirect.valid, rob.io.redirect, bruRedirect)
+  val flushBackend = io.flush || rob.io.redirect.valid && rob.io.redirect.rtype === 1.U
+  io.redirect := Mux(rob.io.redirect.valid && rob.io.redirect.rtype === 0.U, rob.io.redirect, bruRedirect)
+
+  rob.io.cdb <> cdb
+  rob.io.flush := flushBackend
+  when (rob.io.wb(0).rfWen) { rf.write(rob.io.wb(0).rfDest, rob.io.wb(0).rfData) }
+  when (rob.io.wb(1).rfWen) { rf.write(rob.io.wb(1).rfDest, rob.io.wb(1).rfData) }
   List.tabulate(DispatchWidth)(i => {
     rob.io.in(i).valid := io.in(i).valid && instCango(i)
     io.in(i).ready := rob.io.in(i).ready && instCango(i)
@@ -175,11 +177,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val blockReg = RegInit(false.B)
   val haveUnfinishedStore = Wire(Bool())
-  when((rob.io.empty || io.flush) && !haveUnfinishedStore){ blockReg := false.B }
+  when((rob.io.empty || flushBackend) && !haveUnfinishedStore){ blockReg := false.B }
   when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire()){ blockReg := true.B }
   val mispredictionRecoveryReg = RegInit(false.B)
   when(io.redirect.valid && io.redirect.rtype === 1.U){ mispredictionRecoveryReg := true.B }
-  when(rob.io.empty || io.flush){ mispredictionRecoveryReg := false.B }
+  when(rob.io.empty || flushBackend){ mispredictionRecoveryReg := false.B }
   val mispredictionRecovery = mispredictionRecoveryReg && !rob.io.empty || io.redirect.valid && io.redirect.rtype === 1.U // waiting for misprediction recovery or misprediction detected
 
   instCango(0) := 
@@ -220,14 +222,22 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsuInst  = Mux(inst(0).decode.ctrl.fuType === FuType.lsu, 0.U, Mux(inst(1).decode.ctrl.fuType === FuType.lsu, 1.U, noInst))
   val mduInst  = Mux(inst(0).decode.ctrl.fuType === FuType.mdu, 0.U, Mux(inst(1).decode.ctrl.fuType === FuType.mdu, 1.U, noInst))
 
+  def updateBrMask(brMask: UInt) = {
+    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(cdb(i).bits.prfidx) & Fill(robInstCapacity, cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+  }
+
   val brMaskReg = RegInit(0.U(robInstCapacity.W))
-  val brMaskGen = brMaskReg & ~rob.io.brMaskClearVec
+  val brMaskGen = updateBrMask(brMaskReg & ~rob.io.brMaskClearVec)
   val brMask = Wire(Vec(robWidth+1, UInt(robInstCapacity.W)))
   val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.in(i).bits.ctrl.fuOpType))
   brMask(0) := brMaskGen
   brMask(1) := brMaskGen | (UIntToOH(inst(0).prfDest) & Fill(robInstCapacity, io.in(0).fire() && isBranch(0)))
   brMask(2) := brMask(1) | (UIntToOH(inst(1).prfDest) & Fill(robInstCapacity, io.in(1).fire() && isBranch(1)))
-  brMaskReg := Mux(io.flush, 0.U, brMask(2))
+  brMaskReg := Mux(flushBackend, 0.U, brMask(2))
+
+  Debug(){
+    printf("[brMAsk] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
+  }
 
   alu1rs.io.in.valid := instCango(alu1Inst) 
   alu2rs.io.in.valid := instCango(alu2Inst) 
@@ -247,11 +257,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   //   rs(i).io.commit.bits := cdb.bits
   // )}
 
-  alu1rs.io.flush := io.flush
-  alu2rs.io.flush := io.flush
-  csrrs.io.flush  := io.flush
-  lsurs.io.flush  := io.flush
-  mdurs.io.flush  := io.flush
+  alu1rs.io.flush := flushBackend
+  alu2rs.io.flush := flushBackend
+  csrrs.io.flush  := flushBackend
+  lsurs.io.flush  := flushBackend
+  mdurs.io.flush  := flushBackend
 
   alu1rs.io.brMaskIn := brMask(alu1Inst)
   alu2rs.io.brMaskIn := brMask(alu2Inst)
@@ -354,7 +364,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsu.io.cdb := cdb
   lsu.io.scommit := rob.io.scommit
   haveUnfinishedStore := lsu.io.haveUnfinishedStore
-  lsu.io.flush := io.flush
+  lsu.io.flush := flushBackend
   lsu.io.wdata := lsuUop.decode.data.src2
   // lsu.io.instr := lsuUop.decode.cf.instr
   io.dmem <> lsu.io.dmem
@@ -411,7 +421,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     func = csrUop.decode.ctrl.fuOpType
   )
   csr.io.cfIn := csrUop.decode.cf
-  csr.io.instrValid := csrVaild && !io.flush
+  csr.io.instrValid := csrVaild && !flushBackend
   csr.io.isBackendException := commitBackendException
   csr.io.out.ready := true.B
   csrcommit.decode := csrUop.decode
@@ -498,7 +508,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsurs.io.out.ready := lsu.io.in.ready
   mdurs.io.out.ready := mdu.io.in.ready
 
-  Debug(){when(io.flush){printf("[FLUSH] TIMER: %d\n", GTimer())}}
+  Debug(){when(flushBackend){printf("[FLUSH] TIMER: %d\n", GTimer())}}
   Debug(){when(io.redirect.valid){printf("[RDIRECT] TIMER: %d target 0x%x\n", GTimer(), io.redirect.target)}}
 
   // Performance Counter

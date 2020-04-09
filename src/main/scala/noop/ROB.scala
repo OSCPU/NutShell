@@ -136,13 +136,13 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           intrNO(i)(j) := io.cdb(k).bits.intrNO
           // Write redirect info
           redirect(i)(j) := io.cdb(k).bits.decode.cf.redirect
-          redirect(i)(j).valid := io.cdb(k).bits.decode.cf.redirect.valid && io.cdb(k).bits.decode.cf.redirect.rtype === 0.U
+          redirect(i)(j).valid := io.cdb(k).bits.decode.cf.redirect.valid
           exception(i)(j) := io.cdb(k).bits.exception
           // Update wen
           // In several cases, FU will invalidate rfWen
           decode(i)(j).ctrl.rfWen := io.cdb(k).bits.decode.ctrl.rfWen
         }
-        when(valid(i)(j) && brMask(i)(j)(io.cdb(k).bits.prfidx) && io.cdb(k).valid && io.cdb(k).bits.decode.cf.redirect.valid && io.cdb(k).bits.decode.cf.redirect.rtype === 1.U ){
+        when(valid(i)(j) && brMask(i)(j)(io.cdb(k).bits.prfidx) && io.cdb(k).valid && io.cdb(k).bits.decode.cf.redirect.valid ){
           valid(i)(j) := false.B
           canceled(i)(j) := true.B
           Debug(){
@@ -150,7 +150,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           }
         }
       }
-      brMask(i)(j) := brMask(i)(j) & ~io.brMaskClearVec
+      brMask(i)(j) := updateBrMask(brMask(i)(j) & ~io.brMaskClearVec)
     }
   }
 
@@ -184,10 +184,15 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     ringBufferTail := ringBufferTail + 1.U
   }
 
-  //FIXIT
-  io.brMaskClearVec := 
-    UIntToOH(Cat(ringBufferTail, "b0".U)) & Fill(robInstCapacity, (valid(ringBufferTail)(0) || canceled(ringBufferTail)(0)) && (retireATerm || recycleATerm)) |
-    UIntToOH(Cat(ringBufferTail, "b1".U)) & Fill(robInstCapacity, (valid(ringBufferTail)(1) || canceled(ringBufferTail)(1)) && (retireATerm || recycleATerm))
+  //FIXIT: for map table checkpoints
+  val enableMapTableCheckpoint = false
+  if(enableMapTableCheckpoint){
+    io.brMaskClearVec := 
+      UIntToOH(Cat(ringBufferTail, "b0".U)) & Fill(robInstCapacity, (valid(ringBufferTail)(0) || canceled(ringBufferTail)(0)) && (retireATerm || recycleATerm)) |
+      UIntToOH(Cat(ringBufferTail, "b1".U)) & Fill(robInstCapacity, (valid(ringBufferTail)(1) || canceled(ringBufferTail)(1)) && (retireATerm || recycleATerm))
+  } else {
+    io.brMaskClearVec := 0.U
+  }
 
   // retire: trigger redirect
   // exception/interrupt/branch mispredict redirect is raised by ROB

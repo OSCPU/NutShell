@@ -129,7 +129,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     for(i <- 0 to (size -1)){
       printf("[RS " + name + "] 0x%x %x %x %x %x %x", decode(i).decode.cf.pc, valid(i), src1Rdy(i), src1(i), src2Rdy(i), src2(i))
       when(valid(i)){printf("  valid")}
-      printf("\n")
+      printf("mask %x\n", brMask(i))
+      // printf("\n")
     }
   }
 
