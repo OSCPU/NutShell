@@ -304,9 +304,10 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     src2 = alu1rs.io.out.bits.decode.data.src2, 
     func = alu1rs.io.out.bits.decode.ctrl.fuOpType
   )
+  val alu1Writeback = Wire(Bool())
   alu1.io.cfIn := alu1rs.io.out.bits.decode.cf
   alu1.io.offset := alu1rs.io.out.bits.decode.data.imm
-  alu1.io.out.ready := true.B //TODO
+  alu1.io.out.ready := alu1Writeback
   alu1commit.decode := alu1rs.io.out.bits.decode
   alu1commit.isMMIO := false.B
   alu1commit.intrNO := 0.U
@@ -334,9 +335,10 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     src2 = alu2rs.io.out.bits.decode.data.src2, 
     func = alu2rs.io.out.bits.decode.ctrl.fuOpType
   )
+  val alu2Writeback = Wire(Bool())
   alu2.io.cfIn :=  alu2rs.io.out.bits.decode.cf
   alu2.io.offset := alu2rs.io.out.bits.decode.data.imm
-  alu2.io.out.ready := true.B //TODO
+  alu2.io.out.ready := alu2Writeback
   alu2commit.decode := alu2rs.io.out.bits.decode
   alu2commit.isMMIO := false.B
   alu2commit.intrNO := 0.U
@@ -502,8 +504,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   cdb(1).bits := commit(cdbSrc2)
   // cdb(1).ready := true.B
 
-  alu1rs.io.out.ready := cdbSrc1 === srcALU1.U
-  alu2rs.io.out.ready := cdbSrc2 === srcALU2.U
+  alu1Writeback := cdbSrc1 === srcALU1.U
+  alu2Writeback := cdbSrc2 === srcALU2.U
+
+  alu1rs.io.out.ready := alu1.io.in.ready
+  alu2rs.io.out.ready := alu2.io.in.ready
   csrrs.io.out.ready := csr.io.in.ready
   lsurs.io.out.ready := lsu.io.in.ready
   mdurs.io.out.ready := mdu.io.in.ready

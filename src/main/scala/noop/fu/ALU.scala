@@ -145,7 +145,7 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
   when(valid && isBru && io.cfIn.pc === "h7f809ad9b8".U){
     printf("[ERROR] bpuUpdateReq: %d: valid:%d pc:%x inst:%x isMissPredict:%d actualTarget:%x actualTaken:%x fuOpType:%x btbType:%x isRVC:%d \n", GTimer(), valid && isBru, io.cfIn.pc, io.cfIn.instr, predictWrong, target, taken, func, LookupTree(func, RV32I_BRUInstr.bruFuncTobtbTypeTable), isRVC)
   }
-  io.in.ready := true.B
+  io.in.ready := io.out.ready
   io.out.valid := valid
 
   val bpuUpdateReq = WireInit(0.U.asTypeOf(new BPUUpdateReq))
