@@ -746,7 +746,7 @@ class LSU extends NOOPModule with HasLSUConst {
   //-------------------------------------------------------
 
   // Load Data Selection
-  val rdata = Mux(haveLoadResp, rdataFwdSel, loadQueue(loadTailPtr).data)
+  val rdata = Mux(haveLoadResp && loadTailPtr === ldqidxResp, rdataFwdSel, loadQueue(loadTailPtr).data)
   val rdataSel = LookupTree(loadQueue(loadTailPtr).vaddr(2, 0), List(
     "b000".U -> rdata(63, 0),
     "b001".U -> rdata(63, 8),
