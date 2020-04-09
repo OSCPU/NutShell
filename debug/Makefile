@@ -5,6 +5,7 @@ SINGLETEST = ALL=recursion
 CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
 MB_RESULT = $(shell cat microbench.log | grep IPC)
 MBT_RESULT = $(shell cat microbench-train.log | grep IPC)
+CM_RESULT = $(shell cat coremark.log | grep IPC)
 
 # ------------------------------------------------------------------
 # bulid CPU and run dummy test
@@ -52,6 +53,12 @@ microbench-train:
 coremark:
 	$(MAKE) -C $(AM_HOME)/apps/coremark $(ARCH) mainargs=test run 2>&1 | tee > coremark.log
 	cat coremark.log | grep IPC
+	@date >> cm_history.log
+	@git log --pretty=format:"%h %an %ad %s" -1 >> cm_history.log
+	@echo -e "" >> cm_history.log
+	@echo $(CM_RESULT) >> cm_history.log
+	@echo -e "" >> cm_history.log
+
 
 dhrystone:
 	$(MAKE) -C $(AM_HOME)/apps/dhrystone $(ARCH) mainargs=test run 2>&1 | tee > dhrystone.log

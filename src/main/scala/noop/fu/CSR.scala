@@ -305,8 +305,8 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   // val sie = RegInit(0.U(XLEN.W))
   val sieMask = "h222".U & mideleg
   val sipMask  = "h222".U & mideleg
-  // val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
-  val satp = RegInit(UInt(XLEN.W), 0.U)
+  val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
+  // val satp = RegInit(UInt(XLEN.W), 0.U)
   val sepc = RegInit(UInt(XLEN.W), 0.U)
   val scause = RegInit(UInt(XLEN.W), 0.U)
   val stval = Reg(UInt(XLEN.W))
@@ -590,6 +590,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val retTarget = Wire(UInt(VAddrBits.W))
   val trapTarget = Wire(UInt(VAddrBits.W))
   io.redirect.valid := (valid && func === CSROpType.jmp) || raiseExceptionIntr || resetSatp
+  io.redirect.rtype := 0.U
   io.redirect.target := Mux(resetSatp, io.cfIn.pc + 4.U, Mux(raiseExceptionIntr, trapTarget, retTarget))
 
   Debug(){

@@ -28,7 +28,7 @@ class DataSrcIO extends NOOPBundle {
 
 class RedirectIO extends NOOPBundle {
   val target = Output(UInt(VAddrBits.W))
-  // val brIdx = Output(UInt(3.W)) // for RVC
+  val rtype = Output(UInt(1.W)) // 1: branch mispredict: only need to flush frontend  0: others: flush the whole pipeline
   val valid = Output(Bool())
 }
 

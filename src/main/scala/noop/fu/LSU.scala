@@ -79,6 +79,8 @@ class LSUIO extends FunctionUnitIO {
   // val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr // TODO
   val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
   val dtlb = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
+  val cdb = Vec(robWidth, Flipped(Valid(new OOCommitIO)))
+  val brMaskIn = Input(UInt(robInstCapacity.W))
   val uopIn = Input(new RenamedDecodeIO)
   val uopOut = Output(new RenamedDecodeIO)
   val isMMIO = Output(Bool())
@@ -92,7 +94,8 @@ class LSUIO extends FunctionUnitIO {
 class StoreQueueEntry extends NOOPBundle{
   val pc       = UInt(VAddrBits.W)
   val prfidx   = UInt(prfAddrWidth.W) // for debug
-  val wmask   = UInt((XLEN/8).W) // for store queue forwarding
+  val brMask   = UInt(robInstCapacity.W)
+  val wmask    = UInt((XLEN/8).W) // for store queue forwarding
   val vaddr    = UInt(VAddrBits.W)
   val paddr    = UInt(PAddrBits.W)
   val func     = UInt(7.W)
@@ -106,6 +109,7 @@ class StoreQueueEntry extends NOOPBundle{
 class LoadQueueEntry extends NOOPBundle{
   val pc       = UInt(VAddrBits.W)
   val prfidx   = UInt(prfAddrWidth.W)
+  val brMask   = UInt(robInstCapacity.W)
   val vaddr    = UInt(VAddrBits.W) // for debug
   val paddr    = UInt(PAddrBits.W)
   val func     = UInt(7.W)
@@ -188,6 +192,17 @@ class LSU extends NOOPModule with HasLSUConst {
     io.out.bits
   }
 
+  def needMispredictionRecovery(brMask: UInt) = {
+    io.cdb(0).bits.decode.cf.redirect.valid && (io.cdb(0).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(0).bits.prfidx)
+    // List.tabulate(CommitWidth)(i => {
+      // io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx)
+    // }).foldRight(false.B)((sum, i) => sum | i)
+  }
+
+  def updateBrMask(brMask: UInt) = {
+    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+  }
+
   val dmem = io.dmem
   // Gen result
   val tlbRespLdqidx = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx
@@ -195,7 +210,8 @@ class LSU extends NOOPModule with HasLSUConst {
   val opResp = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val opReq = dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val ldqidxResp = dmemUserOut.ldqidx
-  // if loadqueue is enabled, dcache user bit only contains op and ldqidx
+  val branchIndex = io.cdb(0).bits.prfidx //FIXIT
+  val bruFlush = io.cdb(0).bits.decode.cf.redirect.valid && io.cdb(0).bits.decode.cf.redirect.rtype === 1.U //FIXIT
 
   // Decode
   val instr    = io.uopIn.decode.cf.instr
@@ -280,7 +296,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val havePendingStoreEnq = MEMOpID.needStore(loadQueue(loadDmemPtr).op) && !MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val dmemReqFromLoadQueue = havePendingDmemReq || havePendingStoreEnq || havePendingAMOStoreEnq
-  val skipAInst = loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || !loadQueue(loadDmemPtr).op(2,0).orR)
+  val skipAInst = !loadQueue(loadDmemPtr).valid && loadDmemPtr =/= loadDtlbPtr || loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || !loadQueue(loadDmemPtr).op(2,0).orR)
   val haveLoadResp = io.dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && (tlbRespLdqidx === loadTailPtr) && loadQueue(loadTailPtr).valid//FIXIT: to use non blocking dcache, set it to false
   val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
 
@@ -312,6 +328,7 @@ class LSU extends NOOPModule with HasLSUConst {
   when(loadQueueEnqueue){
     loadQueue(loadHeadPtr).pc := io.uopIn.decode.cf.pc
     loadQueue(loadHeadPtr).prfidx := io.uopIn.prfDest
+    loadQueue(loadHeadPtr).brMask := updateBrMask(io.brMaskIn)
     loadQueue(loadHeadPtr).vaddr := addr
     loadQueue(loadHeadPtr).paddr := addr
     loadQueue(loadHeadPtr).func := func
@@ -386,7 +403,7 @@ class LSU extends NOOPModule with HasLSUConst {
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
   // after a store inst get its paddr from TLB, add it to store queue
   val dtlbRespUser = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle)
-  val tlbRespStoreEnq = io.dtlb.resp.fire() && MEMOpID.needStore(dtlbRespUser.op) && !MEMOpID.needAlu(dtlbRespUser.op)
+  val tlbRespStoreEnq = io.dtlb.resp.fire() && MEMOpID.needStore(dtlbRespUser.op) && !MEMOpID.needAlu(dtlbRespUser.op) && !bruFlush && loadQueue(dtlbRespUser.ldqidx).valid
   storeQueueEnqueue := havePendingStoreEnq && !storeQueueFull || !havePendingDmemReq && tlbRespStoreEnq && !storeQueueFull
   val tlbRespAMOStoreEnq = io.dtlb.resp.fire() && MEMOpID.needAlu(dtlbRespUser.op)
   val storeQueueAMOEnqueue = havePendingAMOStoreEnq && loadQueueReqsend || tlbRespAMOStoreEnq && loadQueueReqsend
@@ -407,14 +424,10 @@ class LSU extends NOOPModule with HasLSUConst {
     })
   }
 
-  // move storeReqPtr ptr
-  when(storeQueueDequeue && !storeQueueReqsend){storeReqPtr := storeReqPtr - 1.U}
-  when(!storeQueueDequeue && storeQueueReqsend){storeReqPtr := storeReqPtr + 1.U}
-
   // move storeCmtPtr ptr
   nextStoreCmtPtr := storeCmtPtr
-  when(storeQueueDequeue && !storeQueueConfirm){nextStoreCmtPtr := storeCmtPtr - 1.U}
-  when(!storeQueueDequeue && storeQueueConfirm){nextStoreCmtPtr := storeCmtPtr + 1.U}
+  when((storeQueueDequeue && !storeQueueSkipInst) && !storeQueueConfirm){nextStoreCmtPtr := storeCmtPtr - 1.U}
+  when(!(storeQueueDequeue && !storeQueueSkipInst) && storeQueueConfirm){nextStoreCmtPtr := storeCmtPtr + 1.U}
   storeCmtPtr := nextStoreCmtPtr
   
   // move storeHeadPtr ptr
@@ -430,6 +443,7 @@ class LSU extends NOOPModule with HasLSUConst {
   when(storeQueueEnqueue || storeQueueAMOEnqueue){
     storeQueue(storeQueueEnqPtr).pc := loadQueue(storeQueueEnqSrcPick).pc
     storeQueue(storeQueueEnqPtr).prfidx := loadQueue(storeQueueEnqSrcPick).prfidx
+    storeQueue(storeQueueEnqPtr).brMask := updateBrMask(loadQueue(storeQueueEnqSrcPick).brMask)
     storeQueue(storeQueueEnqPtr).wmask := genWmask(loadQueue(storeQueueEnqSrcPick).vaddr, loadQueue(loadDmemPtr).size)
     storeQueue(storeQueueEnqPtr).vaddr := loadQueue(storeQueueEnqSrcPick).vaddr
     storeQueue(storeQueueEnqPtr).paddr := Mux(havePendingStqEnq, loadQueue(loadDmemPtr).paddr, io.dtlb.resp.bits.rdata)
@@ -438,7 +452,7 @@ class LSU extends NOOPModule with HasLSUConst {
     storeQueue(storeQueueEnqPtr).op := loadQueue(storeQueueEnqSrcPick).op
     storeQueue(storeQueueEnqPtr).data := loadQueue(storeQueueEnqSrcPick).data
     storeQueue(storeQueueEnqPtr).isMMIO := Mux(havePendingStqEnq, loadQueue(loadDmemPtr).isMMIO, paddrIsMMIO)
-    storeQueue(storeQueueEnqPtr).valid := true.B
+    storeQueue(storeQueueEnqPtr).valid := true.B && !(loadQueue(storeQueueEnqSrcPick).brMask(branchIndex) && bruFlush)
   }
 
   Debug(){
@@ -451,11 +465,11 @@ class LSU extends NOOPModule with HasLSUConst {
 
   Debug(){
     printf("[LSU STQ] time %d\n", GTimer())
-    printf("[LSU STQ] pc           id vaddr        paddr        func    op      data             mmio \n")
+    printf("[LSU STQ] pc           id vaddr        paddr        func    op      data             mmio v \n")
     for(i <- 0 to (storeQueueSize - 1)){
       printf(
-        "[LSU STQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b %d", 
-        storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).paddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, i.U
+        "[LSU STQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b %b %d", 
+        storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).paddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, storeQueue(i).valid, i.U
       )
       // when(storeAlloc === i.U){printf(" alloc")}
       when(storeHeadPtr === i.U){printf(" head")}
@@ -464,6 +478,30 @@ class LSU extends NOOPModule with HasLSUConst {
       printf("\n")
     }
   }
+
+  // when branch, invalidate insts in wrong branch direction
+  // brMask(i)(branchIndex) && cdb(0).decode.cf.redirect.valid && cdb(0).decode.cf.redirect.rtype === 1.U
+  List.tabulate(loadQueueSize)(i => {
+    when(loadQueue(i).brMask(branchIndex) && bruFlush){
+      loadQueue(i).valid := false.B
+    }
+    loadQueue(i).brMask := updateBrMask(loadQueue(i).brMask)
+  })
+  List.tabulate(storeQueueSize)(i => {
+    when(storeQueueDequeue){
+      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+        if(i != 0){
+          storeQueue(i-1).valid := false.B
+        }
+      }
+      storeQueue(i-1).brMask := updateBrMask(storeQueue(i).brMask)
+    }.otherwise{
+      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+        storeQueue(i).valid := false.B
+      }
+      storeQueue(i).brMask := updateBrMask(storeQueue(i).brMask)
+    }
+  })
 
   //-------------------------------------------------------
   // Load / Store Pipeline
@@ -533,7 +571,7 @@ class LSU extends NOOPModule with HasLSUConst {
     loadQueue(tlbRespLdqidx).loadPageFault := loadPF
     loadQueue(tlbRespLdqidx).storePageFault := storePF
   }
-  assert(loadQueue(tlbRespLdqidx).valid && !loadQueue(tlbRespLdqidx).tlbfin || !io.dtlb.resp.fire())
+  // assert(loadQueue(tlbRespLdqidx).valid && !loadQueue(tlbRespLdqidx).tlbfin || !io.dtlb.resp.fire())
   // assert(!(!dtlbEnable && io.dtlb.resp.fire()))
 
   //-------------------------------------------------------
@@ -584,7 +622,8 @@ class LSU extends NOOPModule with HasLSUConst {
   // loadDMemReq
   val loadDMemReqSrcPick = Mux(havePendingDmemReq, loadDmemPtr, io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx)
   val loadDTlbResqReqValid = dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue && 
-    !loadPF && !storePF && !loadQueue(tlbRespLdqidx).loadAddrMisaligned && !loadQueue(tlbRespLdqidx).storeAddrMisaligned
+    !loadPF && !storePF && !loadQueue(tlbRespLdqidx).loadAddrMisaligned && !loadQueue(tlbRespLdqidx).storeAddrMisaligned &&
+    !bruFlush && loadQueue(tlbRespLdqidx).valid && tlbRespLdqidx === loadDmemPtr
   val loadSideUserBundle = Wire(new DCacheUserBundle)
   loadSideUserBundle.ldqidx := loadDMemReqSrcPick
   loadSideUserBundle.op := loadQueue(loadDMemReqSrcPick).op
@@ -671,7 +710,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val dataBackVec = Wire(Vec(XLEN/8, (UInt((XLEN/8).W))))
   val dataBack = dataBackVec.asUInt
   val forwardVec = VecInit(List.tabulate(storeQueueSize)(i => {
-    i.U < storeHeadPtr && loadQueue(loadDmemPtr).paddr(PAddrBits-1, log2Up(XLEN/8)) === storeQueue(i).paddr(PAddrBits-1, log2Up(XLEN/8))
+    i.U < storeHeadPtr && loadQueue(loadDmemPtr).paddr(PAddrBits-1, log2Up(XLEN/8)) === storeQueue(i).paddr(PAddrBits-1, log2Up(XLEN/8)) && storeQueue(i).valid
   }))
   val forwardWmask = List.tabulate(storeQueueSize)(i => storeQueue(i).wmask & Fill(XLEN/8, forwardVec(i))).foldRight(0.U)((sum, i) => sum | i)
   for(j <- (0 to (XLEN/8 - 1))){
@@ -783,7 +822,7 @@ class LSU extends NOOPModule with HasLSUConst {
   BoringUtils.addSource(loadQueueFull, "perfCntCondMmemqFull")
   BoringUtils.addSource(storeQueueFull, "perfCntCondMstqFull")
 
-  val reqpc = Mux(storeReadygo, storeQueue(0.U).pc, Mux(havePendingDmemReq, loadQueue(loadDmemPtr).pc, io.uopIn.decode.cf.pc))
+  val reqpc = Mux(storeReadygo, storeQueue(0.U).pc, Mux(havePendingDmemReq, loadQueue(loadDmemPtr).pc, Mux(dtlbEnable, loadQueue(dtlbRespUser.ldqidx).pc, loadQueue(dtlbRespUser.ldqidx).pc)))
   Debug(){
     printf("[DMEM] req v %x r %x addr %x data %x op %b id %x  resp v %x r %x data %x op %b id %x time %x\n",
       dmem.req.valid, dmem.req.ready, dmem.req.bits.addr, dmem.req.bits.wdata, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx,
@@ -807,7 +846,11 @@ class LSU extends NOOPModule with HasLSUConst {
 
   val printMemTrace = false
   val addrTrack = List(
-    "h12345678".U
+    "h12345678".U,
+    "h8332b9c8".U,
+    "h8332b9ca".U,
+    "h8332b9cc".U,
+    "h8332b9ce".U
   )
 
   when(printMemTrace.B || addrTrack.map(i => dmem.req.bits.addr === i).foldRight(false.B)((sum, i) => sum | i)){

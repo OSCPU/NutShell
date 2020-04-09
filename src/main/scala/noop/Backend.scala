@@ -11,8 +11,15 @@ trait HasBackendConst{
   // val multiIssue = true
   val robSize = 16
   val robWidth = 2
+  val robInstCapacity = robSize * robWidth
   val rmqSize = 4 // register map queue size
   val prfAddrWidth = log2Up(robSize) + log2Up(robWidth) // physical rf addr width
+
+  val DispatchWidth = 2
+  val CommitWidth = 2
+  val RetireWidth = 2
+
+  val enableBranchEarlyRedirect = true
 }
 
 // Out Of Order Execution Backend 
@@ -35,10 +42,6 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // There is only 1 BRU (combined with ALU1)
   // There is only 1 LSU
 
-  val DispatchWidth = 2
-  val CommitWidth = 2
-  val RetireWidth = 2
-
   val cdb = Wire(Vec(CommitWidth, Valid(new OOCommitIO)))
   val rf = new RegFile
   val rob = Module(new ROB)
@@ -47,19 +50,24 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   when (rob.io.wb(0).rfWen) { rf.write(rob.io.wb(0).rfDest, rob.io.wb(0).rfData) }
   when (rob.io.wb(1).rfWen) { rf.write(rob.io.wb(1).rfDest, rob.io.wb(1).rfData) }
 
+  val alu1rs = Module(new RS(priority = true, name = "ALU1RS"))
+  val alu2rs = Module(new RS(priority = true, name = "ALU2RS"))
+  val csrrs  = Module(new RS(priority = true, name = "CSRRS", size = 1)) // CSR & MOU
+  val lsurs  = Module(new RS(fifo = true, name = "LSURS")) // FIXIT: out of order l/s disabled
+  val mdurs  = Module(new RS(priority = true, pipelined = false, name = "MDURS"))
+
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
-  io.redirect <> rob.io.redirect
+  val bruRedirect = Wire(new RedirectIO)
+  io.redirect := Mux(rob.io.redirect.valid, rob.io.redirect, bruRedirect)
   List.tabulate(DispatchWidth)(i => {
     rob.io.in(i).valid := io.in(i).valid && instCango(i)
     io.in(i).ready := rob.io.in(i).ready && instCango(i)
     rob.io.in(i).bits := io.in(i).bits
   })
 
-  val alu1rs = Module(new RS(priority = true, name = "ALU1RS"))
-  val alu2rs = Module(new RS(priority = true, name = "ALU2RS"))
-  val csrrs  = Module(new RS(priority = true, name = "CSRRS", size = 1)) // CSR & MOU
-  val lsurs  = Module(new RS(fifo = true, name = "LSURS")) // FIXIT: out of order l/s disabled
-  val mdurs  = Module(new RS(priority = true, pipelined = false, name = "MDURS"))
+  Debug(){
+    when(bruRedirect.valid){printf("[MPR] %d: bruRedirect pc %x idx %x to %x\n", GTimer(), cdb(0).bits.decode.cf.pc, cdb(0).bits.prfidx, bruRedirect.target)}
+  }
 
   // ------------------------------------------------
   // Backend stage 1
@@ -169,12 +177,17 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val haveUnfinishedStore = Wire(Bool())
   when((rob.io.empty || io.flush) && !haveUnfinishedStore){ blockReg := false.B }
   when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire()){ blockReg := true.B }
+  val mispredictionRecoveryReg = RegInit(false.B)
+  when(io.redirect.valid && io.redirect.rtype === 1.U){ mispredictionRecoveryReg := true.B }
+  when(rob.io.empty || io.flush){ mispredictionRecoveryReg := false.B }
+  val mispredictionRecovery = mispredictionRecoveryReg && !rob.io.empty || io.redirect.valid && io.redirect.rtype === 1.U // waiting for misprediction recovery or misprediction detected
 
   instCango(0) := 
     io.in(0).valid &&
     rob.io.in(0).ready && // rob has empty slot
     !(hasBlockInst(0) && !pipeLineEmpty) &&
     !blockReg &&
+    !mispredictionRecovery &&
     LookupTree(io.in(0).bits.ctrl.fuType, List(
       FuType.alu -> alu1rs.io.in.ready,
       FuType.lsu -> lsurs.io.in.ready,
@@ -189,6 +202,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     !hasBlockInst(0) && // there is no block inst
     !hasBlockInst(1) &&
     !blockReg &&
+    !mispredictionRecovery &&
     LookupTree(io.in(1).bits.ctrl.fuType, List(
       FuType.alu -> (alu2rs.io.in.ready && !ALUOpType.isBru(inst(1).decode.ctrl.fuOpType)),
       FuType.lsu -> (lsurs.io.in.ready && (lsuCnt < 2.U)),
@@ -205,6 +219,15 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val csrInst  = Mux(inst(0).decode.ctrl.fuType === FuType.csr || inst(0).decode.ctrl.fuType === FuType.mou, 0.U, noInst)
   val lsuInst  = Mux(inst(0).decode.ctrl.fuType === FuType.lsu, 0.U, Mux(inst(1).decode.ctrl.fuType === FuType.lsu, 1.U, noInst))
   val mduInst  = Mux(inst(0).decode.ctrl.fuType === FuType.mdu, 0.U, Mux(inst(1).decode.ctrl.fuType === FuType.mdu, 1.U, noInst))
+
+  val brMaskReg = RegInit(0.U(robInstCapacity.W))
+  val brMaskGen = brMaskReg & ~rob.io.brMaskClearVec
+  val brMask = Wire(Vec(robWidth+1, UInt(robInstCapacity.W)))
+  val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.in(i).bits.ctrl.fuOpType))
+  brMask(0) := brMaskGen
+  brMask(1) := brMaskGen | (UIntToOH(inst(0).prfDest) & Fill(robInstCapacity, io.in(0).fire() && isBranch(0)))
+  brMask(2) := brMask(1) | (UIntToOH(inst(1).prfDest) & Fill(robInstCapacity, io.in(1).fire() && isBranch(1)))
+  brMaskReg := Mux(io.flush, 0.U, brMask(2))
 
   alu1rs.io.in.valid := instCango(alu1Inst) 
   alu2rs.io.in.valid := instCango(alu2Inst) 
@@ -230,17 +253,22 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsurs.io.flush  := io.flush
   mdurs.io.flush  := io.flush
 
+  alu1rs.io.brMaskIn := brMask(alu1Inst)
+  alu2rs.io.brMaskIn := brMask(alu2Inst)
+  csrrs.io.brMaskIn  := brMask(csrInst)
+  lsurs.io.brMaskIn  := brMask(lsuInst)
+  mdurs.io.brMaskIn  := brMask(mduInst)
+
   alu1rs.io.cdb <> cdb
   alu2rs.io.cdb <> cdb
   csrrs.io.cdb  <> cdb
   lsurs.io.cdb  <> cdb
   mdurs.io.cdb  <> cdb
 
-  //TODO: send ls exception to csr
-
   List.tabulate(DispatchWidth)(i => {
     rob.io.in(i).valid := instCango(i)
     rob.io.in(i).bits := inst(i).decode
+    rob.io.brMaskIn(i) := brMask(i)
   })
 
   // ------------------------------------------------
@@ -275,8 +303,17 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1commit.commits := aluOut
   alu1commit.prfidx := alu1rs.io.out.bits.prfDest
   // commit redirect
-  alu1commit.decode.cf.redirect := alu1.io.redirect
-  alu1commit.exception := false.B
+  bruRedirect :=  alu1.io.redirect
+  if(enableBranchEarlyRedirect){
+    alu1commit.decode.cf.redirect := alu1.io.redirect
+    alu1commit.exception := false.B
+    bruRedirect.valid := alu1.io.redirect.valid && alu1rs.io.out.fire()
+  } else {
+    alu1commit.decode.cf.redirect := alu1.io.redirect
+    alu1commit.decode.cf.redirect.rtype := 0.U // force set rtype to 0
+    alu1commit.exception := false.B
+    bruRedirect.valid := false.B
+  }
 
   // def isBru(func: UInt) = func(4)
   val alu2 = Module(new ALU)
@@ -296,6 +333,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu2commit.commits := alu2Out
   alu2commit.prfidx := alu2rs.io.out.bits.prfDest
   alu2commit.decode.cf.redirect.valid := false.B
+  alu2commit.decode.cf.redirect.rtype := DontCare
   alu2commit.exception := false.B
 
   val lsu = Module(new LSU)
@@ -312,6 +350,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     dtlbPF = lsuTlbPF
   )
   lsu.io.uopIn := lsuUop
+  lsu.io.brMaskIn := lsurs.io.brMaskOut
+  lsu.io.cdb := cdb
   lsu.io.scommit := rob.io.scommit
   haveUnfinishedStore := lsu.io.haveUnfinishedStore
   lsu.io.flush := io.flush
@@ -327,6 +367,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsucommit.commits := lsuOut
   lsucommit.prfidx := lsu.io.uopOut.prfDest
   lsucommit.decode.cf.redirect.valid := false.B
+  lsucommit.decode.cf.redirect.rtype := DontCare
   lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
   // fix exceptionVec
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
@@ -352,6 +393,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.commits := mduOut
   mducommit.prfidx := mdurs.io.out.bits.prfDest
   mducommit.decode.cf.redirect.valid := false.B
+  mducommit.decode.cf.redirect.rtype := DontCare
   mducommit.exception := false.B
   mdurs.io.commit.get := mdu.io.out.fire()
 
