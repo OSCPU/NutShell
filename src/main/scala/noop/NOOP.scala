@@ -11,6 +11,7 @@ import top.Settings
 
 trait HasNOOPParameter {
   val XLEN = 64
+  val NXLEN = if (Settings.IsRV32) 32 else 64
   val HasMExtension = true
   val HasCExtension = true
   val HasDiv = true

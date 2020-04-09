@@ -37,12 +37,14 @@ class Emulator {
     macro(16); macro(17); macro(18); macro(19); macro(20); macro(21); macro(22); macro(23);
     macro(24); macro(25); macro(26); macro(27); macro(28); macro(29); macro(30); macro(31);
     r[DIFFTEST_THIS_PC] = dut_ptr->io_difftest_thisPC;
+#ifndef __RV32__
     r[DIFFTEST_MSTATUS] = dut_ptr->io_difftest_mstatus;
     r[DIFFTEST_SSTATUS] = dut_ptr->io_difftest_sstatus;
     r[DIFFTEST_MEPC   ] = dut_ptr->io_difftest_mepc;
     r[DIFFTEST_SEPC   ] = dut_ptr->io_difftest_sepc;
     r[DIFFTEST_MCAUSE ] = dut_ptr->io_difftest_mcause;
     r[DIFFTEST_SCAUSE ] = dut_ptr->io_difftest_scause;
+#endif
   }
 
   public:

@@ -5,7 +5,13 @@
 #include <assert.h>
 #include <string.h>
 
+#define __RV32__
+
+#ifdef __RV32__
+typedef uint32_t rtlreg_t;
+#else
 typedef uint64_t rtlreg_t;
+#endif
 
 typedef uint64_t paddr_t;
 typedef uint64_t vaddr_t;
@@ -17,12 +23,14 @@ typedef uint16_t ioaddr_t;
 // 0~31: GPRs
 enum {
   DIFFTEST_THIS_PC = 32,
+#ifndef __RV32__
   DIFFTEST_MSTATUS,
   DIFFTEST_MCAUSE,
   DIFFTEST_MEPC,
   DIFFTEST_SSTATUS,
   DIFFTEST_SCAUSE,
   DIFFTEST_SEPC,
+#endif
   DIFFTEST_NR_REG
 };
 

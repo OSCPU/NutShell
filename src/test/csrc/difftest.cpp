@@ -74,9 +74,11 @@ static const char *reg_name[DIFFTEST_NR_REG] = {
   "s0", "s1", "a0", "a1", "a2", "a3", "a4", "a5",
   "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7",
   "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6",
-  "this_pc",
-  "mstatus", "mcause", "mepc",
+  "this_pc"
+#ifndef __RV32__
+  ,"mstatus", "mcause", "mepc",
   "sstatus", "scause", "sepc"
+#endif
 };
 
 int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,

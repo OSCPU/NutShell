@@ -82,6 +82,15 @@ class FunctionUnitIO extends NOOPBundle {
   val out = Decoupled(Output(UInt(XLEN.W)))
 }
 
+class FunctionUnitIO32 extends NOOPBundle {
+  val in = Flipped(Decoupled(new Bundle {
+    val src1 = Output(UInt(NXLEN.W))
+    val src2 = Output(UInt(NXLEN.W))
+    val func = Output(FuOpType())
+  }))
+  val out = Decoupled(Output(UInt(NXLEN.W)))
+}
+
 class ForwardIO extends NOOPBundle {
   val valid = Output(Bool())
   val wb = new WriteBackIO

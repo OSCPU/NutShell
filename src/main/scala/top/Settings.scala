@@ -17,6 +17,7 @@ trait OoOCore {
   val HasDcache = true
   val HasIcache = true
   val MmodeOnly = false
+  val IsRV32 = false
 }
 
 trait SeqCore {
@@ -30,6 +31,7 @@ trait SeqCore {
   val HasDcache = true
   val HasIcache = true
   val MmodeOnly = false
+  val IsRV32 = false
 }
 
 trait SmallCore {
@@ -43,6 +45,7 @@ trait SmallCore {
   val HasDcache = false
   val HasIcache = false
   val MmodeOnly = true
+  val IsRV32 = true
 }
 
 object Settings extends Common with SmallCore {}
