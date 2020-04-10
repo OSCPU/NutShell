@@ -111,7 +111,7 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   ))
   io.out.bits.data.imm  := Mux(isRVC, immrvc, imm)
 
-  when (fuType === FuType.alu) {
+  when (fuType === FuType.bru) {
     def isLink(reg: UInt) = (reg === 1.U || reg === 5.U)
     when (isLink(rfDest) && fuOpType === ALUOpType.jal) { io.out.bits.ctrl.fuOpType := ALUOpType.call }
     when (fuOpType === ALUOpType.jalr) {

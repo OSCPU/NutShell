@@ -46,10 +46,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val rf = new RegFile
   val rob = Module(new ROB)
 
-  val alu1rs = Module(new RS(priority = true, name = "ALU1RS"))
-  val alu2rs = Module(new RS(priority = true, name = "ALU2RS"))
+  val brurs  = Module(new RS(priority = true, size = 8, name = "BRURS"))
+  val alu1rs = Module(new RS(priority = true, size = 8, name = "ALU1RS"))
+  val alu2rs = Module(new RS(priority = true, size = 8, name = "ALU2RS"))
   val csrrs  = Module(new RS(priority = true, name = "CSRRS", size = 1)) // CSR & MOU
-  val lsurs  = Module(new RS(fifo = true, name = "LSURS")) // FIXIT: out of order l/s disabled
+  val lsurs  = Module(new RS(fifo = true, size = 8, name = "LSURS")) // FIXIT: out of order l/s disabled
   val mdurs  = Module(new RS(priority = true, pipelined = false, name = "MDURS"))
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
@@ -90,7 +91,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val lsuCnt = Wire(UInt(2.W)) 
   lsuCnt := List.tabulate(robWidth)(i => (io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.lsu)).foldRight(0.U)((sum, i) => sum +& i)
   val bruCnt = Wire(UInt(2.W)) 
-  bruCnt := List.tabulate(robWidth)(i => (io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.in(i).bits.ctrl.fuOpType))).foldRight(0.U)((sum, i) => sum +& i)
+  bruCnt := List.tabulate(robWidth)(i => (io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.bru && ALUOpType.isBru(io.in(i).bits.ctrl.fuOpType))).foldRight(0.U)((sum, i) => sum +& i)
   val csrCnt = Wire(UInt(2.W)) 
   csrCnt := List.tabulate(robWidth)(i => (io.in(i).valid && (io.in(i).bits.ctrl.fuType === FuType.csr || io.in(i).bits.ctrl.fuType === FuType.mou))).foldRight(0.U)((sum, i) => sum +& i)
 
@@ -191,6 +192,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     !blockReg &&
     !mispredictionRecovery &&
     LookupTree(io.in(0).bits.ctrl.fuType, List(
+      FuType.bru -> brurs.io.in.ready,
       FuType.alu -> alu1rs.io.in.ready,
       FuType.lsu -> lsurs.io.in.ready,
       FuType.mdu -> mdurs.io.in.ready,
@@ -206,7 +208,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     !blockReg &&
     !mispredictionRecovery &&
     LookupTree(io.in(1).bits.ctrl.fuType, List(
-      FuType.alu -> (alu2rs.io.in.ready && !ALUOpType.isBru(inst(1).decode.ctrl.fuOpType)),
+      FuType.bru -> (brurs.io.in.ready && (bruCnt < 2.U)),
+      FuType.alu -> (alu2rs.io.in.ready),
       FuType.lsu -> (lsurs.io.in.ready && (lsuCnt < 2.U)),
       FuType.mdu -> (mdurs.io.in.ready && (mduCnt < 2.U)),
       FuType.csr -> (csrrs.io.in.ready && (csrCnt < 2.U)),
@@ -216,6 +219,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   assert(!(instCango(1) && !instCango(0))) // insts must be dispatched in seq
 
   val noInst = 2.U
+  val bruInst  = Mux(inst(0).decode.ctrl.fuType === FuType.bru, 0.U, Mux(inst(1).decode.ctrl.fuType === FuType.bru, 1.U, noInst))
   val alu1Inst = Mux(inst(0).decode.ctrl.fuType === FuType.alu, 0.U, noInst)
   val alu2Inst = Mux(inst(1).decode.ctrl.fuType === FuType.alu, 1.U, noInst)
   val csrInst  = Mux(inst(0).decode.ctrl.fuType === FuType.csr || inst(0).decode.ctrl.fuType === FuType.mou, 0.U, noInst)
@@ -239,12 +243,14 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     printf("[brMAsk] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
   }
 
+  brurs.io.in.valid  := instCango(bruInst) 
   alu1rs.io.in.valid := instCango(alu1Inst) 
   alu2rs.io.in.valid := instCango(alu2Inst) 
   csrrs.io.in.valid  := instCango(csrInst)
   lsurs.io.in.valid  := instCango(lsuInst)
   mdurs.io.in.valid  := instCango(mduInst)
 
+  brurs.io.in.bits  := inst(bruInst) 
   alu1rs.io.in.bits := inst(alu1Inst) 
   alu2rs.io.in.bits := inst(alu2Inst) 
   csrrs.io.in.bits  := inst(csrInst)
@@ -257,18 +263,21 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   //   rs(i).io.commit.bits := cdb.bits
   // )}
 
+  brurs.io.flush  := flushBackend
   alu1rs.io.flush := flushBackend
   alu2rs.io.flush := flushBackend
   csrrs.io.flush  := flushBackend
   lsurs.io.flush  := flushBackend
   mdurs.io.flush  := flushBackend
 
+  brurs.io.brMaskIn  := brMask(alu1Inst)
   alu1rs.io.brMaskIn := brMask(alu1Inst)
   alu2rs.io.brMaskIn := brMask(alu2Inst)
   csrrs.io.brMaskIn  := brMask(csrInst)
   lsurs.io.brMaskIn  := brMask(lsuInst)
   mdurs.io.brMaskIn  := brMask(mduInst)
 
+  brurs.io.cdb  <> cdb
   alu1rs.io.cdb <> cdb
   alu2rs.io.cdb <> cdb
   csrrs.io.cdb  <> cdb
@@ -296,7 +305,37 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // Function Units
   // TODO: FU template
 
-  val alu1 = Module(new ALU(hasBru = true))
+  val bru = Module(new ALU(hasBru = true))
+  val brucommit = Wire(new OOCommitIO)
+  val bruOut = bru.access(
+    valid = brurs.io.out.valid, 
+    src1 = brurs.io.out.bits.decode.data.src1, 
+    src2 = brurs.io.out.bits.decode.data.src2, 
+    func = brurs.io.out.bits.decode.ctrl.fuOpType
+  )
+  val bruWritebackReady = Wire(Bool())
+  bru.io.cfIn := brurs.io.out.bits.decode.cf
+  bru.io.offset := brurs.io.out.bits.decode.data.imm
+  bru.io.out.ready := bruWritebackReady
+  brucommit.decode := brurs.io.out.bits.decode
+  brucommit.isMMIO := false.B
+  brucommit.intrNO := 0.U
+  brucommit.commits := bruOut
+  brucommit.prfidx := brurs.io.out.bits.prfDest
+  // commit redirect
+  bruRedirect :=  bru.io.redirect
+  if(enableBranchEarlyRedirect){
+    brucommit.decode.cf.redirect := bru.io.redirect
+    brucommit.exception := false.B
+    bruRedirect.valid := bru.io.redirect.valid && brurs.io.out.fire()
+  } else {
+    brucommit.decode.cf.redirect := bru.io.redirect
+    brucommit.decode.cf.redirect.rtype := 0.U // force set rtype to 0
+    brucommit.exception := false.B
+    bruRedirect.valid := false.B
+  }
+
+  val alu1 = Module(new ALU())
   val alu1commit = Wire(new OOCommitIO)
   val aluOut = alu1.access(
     valid = alu1rs.io.out.valid, 
@@ -313,18 +352,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1commit.intrNO := 0.U
   alu1commit.commits := aluOut
   alu1commit.prfidx := alu1rs.io.out.bits.prfDest
-  // commit redirect
-  bruRedirect :=  alu1.io.redirect
-  if(enableBranchEarlyRedirect){
-    alu1commit.decode.cf.redirect := alu1.io.redirect
-    alu1commit.exception := false.B
-    bruRedirect.valid := alu1.io.redirect.valid && alu1rs.io.out.fire()
-  } else {
-    alu1commit.decode.cf.redirect := alu1.io.redirect
-    alu1commit.decode.cf.redirect.rtype := 0.U // force set rtype to 0
-    alu1commit.exception := false.B
-    bruRedirect.valid := false.B
-  }
+  alu1commit.decode.cf.redirect.valid := false.B
+  alu1commit.decode.cf.redirect.rtype := DontCare
+  alu1commit.exception := false.B
 
   // def isBru(func: UInt) = func(4)
   val alu2 = Module(new ALU)
@@ -475,15 +505,16 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // ------------------------------------------------
 
   // CDB arbit
-  val (srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU) = (0, 1, 2, 3, 4, 5)
-  val commit = List(alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit)
-  val commitValid = List(alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid)
+  val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU) = (0, 1, 2, 3, 4, 5, 6)
+  val commit = List(brucommit, alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit)
+  val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid)
 
   val WritebackPriority = Seq(
     srcCSR,
     srcMOU,
     srcLSU,
     srcMDU,
+    srcBRU,
     srcALU1,
     srcALU2
   )
@@ -525,9 +556,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   cdb(1).bits := cdbSrc2
   // cdb(1).ready := true.B
 
-  alu1WritebackReady := commitValidVec(4)
-  alu2WritebackReady := commitValidVec(5)
+  bruWritebackReady  := commitValidVec(4)
+  alu1WritebackReady := commitValidVec(5)
+  alu2WritebackReady := commitValidVec(6)
 
+  brurs.io.out.ready  := bru.io.in.ready
   alu1rs.io.out.ready := alu1.io.in.ready
   alu2rs.io.out.ready := alu2.io.in.ready
   csrrs.io.out.ready := csr.io.in.ready
@@ -540,8 +573,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // Performance Counter
 
   val isBru = ALUOpType.isBru(alu1commit.decode.ctrl.fuOpType)
-  BoringUtils.addSource(alu1.io.out.fire() && !isBru, "perfCntCondMaluInstr") //TODO: Fix it
-  BoringUtils.addSource(alu1.io.out.fire() && isBru, "perfCntCondMbruInstr") //TODO: Fix it
+  assert(!(isBru && alu1.io.out.fire()))
+  BoringUtils.addSource(alu1.io.out.fire(), "perfCntCondMaluInstr") //TODO: Fix it
+  BoringUtils.addSource(bru.io.out.fire(), "perfCntCondMbruInstr") //TODO: Fix it
   BoringUtils.addSource(lsu.io.out.fire(), "perfCntCondMlsuInstr")
   BoringUtils.addSource(mdu.io.out.fire(), "perfCntCondMmduInstr")
 

@@ -31,6 +31,7 @@ trait HasNOOPConst {
   val CacheReadWidth = 8
   val ICacheUserBundleWidth = 39*2 + 9 // TODO: this const depends on VAddrBits
   val DCacheUserBundleWidth = 16
+  val IndependentBru = true
 }
 
 abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO with HasBackendConst
