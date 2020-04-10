@@ -75,15 +75,6 @@ class OOCommitIO extends NOOPBundle with HasBackendConst{
 
 class FunctionUnitIO extends NOOPBundle {
   val in = Flipped(Decoupled(new Bundle {
-    val src1 = Output(UInt(XLEN.W))
-    val src2 = Output(UInt(XLEN.W))
-    val func = Output(FuOpType())
-  }))
-  val out = Decoupled(Output(UInt(XLEN.W)))
-}
-
-class FunctionUnitIO32 extends NOOPBundle {
-  val in = Flipped(Decoupled(new Bundle {
     val src1 = Output(UInt(NXLEN.W))
     val src2 = Output(UInt(NXLEN.W))
     val func = Output(FuOpType())

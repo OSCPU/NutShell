@@ -13,7 +13,7 @@ object MOUOpType {
   def sfence_vma = "b10".U
 }
 
-class MOUIO extends FunctionUnitIO32 {
+class MOUIO extends FunctionUnitIO {
   val cfIn = Flipped(new CtrlFlowIO)
   val redirect = new RedirectIO
 }

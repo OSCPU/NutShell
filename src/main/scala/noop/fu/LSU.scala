@@ -48,7 +48,7 @@ sealed trait HasLSUConst {
   val IndependentAddrCalcState = false
 }
 
-class LSUIO extends FunctionUnitIO32 {
+class LSUIO extends FunctionUnitIO {
   val wdata = Input(UInt(NXLEN.W))
   val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr
   val dmem = new SimpleBusUC(addrBits = VAddrBits)

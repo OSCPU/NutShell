@@ -245,7 +245,7 @@ trait HasCSRCommon {
   )
 }
 
-class CSRIO extends FunctionUnitIO32 {
+class CSRIO extends FunctionUnitIO {
   val cfIn = Flipped(new CtrlFlowIO)
   val redirect = new RedirectIO
   // for exception check

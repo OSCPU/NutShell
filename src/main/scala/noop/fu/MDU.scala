@@ -113,7 +113,7 @@ class Divider(len: Int = 64) extends NOOPModule {
   io.in.ready := (state === s_idle)
 }
 
-class MDUIO extends FunctionUnitIO32 {
+class MDUIO extends FunctionUnitIO {
 }
 
 class MDU extends NOOPModule {

@@ -48,7 +48,7 @@ object ALUOpType {
   def isBranchInvert(func: UInt) = func(0)
 }
 
-class ALUIO extends FunctionUnitIO32 {
+class ALUIO extends FunctionUnitIO {
   val cfIn = Flipped(new CtrlFlowIO)
   val redirect = new RedirectIO
   val offset = Input(UInt(XLEN.W))
