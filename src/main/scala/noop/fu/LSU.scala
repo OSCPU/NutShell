@@ -48,8 +48,8 @@ sealed trait HasLSUConst {
   val IndependentAddrCalcState = false
 }
 
-class LSUIO extends FunctionUnitIO {
-  val wdata = Input(UInt(XLEN.W))
+class LSUIO extends FunctionUnitIO32 {
+  val wdata = Input(UInt(NXLEN.W))
   val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr
   val dmem = new SimpleBusUC(addrBits = VAddrBits)
   val isMMIO = Output(Bool())
@@ -59,19 +59,19 @@ class LSUIO extends FunctionUnitIO {
 }
 
 class StoreQueueEntry extends NOOPBundle{
-  val src1  = UInt(XLEN.W)
-  val src2  = UInt(XLEN.W)
-  val wdata = UInt(XLEN.W)
+  val src1  = UInt(NXLEN.W)
+  val src2  = UInt(NXLEN.W)
+  val wdata = UInt(NXLEN.W)
   val func  = UInt(6.W)
 }
 
 class AtomALU extends NOOPModule {
   val io = IO(new NOOPBundle{
-    val src1 = Input(UInt(XLEN.W))
-    val src2 = Input(UInt(XLEN.W))
+    val src1 = Input(UInt(NXLEN.W))
+    val src2 = Input(UInt(NXLEN.W))
     val func = Input(UInt(7.W))
     val isWordOp = Input(Bool())
-    val result = Output(UInt(XLEN.W))
+    val result = Output(UInt(NXLEN.W))
   })
 
   // src1: load result
@@ -80,10 +80,10 @@ class AtomALU extends NOOPModule {
   val src2 = io.src2
   val func = io.func
   val isAdderSub = !LSUOpType.isAdd(func) 
-  val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
+  val adderRes = (src1 +& (src2 ^ Fill(NXLEN, isAdderSub))) + isAdderSub
   val xorRes = src1 ^ src2
-  val sltu = !adderRes(XLEN)
-  val slt = xorRes(XLEN-1) ^ sltu
+  val sltu = !adderRes(NXLEN)
+  val slt = xorRes(NXLEN-1) ^ sltu
 
   val res = LookupTreeDefault(func(5, 0), adderRes, List(
     LSUOpType.amoswap -> src2,
@@ -97,7 +97,7 @@ class AtomALU extends NOOPModule {
     LSUOpType.amomaxu -> Mux(sltu(0), src2, src1)
   ))
 
-  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res)
+  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res(NXLEN-1,0))
 }
 
 class LSU extends NOOPModule with HasLSUConst {
@@ -151,17 +151,19 @@ class LSU extends NOOPModule with HasLSUConst {
     val dtlbFinish = WireInit(false.B)
     val dtlbPF = WireInit(false.B)
     val dtlbEnable = WireInit(false.B)
-    BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
-    BoringUtils.addSink(dtlbPF, "DTLBPF")
-    BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+    if (Settings.HasDTLB) {
+      BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
+      BoringUtils.addSink(dtlbPF, "DTLBPF")
+      BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+    }
 
     // LSU control FSM state
     val s_idle :: s_exec :: s_load :: s_lr :: s_sc :: s_amo_l :: s_amo_a :: s_amo_s :: Nil = Enum(8)
 
     // LSU control FSM
     val state = RegInit(s_idle)
-    val atomMemReg = Reg(UInt(XLEN.W))
-    val atomRegReg = Reg(UInt(XLEN.W))
+    val atomMemReg = Reg(UInt(NXLEN.W))
+    val atomRegReg = Reg(UInt(NXLEN.W))
     val atomALU = Module(new AtomALU)
     atomALU.io.src1 := atomMemReg
     atomALU.io.src2 := io.wdata
@@ -394,9 +396,11 @@ class LSExecUnit extends NOOPModule {
   val dtlbFinish = WireInit(false.B)
   val dtlbPF = WireInit(false.B)
   val dtlbEnable = WireInit(false.B)
-  BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
-  BoringUtils.addSink(dtlbPF, "DTLBPF")
-  BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+  if (Settings.HasDTLB) {
+    BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
+    BoringUtils.addSink(dtlbPF, "DTLBPF")
+    BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+  }
 
   io.dtlbPF := dtlbPF
 
@@ -425,7 +429,7 @@ class LSExecUnit extends NOOPModule {
   }
 
   val size = func(1,0)
-  dmem.req.bits.apply(addr = addr(VAddrBits-1, 0), size = size, wdata = genWdata(io.wdata, size),
+  dmem.req.bits.apply(addr = ZeroExt(addr(NXLEN-1,0), VAddrBits), size = size, wdata = genWdata(io.wdata, size),
     wmask = genWmask(addr, size), cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
   dmem.req.valid := valid && (state === s_idle) && !io.loadAddrMisaligned && !io.storeAddrMisaligned
   dmem.resp.ready := true.B
@@ -450,12 +454,12 @@ class LSExecUnit extends NOOPModule {
     "b111".U -> rdataLatch(63, 56)
   ))
   val rdataPartialLoad = LookupTree(func, List(
-      LSUOpType.lb   -> SignExt(rdataSel(7, 0) , XLEN),
-      LSUOpType.lh   -> SignExt(rdataSel(15, 0), XLEN),
-      LSUOpType.lw   -> SignExt(rdataSel(31, 0), XLEN),
-      LSUOpType.lbu  -> ZeroExt(rdataSel(7, 0) , XLEN),
-      LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), XLEN),
-      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN)
+      LSUOpType.lb   -> SignExt(rdataSel(7, 0) , NXLEN),
+      LSUOpType.lh   -> SignExt(rdataSel(15, 0), NXLEN),
+      LSUOpType.lw   -> SignExt(rdataSel(31, 0), NXLEN),
+      LSUOpType.lbu  -> ZeroExt(rdataSel(7, 0) , NXLEN),
+      LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), NXLEN),
+      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), NXLEN)
   ))
   val addrAligned = LookupTree(func(1,0), List(
     "b00".U   -> true.B,            //b
@@ -464,7 +468,7 @@ class LSExecUnit extends NOOPModule {
     "b11".U   -> (addr(2,0) === 0.U)  //d
   ))
 
-  io.out.bits := Mux(partialLoad, rdataPartialLoad, rdata)
+  io.out.bits := Mux(partialLoad, rdataPartialLoad, rdata(NXLEN-1,0))
 
   io.isMMIO := DontCare
 
@@ -483,9 +487,4 @@ class LSExecUnit extends NOOPModule {
   BoringUtils.addSource(BoolStopWatch(dmem.isRead(), dmem.resp.fire()), "perfCntCondMloadStall")
   BoringUtils.addSource(BoolStopWatch(dmem.isWrite(), dmem.resp.fire()), "perfCntCondMstoreStall")
   BoringUtils.addSource(io.isMMIO, "perfCntCondMmmioInstr")
-  Debug() {
-    when (dmem.req.fire() && (addr === "h800027a4".U || genWdata(io.wdata, size)(31,0) === "h80000218".U)){
-      //printf("[LSUBP] time %d, addr %x, size %x, wdata_raw %x, wdata %x, isStore %x \n", GTimer(), addr, func(1,0), io.wdata, genWdata(io.wdata, size), isStore)
-    }
-  }
 }
