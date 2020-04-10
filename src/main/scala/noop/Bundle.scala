@@ -21,9 +21,9 @@ class CtrlSignalIO extends NOOPBundle {
 }
 
 class DataSrcIO extends NOOPBundle {
-  val src1 = Output(UInt(XLEN.W))
-  val src2 = Output(UInt(XLEN.W))
-  val imm  = Output(UInt(XLEN.W))
+  val src1 = Output(UInt(NXLEN.W))
+  val src2 = Output(UInt(NXLEN.W))
+  val imm  = Output(UInt(NXLEN.W))
 }
 
 class RedirectIO extends NOOPBundle {
@@ -54,14 +54,14 @@ class DecodeIO extends NOOPBundle {
 class WriteBackIO extends NOOPBundle {
   val rfWen = Output(Bool())
   val rfDest = Output(UInt(5.W))
-  val rfData = Output(UInt(XLEN.W))
+  val rfData = Output(UInt(NXLEN.W))
 }
 
 class CommitIO extends NOOPBundle {
   val decode = new DecodeIO
   val isMMIO = Output(Bool())
-  val intrNO = Output(UInt(XLEN.W))
-  val commits = Output(Vec(FuType.num, UInt(XLEN.W)))
+  val intrNO = Output(UInt(NXLEN.W))
+  val commits = Output(Vec(FuType.num, UInt(NXLEN.W)))
 }
 
 class OOCommitIO extends NOOPBundle with HasBackendConst{

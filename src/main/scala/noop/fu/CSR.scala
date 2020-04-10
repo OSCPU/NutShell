@@ -252,7 +252,7 @@ class CSRIO extends FunctionUnitIO {
   val instrValid = Input(Bool())
   val isBackendException = Input(Bool())
   // for differential testing
-  val intrNO = Output(UInt(XLEN.W))
+  val intrNO = Output(UInt(NXLEN.W))
   val imemMMU = Flipped(new MMUIO)
   val dmemMMU = Flipped(new MMUIO)
   val wenFix = Output(Bool())
