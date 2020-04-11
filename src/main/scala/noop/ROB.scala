@@ -41,10 +41,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   })
 
   def needMispredictionRecovery(brMask: UInt) = {
-    io.cdb(0).bits.decode.cf.redirect.valid && (io.cdb(0).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(0).bits.prfidx)
-    // List.tabulate(CommitWidth)(i => {
-      // io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx)
-    // }).foldRight(false.B)((sum, i) => sum | i)
+    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
   }
 
   def updateBrMask(brMask: UInt) = {
@@ -201,7 +198,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.redirect.valid := retireATerm && List.tabulate(robWidth)(i => 
     redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i)
   ).foldRight(false.B)((sum, i) => sum || i)
-  io.redirect.rtype := 0.U
+  // io.redirect.rtype := 0.U
   // TODO: redirect when inst1 is valid
 
   // retire: trigger exception

@@ -193,10 +193,7 @@ class LSU extends NOOPModule with HasLSUConst {
   }
 
   def needMispredictionRecovery(brMask: UInt) = {
-    io.cdb(0).bits.decode.cf.redirect.valid && (io.cdb(0).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(0).bits.prfidx)
-    // List.tabulate(CommitWidth)(i => {
-      // io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx)
-    // }).foldRight(false.B)((sum, i) => sum | i)
+    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
   }
 
   def updateBrMask(brMask: UInt) = {

@@ -233,7 +233,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val brMaskReg = RegInit(0.U(robInstCapacity.W))
   val brMaskGen = updateBrMask(brMaskReg & ~rob.io.brMaskClearVec)
   val brMask = Wire(Vec(robWidth+1, UInt(robInstCapacity.W)))
-  val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.in(i).bits.ctrl.fuOpType))
+  val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.bru)
   brMask(0) := brMaskGen
   brMask(1) := brMaskGen | (UIntToOH(inst(0).prfDest) & Fill(robInstCapacity, io.in(0).fire() && isBranch(0)))
   brMask(2) := brMask(1) | (UIntToOH(inst(1).prfDest) & Fill(robInstCapacity, io.in(1).fire() && isBranch(1)))
@@ -428,7 +428,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     src2 = mdurs.io.out.bits.decode.data.src2, 
     func = mdurs.io.out.bits.decode.ctrl.fuOpType
   )
-  mdu.io.out.ready := true.B //TODO
+  val mduWritebackReady = Wire(Bool())
+  mdu.io.out.ready := mduWritebackReady
+  // assert(!(mdu.io.out.valid && !mdu.io.out.ready))
   mducommit.decode := mdurs.io.out.bits.decode
   mducommit.isMMIO := false.B
   mducommit.intrNO := 0.U
@@ -556,6 +558,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   cdb(1).bits := cdbSrc2
   // cdb(1).ready := true.B
 
+  mduWritebackReady  := commitValidVec(3)
   bruWritebackReady  := commitValidVec(4)
   alu1WritebackReady := commitValidVec(5)
   alu2WritebackReady := commitValidVec(6)

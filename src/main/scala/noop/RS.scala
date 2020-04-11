@@ -47,10 +47,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val forceDequeue = WireInit(false.B)
 
   def needMispredictionRecovery(brMask: UInt) = {
-    io.cdb(0).bits.decode.cf.redirect.valid && (io.cdb(0).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(0).bits.prfidx)
-    // List.tabulate(CommitWidth)(i => {
-      // io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx)
-    // }).foldRight(false.B)((sum, i) => sum | i)
+    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
   }
 
   def updateBrMask(brMask: UInt) = {
@@ -120,16 +117,16 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   }
 
   Debug(){
-    when(io.out.fire()){printf("[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x wdst %x\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.decode.ctrl.rfDest)}
+    when(io.out.fire()){printf("[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x id %d\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.prfDest)}
   }
 
   Debug(){
     printf("[RS " + name + "] time %d\n", GTimer())
     printf("[RS " + name + "] pc           v src1               src2\n")
     for(i <- 0 to (size -1)){
-      printf("[RS " + name + "] 0x%x %x %x %x %x %x", decode(i).decode.cf.pc, valid(i), src1Rdy(i), src1(i), src2Rdy(i), src2(i))
+      printf("[RS " + name + "] 0x%x %x %x %x %x %x %d", decode(i).decode.cf.pc, valid(i), src1Rdy(i), src1(i), src2Rdy(i), src2(i), decode(i).prfDest)
       when(valid(i)){printf("  valid")}
-      printf("mask %x\n", brMask(i))
+      printf(" mask %x\n", brMask(i))
       // printf("\n")
     }
   }
