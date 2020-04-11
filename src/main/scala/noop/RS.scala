@@ -12,7 +12,7 @@ trait HasRSConst{
 }
 
 // Reservation Station
-class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
+class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, checkpoint: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
@@ -21,6 +21,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     val cdb = Vec(rsCommitWidth, Flipped(Valid(new OOCommitIO)))
     val flush = Input(Bool())
     val empty = Output(Bool())
+    val updateCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
+    val recoverCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
     val commit = if (!pipelined) Some(Input(Bool())) else None
   })
 
@@ -177,6 +179,13 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     when(io.in.fire()){priorityMask(enqueueSelect) := valid}
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
+  }
+
+  if(checkpoint){
+    io.updateCheckpoint.get.valid := io.in.fire()
+    io.updateCheckpoint.get.bits := enqueueSelect
+    io.recoverCheckpoint.get.valid := DontCare
+    io.recoverCheckpoint.get.bits := dequeueSelect
   }
 
 }

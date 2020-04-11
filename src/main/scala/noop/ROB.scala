@@ -38,6 +38,8 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
 
     // Misprediction recovery
     val brMaskClearVec = Output(UInt(robInstCapacity.W))
+    val updateCheckpoint = Input(Valid(UInt(log2Up(checkpointSize).W)))
+    val recoverCheckpoint = Input(Valid(UInt(log2Up(checkpointSize).W)))
   })
 
   def needMispredictionRecovery(brMask: UInt) = {
@@ -83,9 +85,25 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.empty := ringBufferEmpty
 
   // Register Map  
-  val rmtMap = Mem(NRReg, UInt(prfAddrWidth.W))
+  val rmtMap = Reg(Vec(NRReg, UInt(prfAddrWidth.W)))
   val rmtValid = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
-  // val rmtCommited = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
+
+  sealed class Checkpoint extends NOOPBundle {
+    val map = Vec(NRReg, UInt(prfAddrWidth.W))
+    val valid = Vec(NRReg, Bool())
+  }
+
+  val checkpoints= Reg(Vec(checkpointSize, new Checkpoint))
+  when(io.updateCheckpoint.valid){
+    val cpIn = Wire(new Checkpoint)
+    cpIn.map := rmtMap
+    cpIn.valid := rmtValid
+    checkpoints(io.updateCheckpoint.bits) := cpIn
+  }
+  when(io.recoverCheckpoint.valid){
+    rmtMap := checkpoints(io.recoverCheckpoint.bits).map
+    rmtValid := checkpoints(io.recoverCheckpoint.bits).valid
+  }
 
   forAllROBBanks((i: Int) => {
     io.aprf(2*i)        := rmtMap(io.in(i).bits.ctrl.rfSrc1)
@@ -176,6 +194,9 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       ){
         //TODO: make it prettier
         rmtValid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
+        (0 until checkpointSize).map(k => {
+          checkpoints(k).valid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
+        })
       }
     })
     ringBufferTail := ringBufferTail + 1.U
@@ -384,6 +405,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     BoringUtils.addSource(DontCare, "ilaWBUrfWen")
     BoringUtils.addSource(DontCare, "ilaWBUrfDest")
     BoringUtils.addSource(DontCare, "ilaWBUrfData")
+  }
+
+  Debug(){
+    when(io.empty){printf("%d: empty\n", GTimer())}
+    when(io.redirect.valid && io.redirect.rtype === 1.U){printf("%d: mbr finished\n", GTimer())}
   }
 
   // flush control

@@ -12,7 +12,7 @@ trait HasBackendConst{
   val robSize = 16
   val robWidth = 2
   val robInstCapacity = robSize * robWidth
-  val rmqSize = 4 // register map queue size
+  val checkpointSize = 8 // register map checkpoint size
   val prfAddrWidth = log2Up(robSize) + log2Up(robWidth) // physical rf addr width
 
   val DispatchWidth = 2
@@ -20,6 +20,7 @@ trait HasBackendConst{
   val RetireWidth = 2
 
   val enableBranchEarlyRedirect = true
+  val enableCheckpoint = false
 }
 
 // Out Of Order Execution Backend 
@@ -46,7 +47,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val rf = new RegFile
   val rob = Module(new ROB)
 
-  val brurs  = Module(new RS(priority = true, size = 8, name = "BRURS"))
+  val brurs  = Module(new RS(priority = true, size = checkpointSize, checkpoint = true, name = "BRURS"))
   val alu1rs = Module(new RS(priority = true, size = 8, name = "ALU1RS"))
   val alu2rs = Module(new RS(priority = true, size = 8, name = "ALU2RS"))
   val csrrs  = Module(new RS(priority = true, name = "CSRRS", size = 1)) // CSR & MOU
@@ -68,8 +69,13 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     rob.io.in(i).bits := io.in(i).bits
   })
 
-  Debug(){
-    when(bruRedirect.valid){printf("[MPR] %d: bruRedirect pc %x idx %x to %x\n", GTimer(), cdb(0).bits.decode.cf.pc, cdb(0).bits.prfidx, bruRedirect.target)}
+  brurs.io.updateCheckpoint.get <> rob.io.updateCheckpoint
+  brurs.io.recoverCheckpoint.get <> rob.io.recoverCheckpoint
+  if(enableCheckpoint){
+    rob.io.recoverCheckpoint.valid := io.redirect.valid && io.redirect.rtype === 1.U
+  } else {
+    rob.io.recoverCheckpoint.valid := false.B
+    rob.io.updateCheckpoint.valid := false.B
   }
 
   // ------------------------------------------------
@@ -183,7 +189,17 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val mispredictionRecoveryReg = RegInit(false.B)
   when(io.redirect.valid && io.redirect.rtype === 1.U){ mispredictionRecoveryReg := true.B }
   when(rob.io.empty || flushBackend){ mispredictionRecoveryReg := false.B }
-  val mispredictionRecovery = mispredictionRecoveryReg && !rob.io.empty || io.redirect.valid && io.redirect.rtype === 1.U // waiting for misprediction recovery or misprediction detected
+  val mispredictionRecovery = if(enableCheckpoint){
+    false.B
+  } else {
+    mispredictionRecoveryReg && !rob.io.empty || io.redirect.valid && io.redirect.rtype === 1.U // waiting for misprediction recovery or misprediction detected
+  }
+
+  Debug(){
+    when(flushBackend){printf("%d: flushbackend\n", GTimer())}
+    when(io.redirect.valid && io.redirect.rtype === 1.U){printf("%d: bpr start, redirect to %x\n", GTimer(), io.redirect.target)}
+    when(io.redirect.valid && io.redirect.rtype === 0.U){printf("%d: special redirect to %x\n", GTimer(), io.redirect.target)}
+  }
 
   instCango(0) := 
     io.in(0).valid &&
@@ -439,7 +455,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.decode.cf.redirect.valid := false.B
   mducommit.decode.cf.redirect.rtype := DontCare
   mducommit.exception := false.B
-  mdurs.io.commit.get := mdu.io.out.fire()
+  mdurs.io.commit.get := mdu.io.out.valid
 
   val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr || commitBackendException
   val csrUop = WireInit(csrrs.io.out.bits)
@@ -537,7 +553,10 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   }
   val commitValidVec = commitValidPriority.asUInt & ~notSecondMask.asUInt
 
-  // printf("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
+  when((mdu.io.out.valid && mdurs.io.out.valid && !mdu.io.out.ready)){
+    printf("[ERROR] %x %x %x ", mdu.io.out.valid, mdurs.io.out.valid, mdu.io.out.ready)
+    printf("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
+  }
 
   val cdbSrc1 = PriorityMux(commitValidPriority, commitPriority)
   val cdbSrc1Valid = PriorityMux(commitValidPriority, commitValidPriority)
