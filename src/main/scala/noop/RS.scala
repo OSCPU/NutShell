@@ -139,18 +139,19 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     val brMaskPReg = RegInit(0.U(robInstCapacity.W))
     val fuFlushReg = RegInit(false.B)
     val fuDecodeReg = RegEnable(io.out.bits, io.out.fire())
-    val needFlush = io.flush || needMispredictionRecovery(brMaskPReg)
     brMaskPReg := updateBrMask(brMaskPReg)
     when(io.out.fire()){ 
       fuValidReg := true.B 
-      brMaskPReg := io.brMaskOut
+      brMaskPReg := updateBrMask(io.brMaskOut)
     }
     when(io.commit.get){ fuValidReg := false.B }
-    when(needFlush && (fuValidReg || io.out.fire())){ fuFlushReg := true.B }
+    when((io.flush || needMispredictionRecovery(brMaskPReg)) && fuValidReg || (io.flush || needMispredictionRecovery(io.brMaskOut)) && io.out.fire()){ fuFlushReg := true.B }
     when(io.commit.get){ fuFlushReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
-    assert(!(io.out.fire() && io.commit.get && fuValidReg && !needFlush))
+    Debug(){
+      printf("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire())
+    }
   }
 
   if(fifo){
