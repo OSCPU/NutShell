@@ -15,7 +15,7 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   })
 
   val hasIntr = Wire(Bool())
-  val instr = io.in.bits.instr(31, 0)
+  val instr = io.in.bits.instr
   val decodeList = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val instrType :: fuType :: fuOpType :: Nil = // insert Instructions.DecodeDefault when interrupt comes
     Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault), intr, dec)}

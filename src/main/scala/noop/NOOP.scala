@@ -22,6 +22,7 @@ trait HasNOOPParameter {
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
   val VAddrBits = Settings.VAddrBits // VAddrBits is Virtual Memory addr bits
+  val NVAddrBits = if (Settings.IsRV32) 32 else Settings.VAddrBits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN

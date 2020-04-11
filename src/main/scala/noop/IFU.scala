@@ -6,6 +6,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import top.Settings
 
 trait HasResetVector{
   val resetFromSpiFlash = false
@@ -35,6 +36,28 @@ class IFU extends NOOPModule with HasResetVector {
 
   val nlp = Module(new NLP)
 
+  // nlpxxx_latch is used for the situation when I$ is disabled
+  val nlpvalidreg = RegInit(false.B)
+  val nlpvalid_latch = nlpvalidreg & !io.redirect.valid
+  val nlpbridx_latch = RegInit(0.U(4.W))
+  val nlptarget_latch = RegInit(0.U(VAddrBits.W))
+
+  when (nlp.io.out.valid) {
+    nlpvalidreg := true.B
+    nlpbridx_latch := nlp.io.brIdx.asUInt
+    nlptarget_latch := nlp.io.out.target
+  }
+
+  when (io.imem.req.fire() || io.redirect.valid) {
+    nlpvalidreg := false.B
+    nlpbridx_latch := 0.U
+    nlptarget_latch := 0.U
+  }
+
+  val bpuValid = if (Settings.HasIcache) nlp.io.out.valid else nlpvalid_latch
+  val bpuTarget = if (Settings.HasIcache) nlp.io.out.target else nlptarget_latch
+  val bpuBrIdx = if (Settings.HasIcache) nlp.io.brIdx.asUInt else nlpbridx_latch
+
   // cross instline inst branch predict logic "lateJump"
   // 
   // if "lateJump", icache will need to fetch next instline, then fetch redirect addr
@@ -54,11 +77,11 @@ class IFU extends NOOPModule with HasResetVector {
   val lateJumpTarget = RegEnable(nlp.io.out.target, lateJump && pcUpdate) // ???
 
   // predicted next pc
-  val pnpc = Mux(lateJump, snpc, nlp.io.out.target)
+  val pnpc = Mux(lateJump, snpc, bpuTarget)
  
   // next pc
   val npc = Wire(UInt(VAddrBits.W))
-  npc := Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(nlp.io.out.valid, pnpc, snpc)))
+  npc := Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bpuValid, pnpc, snpc)))
   // val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(nlp.io.out.valid, false.B, true.B)))) //for debug only
 
   // instValid: which part of an instline contains an valid inst
@@ -76,13 +99,7 @@ class IFU extends NOOPModule with HasResetVector {
   // e.g. brIdx 0010 means a branch is predicted/assigned at pc (offset 2)
   val brIdx = Wire(UInt(4.W))
   // predicted branch position index, 4 bit vector
-  val pbrIdx = nlp.io.brIdx.asUInt | (lateJump << 3)
-  def genBrIdx(pc: UInt) = LookupTree(pc(2,1), List(
-  "b00".U -> "b0001".U,
-  "b01".U -> "b0010".U,
-  "b10".U -> "b0100".U,
-  "b11".U -> "b1000".U
-))
+  val pbrIdx = bpuBrIdx | (lateJump << 3)
   brIdx := Mux(io.redirect.valid, 0.U, Mux(lateJumpLatch, 0.U, pbrIdx))
   
   //TODO: BP will be disabled shortly after a redirect request
