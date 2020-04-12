@@ -20,7 +20,7 @@ trait HasBackendConst{
   val RetireWidth = 2
 
   val enableBranchEarlyRedirect = true
-  val enableCheckpoint = false
+  val enableCheckpoint = true
 }
 
 // Out Of Order Execution Backend 
@@ -56,7 +56,12 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
-  val flushBackend = io.flush || rob.io.redirect.valid && rob.io.redirect.rtype === 1.U
+  val flushBackend = if(enableCheckpoint){
+    io.flush 
+  } else {
+    io.flush || rob.io.redirect.valid && rob.io.redirect.rtype === 1.U
+  }
+
   io.redirect := Mux(rob.io.redirect.valid && rob.io.redirect.rtype === 0.U, rob.io.redirect, bruRedirect)
 
   rob.io.cdb <> cdb
@@ -190,15 +195,15 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   when(io.redirect.valid && io.redirect.rtype === 1.U){ mispredictionRecoveryReg := true.B }
   when(rob.io.empty || flushBackend){ mispredictionRecoveryReg := false.B }
   val mispredictionRecovery = if(enableCheckpoint){
-    false.B
+    io.redirect.valid && io.redirect.rtype === 1.U
   } else {
     mispredictionRecoveryReg && !rob.io.empty || io.redirect.valid && io.redirect.rtype === 1.U // waiting for misprediction recovery or misprediction detected
   }
 
   Debug(){
     when(flushBackend){printf("%d: flushbackend\n", GTimer())}
-    when(io.redirect.valid && io.redirect.rtype === 1.U){printf("%d: bpr start, redirect to %x\n", GTimer(), io.redirect.target)}
-    when(io.redirect.valid && io.redirect.rtype === 0.U){printf("%d: special redirect to %x\n", GTimer(), io.redirect.target)}
+    when(io.redirect.valid && io.redirect.rtype === 1.U){printf("[REDIRECT] %d: bpr start, redirect to %x\n", GTimer(), io.redirect.target)}
+    when(io.redirect.valid && io.redirect.rtype === 0.U){printf("[REDIRECT] %d: special redirect to %x\n", GTimer(), io.redirect.target)}
   }
 
   instCango(0) := 
@@ -248,12 +253,13 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val brMaskReg = RegInit(0.U(robInstCapacity.W))
   val brMaskGen = updateBrMask(brMaskReg & ~rob.io.brMaskClearVec)
-  val brMask = Wire(Vec(robWidth+1, UInt(robInstCapacity.W)))
+  val brMask = Wire(Vec(robWidth+2, UInt(robInstCapacity.W)))
   val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.bru)
   brMask(0) := brMaskGen
   brMask(1) := brMaskGen | (UIntToOH(inst(0).prfDest) & Fill(robInstCapacity, io.in(0).fire() && isBranch(0)))
-  brMask(2) := brMask(1) | (UIntToOH(inst(1).prfDest) & Fill(robInstCapacity, io.in(1).fire() && isBranch(1)))
-  brMaskReg := Mux(flushBackend, 0.U, brMask(2))
+  brMask(2) := DontCare
+  brMask(3) := brMask(1) | (UIntToOH(inst(1).prfDest) & Fill(robInstCapacity, io.in(1).fire() && isBranch(1)))
+  brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(brurs.io.brMaskOut), brMask(3)))
 
   Debug(){
     printf("[brMAsk] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
@@ -286,7 +292,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsurs.io.flush  := flushBackend
   mdurs.io.flush  := flushBackend
 
-  brurs.io.brMaskIn  := brMask(alu1Inst)
+  brurs.io.brMaskIn  := brMask(bruInst)
   alu1rs.io.brMaskIn := brMask(alu1Inst)
   alu2rs.io.brMaskIn := brMask(alu2Inst)
   csrrs.io.brMaskIn  := brMask(csrInst)
@@ -523,9 +529,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // ------------------------------------------------
 
   // CDB arbit
-  val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU) = (0, 1, 2, 3, 4, 5, 6)
-  val commit = List(brucommit, alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit)
-  val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid)
+  val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU, srcNone) = (0, 1, 2, 3, 4, 5, 6, 7)
+  val commit = List(brucommit, alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit, DontCare)
+  val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
 
   val WritebackPriority = Seq(
     srcCSR,
@@ -534,7 +540,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     srcMDU,
     srcBRU,
     srcALU1,
-    srcALU2
+    srcALU2,
+    srcNone
   )
 
   val commitPriority = VecInit(WritebackPriority.map(i => commit(i)))
@@ -553,8 +560,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   }
   val commitValidVec = commitValidPriority.asUInt & ~notSecondMask.asUInt
 
-  when((mdu.io.out.valid && mdurs.io.out.valid && !mdu.io.out.ready)){
-    printf("[ERROR] %x %x %x ", mdu.io.out.valid, mdurs.io.out.valid, mdu.io.out.ready)
+  Debug(){
     printf("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
   }
 

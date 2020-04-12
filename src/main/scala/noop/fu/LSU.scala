@@ -185,7 +185,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val io = IO(new LSUIO)
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt, dtlbPF: Bool): UInt = {
-    this.valid := valid
+    this.valid := valid && !needMispredictionRecovery(io.brMaskIn)
     this.src1 := src1
     this.src2 := src2
     this.func := func
@@ -207,8 +207,14 @@ class LSU extends NOOPModule with HasLSUConst {
   val opResp = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val opReq = dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val ldqidxResp = dmemUserOut.ldqidx
-  val branchIndex = io.cdb(0).bits.prfidx //FIXIT
-  val bruFlush = io.cdb(0).bits.decode.cf.redirect.valid && io.cdb(0).bits.decode.cf.redirect.rtype === 1.U //FIXIT
+  val branchIndex = Mux(
+    io.cdb(0).valid && io.cdb(0).bits.decode.cf.redirect.valid && io.cdb(0).bits.decode.cf.redirect.rtype === 1.U,
+    io.cdb(0).bits.prfidx,
+    io.cdb(1).bits.prfidx
+  )
+  val bruFlush = List.tabulate(CommitWidth)(i => 
+    io.cdb(i).bits.decode.cf.redirect.valid && io.cdb(i).bits.decode.cf.redirect.rtype === 1.U
+  ).reduce(_ | _)
 
   // Decode
   val instr    = io.uopIn.decode.cf.instr
@@ -317,6 +323,13 @@ class LSU extends NOOPModule with HasLSUConst {
     loadQueue(loadTailPtr).finished := false.B
   }
 
+  // when branch, invalidate insts in wrong branch direction
+  List.tabulate(loadQueueSize)(i => {
+    when(loadQueue(i).brMask(branchIndex) && bruFlush){
+      loadQueue(i).valid := false.B
+    }
+    loadQueue(i).brMask := updateBrMask(loadQueue(i).brMask) // fixit, AS WELL AS STORE BRMASK !!!!!
+  })
   
   // write data to loadqueue
   val vaddrIsMMIO = AddressSpace.isMMIO(addr)
@@ -353,11 +366,11 @@ class LSU extends NOOPModule with HasLSUConst {
 
   Debug(){
     printf("[LSU LDQ] time %d\n", GTimer())
-    printf("[LSU LDQ] pc           id vaddr        paddr        func    op      data             mmio   valid   finished    exc \n")
+    printf("[LSU LDQ] pc           id vaddr        paddr        func    op      data             mmio   valid   finished    exc     mask\n")
     for(i <- 0 until loadQueueSize){
       printf(
-        "[LSU LDQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b valid:%b finished:%b%b exc:%b%b%b%b %d", 
-        loadQueue(i).pc, loadQueue(i).prfidx, loadQueue(i).vaddr, loadQueue(i).paddr, loadQueue(i).func, loadQueue(i).op, loadQueue(i).data, loadQueue(i).isMMIO, loadQueue(i).valid, loadQueue(i).tlbfin, loadQueue(i).finished, loadQueue(i).loadPageFault, loadQueue(i).storePageFault, loadQueue(i).loadAddrMisaligned, loadQueue(i).storeAddrMisaligned, i.U
+        "[LSU LDQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b valid:%b finished:%b%b exc:%b%b%b%b %x %d", 
+        loadQueue(i).pc, loadQueue(i).prfidx, loadQueue(i).vaddr, loadQueue(i).paddr, loadQueue(i).func, loadQueue(i).op, loadQueue(i).data, loadQueue(i).isMMIO, loadQueue(i).valid, loadQueue(i).tlbfin, loadQueue(i).finished, loadQueue(i).loadPageFault, loadQueue(i).storePageFault, loadQueue(i).loadAddrMisaligned, loadQueue(i).storeAddrMisaligned, loadQueue(i).brMask, i.U
       )
       when(loadQueue(i).valid){printf(" valid")}
       when(loadHeadPtr === i.U){printf(" head")}
@@ -409,7 +422,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val storeQueueConfirm = io.scommit // TODO: Argo only support 1 scommit / cycle
   // when a store inst actually writes data to dmem, mark it as `waiting for dmem resp`
   val storeQueueReqsend = dmem.req.fire() && MEMOpID.commitToSTQ(opReq)
-  val storeQueueSkipInst = !storeQueue(0).valid && storeCmtPtr =/= 0.U
+  val storeQueueSkipInst = !storeQueue(0).valid && storeHeadPtr =/= 0.U
   // when dmem try to commit to store queue, i.e. dmem report a write op is finished, dequeue
   // FIXIT: in current case, we can always assume a store is succeed after req.fire()
   // therefore storeQueueDequeue is not necessary 
@@ -432,6 +445,21 @@ class LSU extends NOOPModule with HasLSUConst {
   when(!storeQueueDequeue && (storeQueueEnqueue || storeQueueAMOEnqueue)){storeHeadPtr := storeHeadPtr + 1.U}
   when(io.flush){storeHeadPtr := nextStoreCmtPtr}
   assert(!(storeQueueEnqueue && storeQueueAMOEnqueue))
+
+  // when branch, invalidate insts in wrong branch direction
+  List.tabulate(storeQueueSize)(i => {
+    when(storeQueueDequeue){
+      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+        if(i != 0){ storeQueue(i-1).valid := false.B }
+      }
+      if(i != 0){ storeQueue(i-1).brMask := updateBrMask(storeQueue(i).brMask) }
+    }.otherwise{
+      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+        storeQueue(i).valid := false.B
+      }
+      storeQueue(i).brMask := updateBrMask(storeQueue(i).brMask)
+    }
+  })
 
   // write data to store queue
   val storeQueueEnqPtr = Mux(storeQueueDequeue, storeHeadPtr - 1.U, storeHeadPtr)
@@ -462,11 +490,11 @@ class LSU extends NOOPModule with HasLSUConst {
 
   Debug(){
     printf("[LSU STQ] time %d\n", GTimer())
-    printf("[LSU STQ] pc           id vaddr        paddr        func    op      data             mmio v \n")
+    printf("[LSU STQ] pc           id vaddr        paddr        func    op      data             mmio v mask \n")
     for(i <- 0 to (storeQueueSize - 1)){
       printf(
-        "[LSU STQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b %b %d", 
-        storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).paddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, storeQueue(i).valid, i.U
+        "[LSU STQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b %b %x %d", 
+        storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).paddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, storeQueue(i).valid, storeQueue(i).brMask, i.U
       )
       // when(storeAlloc === i.U){printf(" alloc")}
       when(storeHeadPtr === i.U){printf(" head")}
@@ -475,28 +503,6 @@ class LSU extends NOOPModule with HasLSUConst {
       printf("\n")
     }
   }
-
-  // when branch, invalidate insts in wrong branch direction
-  // brMask(i)(branchIndex) && cdb(0).decode.cf.redirect.valid && cdb(0).decode.cf.redirect.rtype === 1.U
-  List.tabulate(loadQueueSize)(i => {
-    when(loadQueue(i).brMask(branchIndex) && bruFlush){
-      loadQueue(i).valid := false.B
-    }
-    loadQueue(i).brMask := updateBrMask(loadQueue(i).brMask)
-  })
-  List.tabulate(storeQueueSize)(i => {
-    when(storeQueueDequeue){
-      when(storeQueue(i).brMask(branchIndex) && bruFlush){
-        if(i != 0){ storeQueue(i-1).valid := false.B }
-      }
-      if(i != 0){ storeQueue(i-1).brMask := updateBrMask(storeQueue(i).brMask) }
-    }.otherwise{
-      when(storeQueue(i).brMask(branchIndex) && bruFlush){
-        storeQueue(i).valid := false.B
-      }
-      storeQueue(i).brMask := updateBrMask(storeQueue(i).brMask)
-    }
-  })
 
   //-------------------------------------------------------
   // Load / Store Pipeline

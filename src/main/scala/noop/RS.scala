@@ -165,6 +165,13 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     // update priorityMask
     io.out.valid := instRdy(dequeueSelect)
     when(io.in.fire()){priorityMask(enqueueSelect) := valid}
+    List.tabulate(rsSize)(i => 
+      when(needMispredictionRecovery(brMask(i))){ 
+        List.tabulate(rsSize)(j => 
+          priorityMask(j)(i):= false.B 
+        )
+      }
+    )
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
@@ -177,6 +184,13 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     }))
     // update priorityMask
     when(io.in.fire()){priorityMask(enqueueSelect) := valid}
+    List.tabulate(rsSize)(i => 
+      when(needMispredictionRecovery(brMask(i))){ 
+        List.tabulate(rsSize)(j => 
+          priorityMask(j)(i):= false.B 
+        )
+      }
+    )
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
