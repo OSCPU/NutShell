@@ -385,6 +385,21 @@ class LSExecUnit extends NOOPModule {
     ))
   }
 
+  def genWmask32(addr: UInt, sizeEncode: UInt): UInt = {
+    LookupTree(sizeEncode, List(
+      "b00".U -> 0x1.U, //0001 << addr(1:0)
+      "b01".U -> 0x3.U, //0011
+      "b10".U -> 0xf.U  //1111
+    )) << addr(1, 0)
+  }
+  def genWdata32(data: UInt, sizeEncode: UInt): UInt = {
+    LookupTree(sizeEncode, List(
+      "b00".U -> Fill(4, data(7, 0)),
+      "b01".U -> Fill(2, data(15, 0)),
+      "b10".U -> data
+    ))
+  }
+
   val dmem = io.dmem
   val addrLatch = RegNext(addr)
   val isStore = valid && LSUOpType.isStore(func)
@@ -429,9 +444,15 @@ class LSExecUnit extends NOOPModule {
   }
 
   val size = func(1,0)
-  val fixedaddr = if (NXLEN == 32) SignExt(addr, VAddrBits) else addr(VAddrBits-1,0)
-  dmem.req.bits.apply(addr = fixedaddr, size = size, wdata = genWdata(io.wdata, size),
-    wmask = genWmask(addr, size), cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
+  val reqAddr  = if (NXLEN == 32) SignExt(addr, VAddrBits) else addr(VAddrBits-1,0)
+  val reqWdata = if (NXLEN == 32) genWdata32(io.wdata, size) else genWdata(io.wdata, size)
+  val reqWmask = if (NXLEN == 32) genWmask32(addr, size) else genWmask(addr, size)
+  dmem.req.bits.apply(
+    addr = reqAddr, 
+    size = size, 
+    wdata = reqWdata,
+    wmask = reqWmask,
+    cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
   dmem.req.valid := valid && (state === s_idle) && !io.loadAddrMisaligned && !io.storeAddrMisaligned
   dmem.resp.ready := true.B
 

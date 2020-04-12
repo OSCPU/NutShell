@@ -9,13 +9,13 @@
 
 #ifdef __RV32__
 typedef uint32_t rtlreg_t;
+typedef uint32_t paddr_t;
 #else
 typedef uint64_t rtlreg_t;
+typedef uint64_t paddr_t;
 #endif
 
-typedef uint64_t paddr_t;
 typedef uint64_t vaddr_t;
-
 typedef uint16_t ioaddr_t;
 
 #include "macro.h"

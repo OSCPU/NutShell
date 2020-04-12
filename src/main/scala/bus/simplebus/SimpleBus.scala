@@ -63,7 +63,7 @@ class SimpleBusReqBundle(val userBits: Int = 0, val addrBits: Int = 32) extends 
 
 class SimpleBusRespBundle(val userBits: Int = 0) extends SimpleBusBundle {
   val cmd = Output(SimpleBusCmd())
-  val rdata = Output(UInt(DataBits.W))
+  val rdata = Output(UInt(64.W))  // TODO: when frontend datapath support 32bit, set DataBits.W here
   val user = if (userBits > 0) Some(Output(UInt(userBits.W))) else None
 
   override def toPrintable: Printable = p"rdata = ${Hexadecimal(rdata)}, cmd = ${cmd}"

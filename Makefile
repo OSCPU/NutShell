@@ -9,6 +9,8 @@ MEM_GEN = ./scripts/vlsi_mem_gen
 SIMTOP = top.TestMain
 IMAGE ?= temp
 
+DATAWIDTH = 32
+
 .DEFAULT_GOAL = verilog
 
 help:
@@ -55,6 +57,7 @@ EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
 # dump vcd: --debug --trace
 VERILATOR_FLAGS = --top-module $(SIM_TOP) \
+  +define+RV$(DATAWIDTH)=1 \
   +define+VERILATOR=1 \
   +define+PRINTF_COND=1 \
   +define+RANDOMIZE_REG_INIT \
@@ -76,9 +79,9 @@ $(EMU_MK): $(SIM_TOP_V) | $(EMU_DEPS)
 	verilator --cc --exe $(VERILATOR_FLAGS) \
 		-o $(abspath $(EMU)) -Mdir $(@D) $^ $(EMU_DEPS)
 
-REF_SO := $(NEMU_HOME)/build/riscv32-nemu-interpreter-so
+REF_SO := $(NEMU_HOME)/build/riscv$(DATAWIDTH)-nemu-interpreter-so
 $(REF_SO):
-	$(MAKE) -C $(NEMU_HOME) ISA=riscv32 SHARE=1
+	$(MAKE) -C $(NEMU_HOME) ISA=riscv$(DATAWIDTH) SHARE=1
 
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS) $(REF_SO)
 	CPPFLAGS=-DREF_SO=\\\"$(REF_SO)\\\" $(MAKE) -C $(dir $(EMU_MK)) -f $(abspath $(EMU_MK))

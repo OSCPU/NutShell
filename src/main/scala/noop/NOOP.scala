@@ -25,7 +25,7 @@ trait HasNOOPParameter {
   val NVAddrBits = if (Settings.IsRV32) 32 else Settings.VAddrBits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
-  val DataBits = XLEN
+  val DataBits = NXLEN
   val DataBytes = DataBits / 8
   val EnableMultiIssue = Settings.EnableMultiIssue
   val EnableSuperScalarExec = Settings.EnableSuperScalarExec
