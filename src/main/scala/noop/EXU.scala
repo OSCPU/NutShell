@@ -18,10 +18,10 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
     val memMMU = Flipped(new MemMMUIO)
   })
 
-  val src1 = io.in.bits(0).data.src1(NXLEN-1,0)
-  val src2 = io.in.bits(0).data.src2(NXLEN-1,0)
-  val src3 = io.in.bits(1).data.src1(NXLEN-1,0)
-  val src4 = io.in.bits(1).data.src2(NXLEN-1,0)
+  val src1 = io.in.bits(0).data.src1(XLEN-1,0)
+  val src2 = io.in.bits(0).data.src2(XLEN-1,0)
+  val src3 = io.in.bits(1).data.src1(XLEN-1,0)
+  val src4 = io.in.bits(1).data.src2(XLEN-1,0)
 
   val pipeline2valid = io.in.valid && !io.flush && io.in.bits(1).pipeline2 && EnableSuperScalarExec.B
 
@@ -141,8 +141,8 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
 
   if (!p.FPGAPlatform) {
     val mon = Module(new Monitor)
-    val cycleCnt = WireInit(0.U(XLEN.W))
-    val instrCnt = WireInit(0.U(XLEN.W))
+    val cycleCnt = WireInit(0.U(64.W))
+    val instrCnt = WireInit(0.U(64.W))
     val nooptrap = io.in.bits(0).ctrl.isNoopTrap && io.in.valid
     mon.io.clk := clock
     mon.io.reset := reset.asBool

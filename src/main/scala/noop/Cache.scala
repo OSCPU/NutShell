@@ -662,8 +662,8 @@ class Cache_fake32(implicit val cacheConfig: CacheConfig) extends CacheModule {
 
   val addrLatch  = RegEnable(io.in.req.bits.addr, io.in.req.fire())
   val cmdLatch   = RegEnable(io.in.req.bits.cmd, io.in.req.fire())
-  val sizeLatch  = RegEnable(2.U, io.in.req.fire())  // always read/write 64bit
-  val wdataLatch = RegEnable(Fill(2, io.in.req.bits.wdata(31, 0)), io.in.req.fire())
+  val sizeLatch  = RegEnable(2.U, io.in.req.fire())  // always read/write 32bit
+  val wdataLatch = RegEnable(io.in.req.bits.wdata, io.in.req.fire())
   val wmaskLatch = RegEnable(io.in.req.bits.wmask, io.in.req.fire())
 
   val reqAddrRead  = reqArg(Cat(io.in.req.bits.addr(31,3), 0.U(3.W)), Cat(addrLatch(31,3), 4.U(3.W)))
@@ -671,7 +671,7 @@ class Cache_fake32(implicit val cacheConfig: CacheConfig) extends CacheModule {
 
   val reqCmd   = reqArg(io.in.req.bits.cmd, cmdLatch)
   val reqSize  = reqArg(2.U, sizeLatch)
-  val reqWdata = reqArg(Fill(2, io.in.req.bits.wdata(31, 0)), wdataLatch)
+  val reqWdata = reqArg(io.in.req.bits.wdata, wdataLatch)
   val reqWmask = reqArg(io.in.req.bits.wmask, wmaskLatch)
   val reqAddr = Mux(reqCmd === SimpleBusCmd.write, reqAddrWrite, reqAddrRead)
 
@@ -718,7 +718,7 @@ class Cache_fake32(implicit val cacheConfig: CacheConfig) extends CacheModule {
     when (state === s_memResp) {
       memrdata := Cat(0.U(32.W), io.out.mem.resp.bits.rdata(31,0))
     } .elsewhen (state === s_memResp2) {
-      memrdata := Cat(io.out.mem.resp.bits.rdata(31,0), memrdata(31,0))   // !
+      memrdata := Cat(io.out.mem.resp.bits.rdata(31,0), memrdata(31,0))
     }
   }
   val memcmd  = RegEnable(io.out.mem.resp.bits.cmd, io.out.mem.resp.fire())

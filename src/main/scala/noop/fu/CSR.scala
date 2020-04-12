@@ -252,7 +252,7 @@ class CSRIO extends FunctionUnitIO {
   val instrValid = Input(Bool())
   val isBackendException = Input(Bool())
   // for differential testing
-  val intrNO = Output(UInt(NXLEN.W))
+  val intrNO = Output(UInt(XLEN.W))
   val imemMMU = Flipped(new MMUIO)
   val dmemMMU = Flipped(new MMUIO)
   val wenFix = Output(Bool())
@@ -826,33 +826,33 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
 
   // Machine-Level CSRs
   
-  val mtvec = RegInit(UInt(NXLEN.W), 0.U)
-  val mcounteren = RegInit(UInt(NXLEN.W), 0.U)
-  val mcause = RegInit(UInt(NXLEN.W), 0.U)
-  val mtval = RegInit(UInt(NXLEN.W), 0.U)
-  val mepc = Reg(UInt(NXLEN.W))
+  val mtvec = RegInit(UInt(XLEN.W), 0.U)
+  val mcounteren = RegInit(UInt(XLEN.W), 0.U)
+  val mcause = RegInit(UInt(XLEN.W), 0.U)
+  val mtval = RegInit(UInt(XLEN.W), 0.U)
+  val mepc = Reg(UInt(XLEN.W))
 
-  val mie = RegInit(0.U(NXLEN.W))
+  val mie = RegInit(0.U(XLEN.W))
   val mipWire = WireInit(0.U.asTypeOf(new Interrupt))
   val mipReg  = RegInit(0.U.asTypeOf(new Interrupt).asUInt)
   val mipFixMask = "h77f".U
   val mip = (mipWire.asUInt | mipReg).asTypeOf(new Interrupt)
 
-  def getMisaMxl(mxl: Int): UInt = {mxl.U << (NXLEN-2)}
+  def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
   def getMisaExt(ext: Char): UInt = {1.U << (ext.toInt - 'a'.toInt)} 
   var extList = List('a', 'i')
   if(HasMExtension){ extList = extList :+ 'm'}
   if(HasCExtension){ extList = extList :+ 'c'}
-  val misaInitVal = getMisaMxl(if (NXLEN == 32) 1 else 2) | extList.foldLeft(0.U)((sum, i) => sum | getMisaExt(i)) //"h8000000000001105".U or "h40001105".U
-  val misa = RegInit(UInt(NXLEN.W), misaInitVal) 
+  val misaInitVal = getMisaMxl(if (XLEN == 32) 1 else 2) | extList.foldLeft(0.U)((sum, i) => sum | getMisaExt(i)) //"h8000000000001105".U or "h40001105".U
+  val misa = RegInit(UInt(XLEN.W), misaInitVal) 
   // MXL = 2 or 1     | 0 | EXT = b 00 0000 0000 0001 0001 0000 0101
   // (XLEN-1, XLEN-2) |   |(25, 0)  ZY XWVU TSRQ PONM LKJI HGFE DCBA
 
-  val mvendorid = RegInit(UInt(NXLEN.W), 0.U) // this is a non-commercial implementation
-  val marchid = RegInit(UInt(NXLEN.W), 0.U) // return 0 to indicate the field is not implemented
-  val mimpid = RegInit(UInt(NXLEN.W), 0.U) // provides a unique encoding of the version of the processor implementation
-  val mhartid = RegInit(UInt(NXLEN.W), 0.U) // the hardware thread running the code
-  val mstatus = RegInit(UInt(NXLEN.W), "h00001800".U) //"h8000c0100".U
+  val mvendorid = RegInit(UInt(XLEN.W), 0.U) // this is a non-commercial implementation
+  val marchid = RegInit(UInt(XLEN.W), 0.U) // return 0 to indicate the field is not implemented
+  val mimpid = RegInit(UInt(XLEN.W), 0.U) // provides a unique encoding of the version of the processor implementation
+  val mhartid = RegInit(UInt(XLEN.W), 0.U) // the hardware thread running the code
+  val mstatus = RegInit(UInt(XLEN.W), "h00001800".U) //"h8000c0100".U
   // mstatus Value Table
   // | sd   |
   // | pad1 |
@@ -875,22 +875,22 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
   val mstatusStruct = mstatus.asTypeOf(new MstatusStruct)
   def mstatusUpdateSideEffect(mstatus: UInt): UInt = {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
-    val mstatusNew = Cat(mstatusOld.fs === "b11".U, mstatus(NXLEN-2, 0))
+    val mstatusNew = Cat(mstatusOld.fs === "b11".U, mstatus(XLEN-2, 0))
     mstatusNew
   }
 
   // val medeleg = RegInit(UInt(XLEN.W), 0.U)
   // val mideleg = RegInit(UInt(XLEN.W), 0.U)
-  val mscratch = RegInit(UInt(NXLEN.W), 0.U)
+  val mscratch = RegInit(UInt(XLEN.W), 0.U)
 
-  val pmpcfg0 = RegInit(UInt(NXLEN.W), 0.U)
-  val pmpcfg1 = RegInit(UInt(NXLEN.W), 0.U)
-  val pmpcfg2 = RegInit(UInt(NXLEN.W), 0.U)
-  val pmpcfg3 = RegInit(UInt(NXLEN.W), 0.U)
-  val pmpaddr0 = RegInit(UInt(NXLEN.W), 0.U) 
-  val pmpaddr1 = RegInit(UInt(NXLEN.W), 0.U) 
-  val pmpaddr2 = RegInit(UInt(NXLEN.W), 0.U) 
-  val pmpaddr3 = RegInit(UInt(NXLEN.W), 0.U) 
+  val pmpcfg0 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpcfg1 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpcfg2 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpcfg3 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpaddr0 = RegInit(UInt(XLEN.W), 0.U) 
+  val pmpaddr1 = RegInit(UInt(XLEN.W), 0.U) 
+  val pmpaddr2 = RegInit(UInt(XLEN.W), 0.U) 
+  val pmpaddr3 = RegInit(UInt(XLEN.W), 0.U) 
 
   // Superviser-Level CSRs - only used for difftest
 
@@ -901,9 +901,9 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
   // 0  1100 0000 0001 0010 0010
   // 0  c    0    1    2    2
   // -------------------------------------------------------
-  val sstatusRmask = sstatusWmask | (if (NXLEN == 32) "h80018000".U else "h8000000300018000".U)
-  val sepc = RegInit(UInt(NXLEN.W), 0.U)
-  val scause = RegInit(UInt(NXLEN.W), 0.U)
+  val sstatusRmask = sstatusWmask | (if (XLEN == 32) "h80018000".U else "h8000000300018000".U)
+  val sepc = RegInit(UInt(XLEN.W), 0.U)
+  val scause = RegInit(UInt(XLEN.W), 0.U)
 
   if (Settings.HasDTLB) { assert(false.B) }
 
@@ -945,7 +945,7 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
 
     // Machine Trap Setup
     // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
-    MaskedRegMap(Mstatus, mstatus, (if (NXLEN == 32) "hffffffff".U else "hffffffffffffffff".U), mstatusUpdateSideEffect),
+    MaskedRegMap(Mstatus, mstatus, (if (XLEN == 32) "hffffffff".U else "hffffffffffffffff".U), mstatusUpdateSideEffect),
     MaskedRegMap(Misa, misa), // now MXL, EXT is not changeable
     // MaskedRegMap(Medeleg, medeleg, "hbbff".U),
     // MaskedRegMap(Mideleg, mideleg, "h222".U),
@@ -970,11 +970,11 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
     MaskedRegMap(PmpaddrBase + 2, pmpaddr2),
     MaskedRegMap(PmpaddrBase + 3, pmpaddr3)
 
-  ) ++ perfCntsLoMapping //++ (if (NXLEN == 32) perfCntsHiMapping else Nil)
+  ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
   val addr = src2(11, 0)
-  val rdata = Wire(UInt(NXLEN.W))
-  val csri = ZeroExt(io.cfIn.instr(19,15), NXLEN) //unsigned imm for csri. [TODO]
+  val rdata = Wire(UInt(XLEN.W))
+  val csri = ZeroExt(io.cfIn.instr(19,15), XLEN) //unsigned imm for csri. [TODO]
   val wdata = LookupTree(func, List(
     CSROpType.wrt  -> src1,
     CSROpType.set  -> (rdata | src1),
@@ -991,7 +991,7 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
 
   // Fix Mip write
   val fixMapping = Map( MaskedRegMap(Mip, mipReg.asUInt, mipFixMask) )
-  val rdataDummy = Wire(UInt(NXLEN.W))
+  val rdataDummy = Wire(UInt(XLEN.W))
   MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen, wdata)
 
   // CSR inst decode
@@ -1034,13 +1034,13 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
     val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, io.cfIn.pc + 2.U, io.cfIn.pc), io.dmemMMU.addr)
-    mtval := (if (NXLEN == 32) tval(NXLEN-1,0) else SignExt(tval, NXLEN))
+    mtval := (if (XLEN == 32) tval(XLEN-1,0) else SignExt(tval, XLEN))
   }
 
-  val lsuAddr = WireInit(0.U(NXLEN.W))
+  val lsuAddr = WireInit(0.U(XLEN.W))
   BoringUtils.addSink(lsuAddr, "LSUADDR")
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned) {
-    mtval := SignExt(lsuAddr, NXLEN)
+    mtval := SignExt(lsuAddr, XLEN)
   }
 
   // Exception and Intr
@@ -1080,7 +1080,7 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
   val exceptionNO = ExcPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(raiseExceptionVec(i), i.U, sum))
   io.wenFix := raiseException
 
-  val causeNO = (raiseIntr << (NXLEN-1)) | Mux(raiseIntr, intrNO, exceptionNO)
+  val causeNO = (raiseIntr << (XLEN-1)) | Mux(raiseIntr, intrNO, exceptionNO)
   io.intrNO := Mux(raiseIntr, causeNO, 0.U)
 
   val raiseExceptionIntr = (raiseException || raiseIntr) && io.instrValid
@@ -1121,7 +1121,7 @@ class CSR_M(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     mcause := causeNO
-    mepc := (if (NXLEN == 32) io.cfIn.pc(NXLEN-1,0) else SignExt(io.cfIn.pc, NXLEN))
+    mepc := (if (XLEN == 32) io.cfIn.pc(XLEN-1,0) else SignExt(io.cfIn.pc, XLEN))
     mstatusNew.mpp := ModeM
     mstatusNew.pie.m := mstatusOld.ie.m
     mstatusNew.ie.m := false.B

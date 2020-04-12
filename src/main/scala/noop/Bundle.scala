@@ -21,9 +21,9 @@ class CtrlSignalIO extends NOOPBundle {
 }
 
 class DataSrcIO extends NOOPBundle {
-  val src1 = Output(UInt(NXLEN.W))
-  val src2 = Output(UInt(NXLEN.W))
-  val imm  = Output(UInt(NXLEN.W))
+  val src1 = Output(UInt(XLEN.W))
+  val src2 = Output(UInt(XLEN.W))
+  val imm  = Output(UInt(XLEN.W))
 }
 
 class RedirectIO extends NOOPBundle {
@@ -54,14 +54,14 @@ class DecodeIO extends NOOPBundle {
 class WriteBackIO extends NOOPBundle {
   val rfWen = Output(Bool())
   val rfDest = Output(UInt(5.W))
-  val rfData = Output(UInt(NXLEN.W))
+  val rfData = Output(UInt(XLEN.W))
 }
 
 class CommitIO extends NOOPBundle {
   val decode = new DecodeIO
   val isMMIO = Output(Bool())
-  val intrNO = Output(UInt(NXLEN.W))
-  val commits = Output(Vec(FuType.num, UInt(NXLEN.W)))
+  val intrNO = Output(UInt(XLEN.W))
+  val commits = Output(Vec(FuType.num, UInt(XLEN.W)))
 }
 
 class OOCommitIO extends NOOPBundle with HasBackendConst{
@@ -75,11 +75,11 @@ class OOCommitIO extends NOOPBundle with HasBackendConst{
 
 class FunctionUnitIO extends NOOPBundle {
   val in = Flipped(Decoupled(new Bundle {
-    val src1 = Output(UInt(NXLEN.W))
-    val src2 = Output(UInt(NXLEN.W))
+    val src1 = Output(UInt(XLEN.W))
+    val src2 = Output(UInt(XLEN.W))
     val func = Output(FuOpType())
   }))
-  val out = Decoupled(Output(UInt(NXLEN.W)))
+  val out = Decoupled(Output(UInt(XLEN.W)))
 }
 
 class ForwardIO extends NOOPBundle {

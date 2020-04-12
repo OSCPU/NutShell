@@ -132,15 +132,15 @@ class MDU extends NOOPModule {
   val isDivSign = MDUOpType.isDivSign(func)
   val isW = MDUOpType.isW(func)
 
-  val mul = Module(new Multiplier(NXLEN + 1))
-  val div = Module(new Divider(NXLEN))
+  val mul = Module(new Multiplier(XLEN + 1))
+  val div = Module(new Divider(XLEN))
   List(mul.io, div.io).map { case x =>
     x.sign := isDivSign
     x.out.ready := io.out.ready
   }
 
-  val signext = SignExt(_: UInt, NXLEN+1)
-  val zeroext = ZeroExt(_: UInt, NXLEN+1)
+  val signext = SignExt(_: UInt, XLEN+1)
+  val zeroext = ZeroExt(_: UInt, XLEN+1)
   val mulInputFuncTable = List(
     MDUOpType.mul    -> (zeroext, zeroext),
     MDUOpType.mulh   -> (signext, signext),
@@ -150,17 +150,17 @@ class MDU extends NOOPModule {
   mul.io.in.bits(0) := LookupTree(func(1,0), mulInputFuncTable.map(p => (p._1(1,0), p._2._1(src1))))
   mul.io.in.bits(1) := LookupTree(func(1,0), mulInputFuncTable.map(p => (p._1(1,0), p._2._2(src2))))
 
-  val divInputFunc = (x: UInt) => Mux(isW, Mux(isDivSign, SignExt(x(31,0), NXLEN), ZeroExt(x(31,0), NXLEN)), x)
+  val divInputFunc = (x: UInt) => Mux(isW, Mux(isDivSign, SignExt(x(31,0), XLEN), ZeroExt(x(31,0), XLEN)), x)
   div.io.in.bits(0) := divInputFunc(src1)
   div.io.in.bits(1) := divInputFunc(src2)
 
   mul.io.in.valid := io.in.valid && !isDiv
   div.io.in.valid := io.in.valid && isDiv
 
-  val mulRes = Mux(func(1,0) === MDUOpType.mul(1,0), mul.io.out.bits(NXLEN-1,0), mul.io.out.bits(2*NXLEN-1,NXLEN))
-  val divRes = Mux(func(1) /* rem */, div.io.out.bits(2*NXLEN-1,NXLEN), div.io.out.bits(NXLEN-1,0))
+  val mulRes = Mux(func(1,0) === MDUOpType.mul(1,0), mul.io.out.bits(XLEN-1,0), mul.io.out.bits(2*XLEN-1,XLEN))
+  val divRes = Mux(func(1) /* rem */, div.io.out.bits(2*XLEN-1,XLEN), div.io.out.bits(XLEN-1,0))
   val res = Mux(isDiv, divRes, mulRes)
-  io.out.bits := Mux(isW, SignExt(res(31,0),NXLEN), res)
+  io.out.bits := Mux(isW, SignExt(res(31,0),XLEN), res)
 
   val isDivReg = Mux(io.in.fire(), isDiv, RegNext(isDiv))
   io.in.ready := Mux(isDiv, div.io.in.ready, mul.io.in.ready)

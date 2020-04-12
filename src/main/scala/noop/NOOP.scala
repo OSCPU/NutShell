@@ -10,8 +10,8 @@ import utils._
 import top.Settings
 
 trait HasNOOPParameter {
-  val XLEN = 64
-  val NXLEN = if (Settings.IsRV32) 32 else 64
+  //val XLEN = 64
+  val XLEN = if (Settings.IsRV32) 32 else 64
   val HasMExtension = true
   val HasCExtension = true
   val HasDiv = true
@@ -25,7 +25,7 @@ trait HasNOOPParameter {
   val NVAddrBits = if (Settings.IsRV32) 32 else Settings.VAddrBits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
-  val DataBits = NXLEN
+  val DataBits = XLEN
   val DataBytes = DataBits / 8
   val EnableMultiIssue = Settings.EnableMultiIssue
   val EnableSuperScalarExec = Settings.EnableSuperScalarExec

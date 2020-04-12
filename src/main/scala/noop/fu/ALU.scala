@@ -51,7 +51,7 @@ object ALUOpType {
 class ALUIO extends FunctionUnitIO {
   val cfIn = Flipped(new CtrlFlowIO)
   val redirect = new RedirectIO
-  val offset = Input(UInt(NXLEN.W))
+  val offset = Input(UInt(XLEN.W))
 }
 
 class ALU(hasBru: Boolean = false) extends NOOPModule {
@@ -68,20 +68,20 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
 
   // val isAdderSub = (func =/= ALUOpType.add) && (func =/= ALUOpType.addw) && !ALUOpType.isJump(func)
   val isAdderSub = !ALUOpType.isAdd(func)
-  val adderRes = (src1 +& (src2 ^ Fill(NXLEN, isAdderSub))) + isAdderSub
+  val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
   val xorRes = src1 ^ src2
-  val sltu = !adderRes(NXLEN)
-  val slt = xorRes(NXLEN-1) ^ sltu
+  val sltu = !adderRes(XLEN)
+  val slt = xorRes(XLEN-1) ^ sltu
 
-  val shsrc1 = LookupTreeDefault(func, src1(NXLEN-1,0), List(
-    ALUOpType.srlw -> ZeroExt(src1(31,0), NXLEN),
-    ALUOpType.sraw -> SignExt(src1(31,0), NXLEN)
+  val shsrc1 = LookupTreeDefault(func, src1(XLEN-1,0), List(
+    ALUOpType.srlw -> ZeroExt(src1(31,0), XLEN),
+    ALUOpType.sraw -> SignExt(src1(31,0), XLEN)
   ))
-  val shamt = Mux(ALUOpType.isWordOp(func), src2(4, 0), if (NXLEN == 64) src2(5, 0) else src2(4, 0))
+  val shamt = Mux(ALUOpType.isWordOp(func), src2(4, 0), if (XLEN == 64) src2(5, 0) else src2(4, 0))
   val res = LookupTreeDefault(func(3, 0), adderRes, List(
-    ALUOpType.sll  -> ((shsrc1  << shamt)(NXLEN-1, 0)),
-    ALUOpType.slt  -> ZeroExt(slt, NXLEN),
-    ALUOpType.sltu -> ZeroExt(sltu, NXLEN),
+    ALUOpType.sll  -> ((shsrc1  << shamt)(XLEN-1, 0)),
+    ALUOpType.slt  -> ZeroExt(slt, XLEN),
+    ALUOpType.sltu -> ZeroExt(sltu, XLEN),
     ALUOpType.xor  -> xorRes,
     ALUOpType.srl  -> (shsrc1  >> shamt),
     ALUOpType.or   -> (src1  |  src2),
