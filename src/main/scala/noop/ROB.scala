@@ -97,11 +97,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   val cpUpdate = Wire(new Checkpoint)
   cpUpdate.map := rmtMap
   cpUpdate.valid := rmtValid
-  when(io.updateCheckpoint.valid){
-    checkpoints(io.updateCheckpoint.bits) := cpUpdate
-    Debug(){printf("[CP] checkpoint %d set\n", io.updateCheckpoint.bits)}
-    Debug(){printf("[CP] %d %d\n", cpUpdate.valid(14), cpUpdate.map(14))}
-  }
+
   val rmtValidRecovery = Wire(Vec(NRReg, Bool()))
   rmtValidRecovery := checkpoints(io.recoverCheckpoint.bits).valid
 
@@ -218,11 +214,15 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.brMaskClearVec := 0.U
 
   // mispredict checkpoint recovery
+  when(io.updateCheckpoint.valid){
+    checkpoints(io.updateCheckpoint.bits) := cpUpdate
+    Debug(){printf("[CP] checkpoint %d set\n", io.updateCheckpoint.bits)}
+    // Debug(){printf("[CP] %d %d\n", cpUpdate.valid(14), cpUpdate.map(14))}
+  }
   when(io.recoverCheckpoint.valid){
     rmtMap := checkpoints(io.recoverCheckpoint.bits).map
     rmtValid := rmtValidRecovery
     Debug(){printf("[CP] recover rmt to checkpoint %d\n", io.recoverCheckpoint.bits)}
-    Debug(){printf("[CP] %d %d %d\n", rmtValidRecovery(14), checkpoints(io.recoverCheckpoint.bits).valid(14), checkpoints(io.recoverCheckpoint.bits).map(14))}
   }
 
   // retire: trigger redirect
