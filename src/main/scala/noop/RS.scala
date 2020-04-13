@@ -12,7 +12,7 @@ trait HasRSConst{
 }
 
 // Reservation Station
-class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, checkpoint: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
+class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, checkpoint: Boolean = false, storeBarrier: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
@@ -158,6 +158,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
 
   if(fifo){
     require(!priority)
+    require(!storeBarrier)
     val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
     dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
       !priorityMask(i).asUInt.orR && valid(i)
@@ -178,10 +179,35 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
 
   if(priority){
     require(!fifo)
+    require(!storeBarrier)
     val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
     dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
       !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
     }))
+    // update priorityMask
+    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
+    List.tabulate(rsSize)(i => 
+      when(needMispredictionRecovery(brMask(i))){ 
+        List.tabulate(rsSize)(j => 
+          priorityMask(j)(i):= false.B 
+        )
+      }
+    )
+    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
+  }
+
+  if(storeBarrier){
+    require(!priority)
+    require(!fifo)
+    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
+    val needStore = Reg(Vec(rsSize, Bool()))
+    dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
+      valid(i) &&
+      !((priorityMask(i).asUInt & needStore.asUInt).orR) && // there is no store (with no valid addr) ahead
+      !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
+    }))
+    io.out.valid := instRdy(dequeueSelect)
     // update priorityMask
     when(io.in.fire()){priorityMask(enqueueSelect) := valid}
     List.tabulate(rsSize)(i => 
