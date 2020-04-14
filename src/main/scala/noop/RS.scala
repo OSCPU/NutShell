@@ -165,7 +165,6 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     }))
     // update priorityMask
     io.out.valid := instRdy(dequeueSelect)
-    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
     List.tabulate(rsSize)(i => 
       when(needMispredictionRecovery(brMask(i))){ 
         List.tabulate(rsSize)(j => 
@@ -173,6 +172,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
         )
       }
     )
+    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
@@ -185,7 +185,6 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
       !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
     }))
     // update priorityMask
-    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
     List.tabulate(rsSize)(i => 
       when(needMispredictionRecovery(brMask(i))){ 
         List.tabulate(rsSize)(j => 
@@ -193,6 +192,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
         )
       }
     )
+    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
@@ -202,14 +202,18 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     require(!fifo)
     val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
     val needStore = Reg(Vec(rsSize, Bool()))
-    dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
+    val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
       valid(i) &&
-      !((priorityMask(i).asUInt & needStore.asUInt).orR) && // there is no store (with no valid addr) ahead
+      Mux(
+        needStore(i), 
+        !(priorityMask(i).asUInt.orR), // there is no other inst ahead
+        !((priorityMask(i).asUInt & needStore.asUInt).orR) // there is no store (with no valid addr) ahead
+      ) &&
       !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
     }))
-    io.out.valid := instRdy(dequeueSelect)
+    dequeueSelect := OHToUInt(dequeueSelectVec)
+    io.out.valid := instRdy(dequeueSelect) && dequeueSelectVec(dequeueSelect)
     // update priorityMask
-    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
     List.tabulate(rsSize)(i => 
       when(needMispredictionRecovery(brMask(i))){ 
         List.tabulate(rsSize)(j => 
@@ -217,6 +221,10 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
         )
       }
     )
+    when(io.in.fire()){
+      priorityMask(enqueueSelect) := valid
+      needStore(enqueueSelect) := LSUOpType.needMemWrite(io.in.bits.decode.ctrl.fuOpType)
+    }
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
