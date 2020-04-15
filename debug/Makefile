@@ -1,6 +1,7 @@
 ARCH = ARCH=riscv64-noop
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
 SINGLETEST = ALL=recursion
+RVTEST_TARGET = towers
 
 CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
 MB_RESULT = $(shell cat microbench.log | grep IPC)
@@ -34,7 +35,7 @@ bputest:
 
 unittest:
 	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) $(SINGLETEST) run 2>&1 | tee > test.log
-	cat test.log | grep different
+	cat test.log | grep -E "different|stuck|GOOD"
 	cat test.log | grep ISU > isu.log
 
 microbench:
@@ -63,6 +64,10 @@ coremark:
 dhrystone:
 	$(MAKE) -C $(AM_HOME)/apps/dhrystone $(ARCH) mainargs=test run 2>&1 | tee > dhrystone.log
 	cat dhrystone.log | grep IPC
+
+rvtest:
+	$(MAKE) -C $(AM_HOME)/tests/riscv-test/benchmarks/$(RVTEST_TARGET) $(ARCH) run
+	# usage: make rvtest RVTEST_TARGET=dhrystone
 
 xj:
 	$(MAKE) -C $(NANOS_HOME) $(ARCH) run
