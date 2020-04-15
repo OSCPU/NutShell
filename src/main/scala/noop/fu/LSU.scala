@@ -611,8 +611,8 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // val pageTableWalkerWorking = RegInit(false.B)
   // val tlbReadygo   = tlbDMemReq.valid
-  val storeReadygo = storeDMemReq.valid
-  val loadReadygo  = loadDMemReq.valid && !storeDMemReq.valid && !storeQueueFull
+  val storeReadygo = storeDMemReq.valid && (!loadDMemReq.valid || storeQueueFull)
+  val loadReadygo  = loadDMemReq.valid && !storeQueueFull
 
   val memReq = Mux1H(List(
     loadReadygo -> loadDMemReq,
