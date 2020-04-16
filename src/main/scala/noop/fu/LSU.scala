@@ -300,8 +300,12 @@ class LSU extends NOOPModule with HasLSUConst {
   val havePendingAMOStoreEnq = MEMOpID.needAlu(loadQueue(loadDmemPtr).op) && loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin
   val dmemReqFromLoadQueue = havePendingDmemReq || havePendingStoreEnq || havePendingAMOStoreEnq
   val skipAInst = !loadQueue(loadDmemPtr).valid && loadDmemPtr =/= loadDtlbPtr || loadQueue(loadDmemPtr).valid && loadQueue(loadDmemPtr).tlbfin && (loadQueue(loadDmemPtr).loadPageFault || loadQueue(loadDmemPtr).storePageFault || loadQueue(loadDmemPtr).loadAddrMisaligned || loadQueue(loadDmemPtr).storeAddrMisaligned || !loadQueue(loadDmemPtr).op(2,0).orR)
-  val haveLoadResp = io.dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && (tlbRespLdqidx === loadTailPtr) && loadQueue(loadTailPtr).valid//FIXIT: to use non blocking dcache, set it to false
-  val havePendingCDBCmt = loadQueue(loadTailPtr).finished && loadQueue(loadTailPtr).valid
+  val haveLoadResp = io.dmem.resp.fire() && MEMOpID.commitToCDB(opResp) && loadQueue(ldqidxResp).valid //FIXIT: to use non blocking dcache, set it to false
+  val havePendingCDBCmt = (0 until loadQueueSize).map(i => loadQueue(i).finished && loadQueue(i).valid).reduce(_ | _)
+  val pendingCDBCmtSelect = PriorityEncoder(VecInit((0 until loadQueueSize).map(i => loadQueue(i).finished && loadQueue(i).valid)))
+  val writebackSelect = Wire(UInt(log2Up(loadQueueSize).W))
+  writebackSelect := Mux(haveLoadResp, ldqidxResp, pendingCDBCmtSelect)
+  // assert(!(loadQueue(pendingCDBCmtSelect).valid && !MEMOpID.needStore(loadQueue(pendingCDBCmtSelect).op) && MEMOpID.needLoad(loadQueue(pendingCDBCmtSelect).op)))
 
   // load queue enqueue
   val loadQueueEnqueue = io.in.fire()
@@ -316,8 +320,14 @@ class LSU extends NOOPModule with HasLSUConst {
     nextLoadDmemPtr := loadDmemPtr + 1.U
   }
   loadDmemPtr := nextLoadDmemPtr
+
   // load queue dequeue
-  when(io.out.fire() || (loadTailPtr =/= loadDmemPtr) && !loadQueue(loadTailPtr).valid && loadQueue(loadTailPtr).finished){
+  when(io.out.fire()){
+    loadQueue(writebackSelect).valid := false.B
+    loadQueue(writebackSelect).finished := true.B
+  }
+
+  when((loadTailPtr =/= loadDmemPtr) && !loadQueue(loadTailPtr).valid && loadQueue(loadTailPtr).finished){
     loadTailPtr := loadTailPtr + 1.U
     loadQueue(loadTailPtr).valid := false.B
     loadQueue(loadTailPtr).finished := false.B
@@ -749,8 +759,8 @@ class LSU extends NOOPModule with HasLSUConst {
   //-------------------------------------------------------
 
   // Load Data Selection
-  val rdata = Mux(haveLoadResp && loadTailPtr === ldqidxResp, rdataFwdSel, loadQueue(loadTailPtr).data)
-  val rdataSel = LookupTree(loadQueue(loadTailPtr).vaddr(2, 0), List(
+  val rdata = rdataFwdSel
+  val rdataSel = LookupTree(loadQueue(ldqidxResp).vaddr(2, 0), List(
     "b000".U -> rdata(63, 0),
     "b001".U -> rdata(63, 8),
     "b010".U -> rdata(63, 16),
@@ -760,7 +770,7 @@ class LSU extends NOOPModule with HasLSUConst {
     "b110".U -> rdata(63, 48),
     "b111".U -> rdata(63, 56)
   ))
-  val rdataPartialLoad = LookupTree(loadQueue(loadTailPtr).func, List(
+  val rdataPartialLoad = LookupTree(loadQueue(ldqidxResp).func, List(
       LSUOpType.lb   -> SignExt(rdataSel(7, 0) , XLEN),
       LSUOpType.lh   -> SignExt(rdataSel(15, 0), XLEN),
       LSUOpType.lw   -> SignExt(rdataSel(31, 0), XLEN),
@@ -769,26 +779,26 @@ class LSU extends NOOPModule with HasLSUConst {
       LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), XLEN),
       LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN)
   ))
-  val atomDataPartialLoad = Mux(loadQueue(loadTailPtr).size(0), SignExt(rdataSel(63, 0), XLEN), SignExt(rdataSel(31, 0), XLEN))
+  val atomDataPartialLoad = Mux(loadQueue(ldqidxResp).size(0), SignExt(rdataSel(63, 0), XLEN), SignExt(rdataSel(31, 0), XLEN))
 
   // Atom
   val atomALU = Module(new AtomALU)
   atomALU.io.src1 := atomDataPartialLoad
-  atomALU.io.src2 := loadQueue(loadTailPtr).asrc//io.wdata FIXIT: use a single reg
-  atomALU.io.func := loadQueue(loadTailPtr).func
-  atomALU.io.isWordOp := !loadQueue(loadTailPtr).size(0)  //recover atomWidthW from size
+  atomALU.io.src2 := loadQueue(ldqidxResp).asrc//io.wdata FIXIT: use a single reg
+  atomALU.io.func := loadQueue(ldqidxResp).func
+  atomALU.io.isWordOp := !loadQueue(ldqidxResp).size(0)  //recover atomWidthW from size
   // When an atom inst reaches here, store its result to store buffer,
   // then commit it to CDB, set atom-on-the-fly to false
-  val atomDataReg = RegEnable(genWdata(atomALU.io.result, loadQueue(loadTailPtr).size), io.out.fire() && LSUOpType.isAMO(loadQueue(loadTailPtr).func))
+  val atomDataReg = RegEnable(genWdata(atomALU.io.result, loadQueue(ldqidxResp).size), io.out.fire() && LSUOpType.isAMO(loadQueue(ldqidxResp).func))
   io.atomData := atomDataReg
 
   // Commit to CDB
   io.out.bits := MuxCase(
       default = rdataPartialLoad,
       mapping = List(
-        (loadQueue(loadTailPtr).loadPageFault || loadQueue(loadTailPtr).storePageFault || loadQueue(loadTailPtr).loadAddrMisaligned || loadQueue(loadTailPtr).storeAddrMisaligned) -> loadQueue(loadTailPtr).vaddr,
-        LSUOpType.isSC(loadQueue(loadTailPtr).func) -> !MEMOpID.needStore(loadQueue(loadTailPtr).op),
-        LSUOpType.isAtom(loadQueue(loadTailPtr).func) -> atomDataPartialLoad
+        (loadQueue(writebackSelect).loadPageFault || loadQueue(writebackSelect).storePageFault || loadQueue(writebackSelect).loadAddrMisaligned || loadQueue(writebackSelect).storeAddrMisaligned) -> loadQueue(writebackSelect).vaddr,
+        LSUOpType.isSC(loadQueue(writebackSelect).func) -> !MEMOpID.needStore(loadQueue(writebackSelect).op),
+        LSUOpType.isAtom(loadQueue(writebackSelect).func) -> atomDataPartialLoad
       )
   )
 
@@ -797,18 +807,19 @@ class LSU extends NOOPModule with HasLSUConst {
   // }
 
   io.uopOut := DontCare
-  io.isMMIO := loadQueue(loadTailPtr).isMMIO
+  io.isMMIO := loadQueue(writebackSelect).isMMIO
   io.exceptionVec.map(_ := false.B)
-  io.exceptionVec(loadPageFault) := loadQueue(loadTailPtr).loadPageFault
-  io.exceptionVec(storePageFault) := loadQueue(loadTailPtr).storePageFault
-  io.exceptionVec(loadAddrMisaligned) := loadQueue(loadTailPtr).loadAddrMisaligned
-  io.exceptionVec(storeAddrMisaligned) := loadQueue(loadTailPtr).storeAddrMisaligned
-  io.uopOut.decode.cf.pc := loadQueue(loadTailPtr).pc
-  io.uopOut.prfDest := loadQueue(loadTailPtr).prfidx
-  io.uopOut.decode.ctrl.rfWen := loadQueue(loadTailPtr).rfWen && !loadQueue(loadTailPtr).loadAddrMisaligned && !loadQueue(loadTailPtr).storeAddrMisaligned && !loadQueue(loadTailPtr).loadPageFault && !loadQueue(loadTailPtr).storePageFault
+  io.exceptionVec(loadPageFault) := loadQueue(writebackSelect).loadPageFault
+  io.exceptionVec(storePageFault) := loadQueue(writebackSelect).storePageFault
+  io.exceptionVec(loadAddrMisaligned) := loadQueue(writebackSelect).loadAddrMisaligned
+  io.exceptionVec(storeAddrMisaligned) := loadQueue(writebackSelect).storeAddrMisaligned
+  io.uopOut.decode.cf.pc := loadQueue(writebackSelect).pc
+  io.uopOut.prfDest := loadQueue(writebackSelect).prfidx
+  io.uopOut.decode.ctrl.rfWen := loadQueue(writebackSelect).rfWen && !loadQueue(writebackSelect).loadAddrMisaligned && !loadQueue(writebackSelect).storeAddrMisaligned && !loadQueue(writebackSelect).loadPageFault && !loadQueue(writebackSelect).storePageFault
 
   io.in.ready := !loadQueueFull
   io.out.valid := havePendingCDBCmt || haveLoadResp
+  assert(!(io.out.valid && !io.out.ready))
 
   when(io.flush){
     loadHeadPtr := nextLoadDmemPtr
