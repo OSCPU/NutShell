@@ -417,8 +417,8 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     // BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr), "difftestThisINST2")
     BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0) && valid(ringBufferTail)(0) || isMMIO(ringBufferTail)(1) && valid(ringBufferTail)(1) && !(valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid)), "difftestIsMMIO")
     // BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(1)), "difftestIsMMIO2")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr(1,0)=/="b11".U), "difftestIsRVC")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr(1,0)=/="b11".U), "difftestIsRVC2")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.isRVC), "difftestIsRVC")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.isRVC), "difftestIsRVC2")
     BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
     // BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(1)), "difftestIntrNO2")
   } else {

@@ -103,7 +103,11 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
   val target = Mux(isBranch, io.cfIn.pc + io.offset, adderRes)(VAddrBits-1,0)
   val predictWrong = Mux(!taken && isBranch, io.cfIn.brIdx, !io.cfIn.brIdx || (io.redirect.target =/= io.cfIn.pnpc))
   // val predictWrong = (io.redirect.target =/= io.cfIn.pnpc)
-  val isRVC = (io.cfIn.instr(1,0) =/= "b11".U)
+  val isRVC = io.cfIn.isRVC
+  // when(!(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)){
+  //   printf("[ERROR] io.cfIn.instr %x\n", io.cfIn.instr)
+  // }
+  assert(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)
   io.redirect.target := Mux(!taken && isBranch, Mux(isRVC, io.cfIn.pc + 2.U, io.cfIn.pc + 4.U), target)
   // with branch predictor, this is actually to fix the wrong prediction
   io.redirect.valid := valid && isBru && predictWrong

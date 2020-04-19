@@ -103,6 +103,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out(0).bits.pnpc := npcRingMeta(ringBufferTail)
   io.out(0).bits.instr := Cat(ringInstBuffer(ringBufferTail+1.U), ringInstBuffer(ringBufferTail))
   io.out(0).bits.brIdx := branchRingMeta(ringBufferTail)
+  io.out(0).bits.isRVC := dequeueIsRVC(ringBufferTail)
   io.out(0).bits.crossPageIPFFix := !ipfRingMeta(ringBufferTail) && !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
 
   io.out(0).valid := dequeueIsValid(0) && (dequeueIsRVC(0) || dequeueIsValid(1)) && !io.flush
@@ -123,6 +124,7 @@ class IBF extends NOOPModule with HasInstrType with HasIBUFConst{
   io.out(1).bits.pnpc := npcRingMeta(inst2_StartIndex)
   io.out(1).bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out(1).bits.brIdx := branchRingMeta(inst2_StartIndex)
+  io.out(1).bits.isRVC := dequeueIsRVC(inst2_StartIndex)
   io.out(1).bits.crossPageIPFFix := !ipfRingMeta(inst2_StartIndex) && !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
 
   if(EnableMultiIssue){
