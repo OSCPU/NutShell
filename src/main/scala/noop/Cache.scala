@@ -630,7 +630,7 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
   }
 }
 
-class Cache_fake32(implicit val cacheConfig: CacheConfig) extends CacheModule {
+class Cache_fake_joint(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC(userBits = userBits))
     val flush = Input(UInt(2.W))
@@ -755,8 +755,10 @@ class Cache_fake32(implicit val cacheConfig: CacheConfig) extends CacheModule {
 object Cache {
   def apply(in: SimpleBusUC, mmio: Seq[SimpleBusUC], flush: UInt, empty: Bool, enable: Boolean = true)(implicit cacheConfig: CacheConfig) = {
     val cache = if (enable) Module(new Cache) 
-                else (if (Settings.IsRV32) Module(new Cache_fake32) 
-                      else Module(new Cache_fake))
+                else (if (Settings.IsRV32) 
+                        (if (cacheConfig.name == "dcache") Module(new Cache_fake) else Module(new Cache_fake_joint)) 
+                      else 
+                        (Module(new Cache_fake)))
     cache.io.flush := flush
     cache.io.in <> in
     mmio(0) <> cache.io.mmio

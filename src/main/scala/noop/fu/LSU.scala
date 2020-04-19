@@ -465,7 +465,7 @@ class LSExecUnit extends NOOPModule {
 
   val rdata = dmem.resp.bits.rdata
   val rdataLatch = RegNext(rdata)
-  val rdataSel = LookupTree(addrLatch(2, 0), List(
+  val rdataSel64 = LookupTree(addrLatch(2, 0), List(
     "b000".U -> rdataLatch(63, 0),
     "b001".U -> rdataLatch(63, 8),
     "b010".U -> rdataLatch(63, 16),
@@ -475,6 +475,13 @@ class LSExecUnit extends NOOPModule {
     "b110".U -> rdataLatch(63, 48),
     "b111".U -> rdataLatch(63, 56)
   ))
+  val rdataSel32 = LookupTree(addrLatch(1, 0), List(
+    "b00".U -> rdataLatch(31, 0),
+    "b01".U -> rdataLatch(31, 8),
+    "b10".U -> rdataLatch(31, 16),
+    "b11".U -> rdataLatch(31, 24)
+  ))
+  val rdataSel = if (XLEN == 32) rdataSel32 else rdataSel64
   val rdataPartialLoad = LookupTree(func, List(
       LSUOpType.lb   -> SignExt(rdataSel(7, 0) , XLEN),
       LSUOpType.lh   -> SignExt(rdataSel(15, 0), XLEN),
