@@ -639,7 +639,7 @@ class Cache_fake32(implicit val cacheConfig: CacheConfig) extends CacheModule {
     val empty = Output(Bool())
   })
   
-  val s_idle :: s_memReq :: s_memResp :: s_memReq2 :: s_memResp2 :: s_mmioReq :: s_mmioResp :: s_mmioReq2 :: s_mmioResp2 :: s_wait_resp :: Nil = Enum(10)
+  val s_idle :: s_memReq :: s_memResp :: s_memReq2 :: s_memResp2 :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(8)
   val state = RegInit(s_idle)
 
   val ismmio = AddressSpace.isMMIO(io.in.req.bits.addr)

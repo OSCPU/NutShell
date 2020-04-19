@@ -46,6 +46,11 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   axi2sb.io.in <> io.frontend
   noop.io.frontend <> axi2sb.io.out
 
+  val memport = xbar.io.out.toMemPort()
+  memport.resp.bits.data := DontCare
+  memport.resp.valid := DontCare
+  memport.req.ready := DontCare
+
   if (HasL2cache) {
     val l2cacheOut = Wire(new SimpleBusC)
     val l2cacheIn = if (HasPrefetch) {
