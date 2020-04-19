@@ -4,6 +4,7 @@ trait Common {
   val EnableILA = true
   val VAddrBits = 39
   val EnableDebug = false
+  val HasMMIO = true
 }
 
 trait OoOCore {
