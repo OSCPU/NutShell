@@ -143,6 +143,30 @@ class IFU extends NOOPModule with HasResetVector {
   // assert(!io.out.bits.icachePF)
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
 
+
+  // Illegal branch predict check
+  val FixInvalidBranchPredict = false
+
+  def preDecodeIsBranch(x: UInt) = {
+    require(x.getWidth == 16)
+    val res :: Nil = ListLookup(x, List(false.B), PreDecode.branchTable)
+    res
+  }
+
+  if(FixInvalidBranchPredict){
+    val maybeBranch = Wire(Vec(4, Bool()))
+    (0 until 4).map(i => maybeBranch(i) := preDecodeIsBranch(io.out.bits.instr(16*(i+1)-1, 16*i))) //TODO: use icache pre-decode result
+    // When branch predicter set non-sequential npc for a non-branch inst,
+    // flush IFU, fetch sequential inst instead.
+    when((io.out.bits.brIdx & ~maybeBranch.asUInt).orR && io.out.fire()){
+      io.bpFlush := true.B
+      io.out.bits.brIdx := 0.U
+      npc := io.out.bits.pc + 8.U
+      pcUpdate := true.B
+    }
+    // TODO: update BPU
+  }
+
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire()), "perfCntCondMimemStall")
   BoringUtils.addSource(io.flushVec.orR, "perfCntCondMifuFlush")
 }
