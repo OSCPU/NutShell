@@ -54,4 +54,4 @@ object Settings extends Common with SmallCore {}
 // To generate RV32 core
 // 1. Enble Settings.IsRV32
 // 2. Set DATAWIDTH = 32 in Makefile
-// 3. Define __RV32__ macro in difftest.h
+// 3. make a fresh build

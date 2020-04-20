@@ -5,8 +5,6 @@
 #include <assert.h>
 #include <string.h>
 
-#define __RV32__
-
 #ifdef __RV32__
 typedef uint32_t rtlreg_t;
 typedef uint32_t paddr_t;

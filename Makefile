@@ -52,7 +52,7 @@ EMU_CXXFILES = $(shell find $(EMU_CSRC_DIR) -name "*.cpp")
 EMU_VFILES = $(shell find $(EMU_VSRC_DIR) -name "*.v" -or -name "*.sv")
 
 EMU_CXXFLAGS  = -O3 -std=c++11 -static -g -Wall -I$(EMU_CSRC_DIR)
-EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized
+EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized -D__RV$(DATAWIDTH)__
 EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
 # dump vcd: --debug --trace
