@@ -21,6 +21,7 @@ trait HasNOOPParameter {
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN
   val DataBytes = DataBits / 8
+  val EnableMultiCyclePredictor = false
   val EnableMultiIssue = true
   val EnableSuperScalarExec = true
   val EnableOutOfOrderExec = true
