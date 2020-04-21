@@ -423,9 +423,9 @@ class LSU extends NOOPModule with HasLSUConst {
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
   // after a store inst get its paddr from TLB, add it to store queue
   val dtlbRespUser = io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle)
-  val tlbRespStoreEnq = io.dtlb.resp.fire() && MEMOpID.needStore(dtlbRespUser.op) && !MEMOpID.needAlu(dtlbRespUser.op) && !bruFlush && loadQueue(dtlbRespUser.ldqidx).valid
+  val tlbRespStoreEnq = io.dtlb.resp.fire() && MEMOpID.needStore(dtlbRespUser.op) && !MEMOpID.needAlu(dtlbRespUser.op) && !bruFlush && loadQueue(dtlbRespUser.ldqidx).valid && tlbRespLdqidx === loadDmemPtr
   storeQueueEnqueue := havePendingStoreEnq && !storeQueueFull || !havePendingDmemReq && tlbRespStoreEnq && !storeQueueFull
-  val tlbRespAMOStoreEnq = io.dtlb.resp.fire() && MEMOpID.needAlu(dtlbRespUser.op)
+  val tlbRespAMOStoreEnq = io.dtlb.resp.fire() && MEMOpID.needAlu(dtlbRespUser.op) && !bruFlush && loadQueue(dtlbRespUser.ldqidx).valid && tlbRespLdqidx === loadDmemPtr
   val storeQueueAMOEnqueue = havePendingAMOStoreEnq && loadQueueReqsend || tlbRespAMOStoreEnq && loadQueueReqsend
   assert(!(storeQueueAMOEnqueue && storeQueueFull))
   // when a store inst is retired, commit 1 term in Store Queue
@@ -632,7 +632,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // loadDMemReq
   val loadDMemReqSrcPick = Mux(havePendingDmemReq, loadDmemPtr, io.dtlb.resp.bits.user.get.asTypeOf(new DCacheUserBundle).ldqidx)
-  val loadDTlbResqReqValid = dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue && 
+  val loadDTlbRespReqValid = dtlbEnable && io.dtlb.resp.fire() && MEMOpID.needLoad(dtlbRespUser.op) && !dmemReqFromLoadQueue && 
     !loadPF && !storePF && !loadQueue(tlbRespLdqidx).loadAddrMisaligned && !loadQueue(tlbRespLdqidx).storeAddrMisaligned &&
     !bruFlush && loadQueue(tlbRespLdqidx).valid && tlbRespLdqidx === loadDmemPtr
   val loadSideUserBundle = Wire(new DCacheUserBundle)
@@ -642,7 +642,7 @@ class LSU extends NOOPModule with HasLSUConst {
   loadDMemReq.addr := Mux(havePendingDmemReq, loadQueue(loadDmemPtr).paddr, io.dtlb.resp.bits.rdata)
   loadDMemReq.size := loadQueue(loadDMemReqSrcPick).size
   loadDMemReq.wdata := loadQueue(loadDMemReqSrcPick).data
-  loadDMemReq.valid := havePendingDmemReq || loadDTlbResqReqValid
+  loadDMemReq.valid := havePendingDmemReq || loadDTlbRespReqValid
   loadDMemReq.wmask := genWmask(loadDMemReq.addr, loadDMemReq.size)
   loadDMemReq.cmd := SimpleBusCmd.read
   loadDMemReq.user := loadSideUserBundle
@@ -735,7 +735,7 @@ class LSU extends NOOPModule with HasLSUConst {
   }
 
   // write back to load queue
-  when(dmem.req.fire() && !MEMOpID.needStore(opReq)){
+  when(dmem.req.fire() && MEMOpID.needLoad(opReq)){
     loadQueue(loadDmemPtr).fdata := dataBack
     loadQueue(loadDmemPtr).fmask := forwardWmask
   }
