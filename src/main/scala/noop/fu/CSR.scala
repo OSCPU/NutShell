@@ -784,18 +784,65 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     "MmemqFull"   -> (0xb37, "perfCntCondMmemqFull"    ),
     "MrobEmpty"   -> (0xb38, "perfCntCondMrobEmpty"    ),
     "MstqFull"    -> (0xb39, "perfCntCondMstqFull"     ),
-    "McmtStrHaz1" -> (0xb40, "perfCntCondMcmtStrHaz1"  ),
-    "McmtStrHaz2" -> (0xb41, "perfCntCondMcmtStrHaz2"  ),
-    "MaluInstr2"  -> (0xb42, "perfCntCondMaluInstr2"   ),
-    "Mdispatch1"  -> (0xb43, "perfCntCondMdispatch1"   ),
-    "Mdispatch2"  -> (0xb44, "perfCntCondMdispatch2"   )
+    "McmtCnt0"    -> (0xb40, "perfCntCondMcmtCnt0"     ),
+    "McmtCnt1"    -> (0xb41, "perfCntCondMcmtCnt1"     ),
+    "McmtCnt2"    -> (0xb42, "perfCntCondMcmtCnt2"     ),
+    "McmtStrHaz1" -> (0xb43, "perfCntCondMcmtStrHaz1"  ),
+    "McmtStrHaz2" -> (0xb44, "perfCntCondMcmtStrHaz2"  ),
+    "MaluInstr2"  -> (0xb45, "perfCntCondMaluInstr2"   ),
+    "Mdispatch0"  -> (0xb46, "perfCntCondMdispatch0"   ),
+    "Mdispatch1"  -> (0xb47, "perfCntCondMdispatch1"   ),
+    "Mdispatch2"  -> (0xb48, "perfCntCondMdispatch2"   ),
+    "MlsuIssue"   -> (0xb49, "perfCntCondMlsuIssue"    ),
+    "MmduIssue"   -> (0xb4a, "perfCntCondMmduIssue"    ),
+    "MbruCmt"     -> (0xb4b, "perfCntCondMbruCmt"       ),
+    "MbruCmtWrong"-> (0xb4c, "perfCntCondMbruCmtWrong"  ),
+    "MicacheLoss" -> (0xb4d, "perfCntCondMicacheLoss"   ),
+    "MdcacheLoss" -> (0xb4e, "perfCntCondMdcacheLoss"   ),
+    "Ml2cacheLoss"-> (0xb4f, "perfCntCondMl2cacheLoss"  ),
+    "MbrInROB_0"  -> (0xb50, "perfCntCondMbrInROB_0"   ),
+    "MbrInROB_1"  -> (0xb51, "perfCntCondMbrInROB_1"   ),
+    "MbrInROB_2"  -> (0xb52, "perfCntCondMbrInROB_2"   ),
+    "MbrInROB_3"  -> (0xb53, "perfCntCondMbrInROB_3"   ),
+    "MbrInROB_4"  -> (0xb54, "perfCntCondMbrInROB_4"   ),
+    "Mdp1StBlk"   -> (0xb55, "perfCntCondMdp1StBlk"   ),
+    "Mdp1StRSf"   -> (0xb56, "perfCntCondMdp1StRSf"   ),
+    "Mdp1StROBf"  -> (0xb57, "perfCntCondMdp1StROBf"   ),
+    "Mdp1StConf"  -> (0xb58, "perfCntCondMdp1StConf"   ),
+    "Mdp1StCnt"   -> (0xb59, "perfCntCondMdp1StCnt"   ),
+    "Mdp2StBlk"   -> (0xb5a, "perfCntCondMdp2StBlk"   ),
+    "Mdp2StRSf"   -> (0xb5b, "perfCntCondMdp2StRSf"   ),
+    "Mdp2StROBf"  -> (0xb5c, "perfCntCondMdp2StROBf"   ),
+    "Mdp2StConf"  -> (0xb5d, "perfCntCondMdp2StConf"   ),
+    "Mdp2StSeq"   -> (0xb5e, "perfCntCondMdp2StSeq"   ),
+    "Mdp2StCnt"   -> (0xb5f, "perfCntCondMdp2StCnt"   ),
+    "MloadCnt"    -> (0xb60, "perfCntCondMloadCnt"   ),
+    "MstoreCnt"   -> (0xb61, "perfCntCondMstoreCnt"   ),
+    "MmemSBL"     -> (0xb62, "perfCntCondMmemSBL"   ),
+    "MpendingLS  "-> (0xb63, "perfCntCondMpendingLS"   ),     //Maunally updated
+    "MpendingSCmt"-> (0xb64, "perfCntCondMpendingSCmt"   ), //Maunally updated
+    "MpendingSReq"-> (0xb65, "perfCntCondMpendingSReq"   ), //Maunally updated
+    "MicacheReq"  -> (0xb66, "perfCntCondMicacheReq"   ),
+    "MdcacheReq"  -> (0xb67, "perfCntCondMdcacheReq"   ),
+    "Ml2cacheReq" -> (0xb68, "perfCntCondMl2cacheReq"   )
+    // "MmemLBS"  -> (0xb69, "perfCntCondMmemLBS"   ),//TODO
   )
 
   val perfCntList = generalPerfCntList ++  (if (EnableOutOfOrderExec) outOfOrderPerfCntList else sequentialPerfCntList) 
 
 	val perfCntCond = List.fill(0x80)(WireInit(false.B))
   (perfCnts zip perfCntCond).map { case (c, e) => { when (e) { c := c + 1.U } } }
+  // Manually update perf counter
+  val pendingLS = WireInit(0.U(5.W))
+  val pendingSCmt = WireInit(0.U(5.W))
+  val pendingSReq = WireInit(0.U(5.W))
+  BoringUtils.addSink(pendingLS, "perfCntSrcMpendingLS")
+  BoringUtils.addSink(pendingSCmt, "perfCntSrcMpendingSCmt")
+  BoringUtils.addSink(pendingSReq, "perfCntSrcMpendingSReq")
   when(perfCntCond(0xb03 & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
+  when(true.B) { perfCnts(0xb63 & 0x7f) := perfCnts(0xb63 & 0x7f) + pendingLS } 
+  when(true.B) { perfCnts(0xb64 & 0x7f) := perfCnts(0xb64 & 0x7f) + pendingSCmt } 
+  when(true.B) { perfCnts(0xb65 & 0x7f) := perfCnts(0xb66 & 0x7f) + pendingSReq } 
 
   BoringUtils.addSource(WireInit(true.B), "perfCntCondMcycle")
   perfCntList.map { case (name, (addr, boringId)) => {
@@ -818,10 +865,20 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
 
     // display all perfcnt when nooptrap is executed
+    val PrintPerfCntToCSV = true
     when (nooptrap) {
       printf("======== PerfCnt =========\n")
       perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
         printf("%d <- " + name + "\n", readWithScala(addr)) }
+      if(PrintPerfCntToCSV){
+      printf("======== PerfCntCSV =========\n\n")
+      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+        printf(name + ", ")}
+      printf("\n\n\n")
+      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+        printf("%d, ", readWithScala(addr)) }
+      printf("\n\n\n")
+      }
     }
 
     // for differential testing

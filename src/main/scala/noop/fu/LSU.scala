@@ -833,6 +833,16 @@ class LSU extends NOOPModule with HasLSUConst {
   BoringUtils.addSource(io.out.fire() && io.isMMIO, "perfCntCondMmmioInstr")
   BoringUtils.addSource(loadQueueFull, "perfCntCondMmemqFull")
   BoringUtils.addSource(storeQueueFull, "perfCntCondMstqFull")
+  BoringUtils.addSource(io.in.fire() && MEMOpID.needLoad(memop), "perfCntCondMloadCnt")
+  BoringUtils.addSource(io.in.fire() && MEMOpID.needStore(memop), "perfCntCondMstoreCnt")
+  BoringUtils.addSource(dmem.req.fire() && MEMOpID.needLoad(opReq) && forwardWmask.orR, "perfCntCondMmemSBL")
+  BoringUtils.addSource(storeQueueFull, "perfCntCondMpendingLS")
+  BoringUtils.addSource(storeQueueFull, "perfCntCondMpendingSCmt")
+  BoringUtils.addSource(storeQueueFull, "perfCntCondMpendingSReq")
+  val ldqValid = VecInit((0 until loadQueueSize).map(i => loadQueue(i).valid))
+  BoringUtils.addSource(PopCount(ldqValid.asUInt), "perfCntSrcMpendingLS")
+  BoringUtils.addSource(storeCmtPtr, "perfCntSrcMpendingSCmt")
+  BoringUtils.addSource(storeHeadPtr, "perfCntSrcMpendingSReq")
 
   val reqpc = Mux(storeReadygo, storeQueue(0.U).pc, Mux(havePendingDmemReq, loadQueue(loadDmemPtr).pc, Mux(dtlbEnable, loadQueue(dtlbRespUser.ldqidx).pc, loadQueue(dtlbRespUser.ldqidx).pc)))
   Debug(){

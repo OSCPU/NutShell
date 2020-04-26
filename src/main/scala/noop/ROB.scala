@@ -278,7 +278,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     LSUOpType.needMemWrite(decode(ringBufferTail)(i).ctrl.fuOpType) && 
     List.tabulate(i+1)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
     List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k)
-  ).foldRight(false.B)((sum, i) => sum || i) && retireATerm
+  ).reduce(_ || _) && retireATerm
 
   Debug(){
     when(io.scommit){
@@ -408,19 +408,14 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   val retirePC2 = SignExt(decode(ringBufferTail)(1).cf.pc, AddrBits)
   
   if (!p.FPGAPlatform) {
-    // TODO: fix debug
     BoringUtils.addSource(RegNext(retireATerm), "difftestCommit")
     BoringUtils.addSource(RegNext(retireMultiTerms), "difftestMultiCommit")
     BoringUtils.addSource(RegNext(retirePC), "difftestThisPC")
-    // BoringUtils.addSource(RegNext(SignExt(decode(ringBufferTail)(1).cf.pc, AddrBits)), "difftestThisPC2")
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "difftestThisINST")
-    // BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr), "difftestThisINST2")
     BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0) && valid(ringBufferTail)(0) || isMMIO(ringBufferTail)(1) && valid(ringBufferTail)(1) && !(valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid)), "difftestIsMMIO")
-    // BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(1)), "difftestIsMMIO2")
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.isRVC), "difftestIsRVC")
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.isRVC), "difftestIsRVC2")
     BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
-    // BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(1)), "difftestIntrNO2")
   } else {
     BoringUtils.addSource(DontCare, "ilaWBUvalid")
     BoringUtils.addSource(DontCare, "ilaWBUpc")
@@ -450,5 +445,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     List.tabulate(robSize)(i => valid(i)(1) := 0.U) // set valid to 0
     List.tabulate(NRReg)(i => rmtValid(i) := false.B) // flush rmt
   }
+
+  // sim pref counter
+  val retireBruInst = (retireATerm && (decode(ringBufferTail)(0).ctrl.fuType === FuType.bru || decode(ringBufferTail)(1).ctrl.fuType === FuType.bru))
+  val retireBruInstRedirect = retireBruInst && (redirect(ringBufferTail)(0).valid || redirect(ringBufferTail)(1).valid)
+  BoringUtils.addSource(retireBruInst, "perfCntCondMbruCmt")
+  BoringUtils.addSource(retireBruInstRedirect, "perfCntCondMbruCmtWrong")
 
 }

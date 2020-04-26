@@ -234,6 +234,12 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     io.updateCheckpoint.get.bits := enqueueSelect
     io.recoverCheckpoint.get.valid := DontCare
     io.recoverCheckpoint.get.bits := dequeueSelect
+
+    BoringUtils.addSource(PopCount(valid) === 0.U, "perfCntCondMbrInROB_0")
+    BoringUtils.addSource(PopCount(valid) === 1.U, "perfCntCondMbrInROB_1")
+    BoringUtils.addSource(PopCount(valid) === 2.U, "perfCntCondMbrInROB_2")
+    BoringUtils.addSource(PopCount(valid) === 3.U, "perfCntCondMbrInROB_3")
+    BoringUtils.addSource(PopCount(valid) >   3.U, "perfCntCondMbrInROB_4")
   }
 
 }

@@ -569,7 +569,10 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val cdbSrc2Valid = PriorityMux(secondCommitValid, commitValidPriority)
 
   val cmtStrHaz = List(
-    PopCount(commitValidPriority.asUInt) > 2.U,
+    PopCount(commitValidPriority.asUInt) === 0.U,
+    PopCount(commitValidPriority.asUInt) === 1.U,
+    PopCount(commitValidPriority.asUInt) === 2.U,
+    PopCount(commitValidPriority.asUInt) === 3.U,
     PopCount(commitValidPriority.asUInt) > 3.U
   )
   val commitValidPriorityUInt = commitValidPriority.asUInt
@@ -600,24 +603,60 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // Performance Counter
 
   val isBru = ALUOpType.isBru(alu1commit.decode.ctrl.fuOpType)
-  assert(!(isBru && alu1.io.out.fire()))
-  BoringUtils.addSource(alu1.io.out.fire(), "perfCntCondMaluInstr") //TODO: Fix it
-  BoringUtils.addSource(bru.io.out.fire(), "perfCntCondMbruInstr") //TODO: Fix it
+  // assert(!(isBru && alu1.io.out.fire()))
+  BoringUtils.addSource(alu1.io.out.fire(), "perfCntCondMaluInstr")
+  BoringUtils.addSource(bru.io.out.fire(), "perfCntCondMbruInstr")
   BoringUtils.addSource(lsu.io.out.fire(), "perfCntCondMlsuInstr")
   BoringUtils.addSource(mdu.io.out.fire(), "perfCntCondMmduInstr")
-
   BoringUtils.addSource(!rob.io.in(0).ready, "perfCntCondMrobFull")
   BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMalu1rsFull")
   BoringUtils.addSource(!alu2rs.io.in.ready, "perfCntCondMalu2rsFull")
   BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMbrursFull")
   BoringUtils.addSource(!lsurs.io.in.ready, "perfCntCondMlsursFull")
   BoringUtils.addSource(!mdurs.io.in.ready, "perfCntCondMmdursFull")
+  BoringUtils.addSource(lsurs.io.out.fire(), "perfCntCondMlsuIssue")
+  BoringUtils.addSource(mdurs.io.out.fire(), "perfCntCondMmduIssue")
   BoringUtils.addSource(rob.io.empty, "perfCntCondMrobEmpty")
-  BoringUtils.addSource(cmtStrHaz(0), "perfCntCondMcmtStrHaz1")
-  BoringUtils.addSource(cmtStrHaz(1), "perfCntCondMcmtStrHaz2")
+  BoringUtils.addSource(cmtStrHaz(0), "perfCntCondMcmtCnt0")
+  BoringUtils.addSource(cmtStrHaz(1), "perfCntCondMcmtCnt1")
+  BoringUtils.addSource(cmtStrHaz(2), "perfCntCondMcmtCnt2")
+  BoringUtils.addSource(cmtStrHaz(3), "perfCntCondMcmtStrHaz1")
+  BoringUtils.addSource(cmtStrHaz(4), "perfCntCondMcmtStrHaz2")
   BoringUtils.addSource(alu2.io.out.fire(), "perfCntCondMaluInstr2")
+  BoringUtils.addSource(!(rob.io.in(0).fire() | rob.io.in(1).fire()), "perfCntCondMdispatch0")
   BoringUtils.addSource(rob.io.in(0).fire() ^ rob.io.in(1).fire(), "perfCntCondMdispatch1")
   BoringUtils.addSource(rob.io.in(0).fire() & rob.io.in(1).fire(), "perfCntCondMdispatch2")
+
+  val inst1RSfull = !LookupTree(io.in(0).bits.ctrl.fuType, List(
+    FuType.bru -> brurs.io.in.ready,
+    FuType.alu -> alu1rs.io.in.ready,
+    FuType.lsu -> lsurs.io.in.ready,
+    FuType.mdu -> mdurs.io.in.ready,
+    FuType.csr -> csrrs.io.in.ready,
+    FuType.mou -> csrrs.io.in.ready
+  ))
+  val inst2RSfull = !LookupTree(io.in(1).bits.ctrl.fuType, List(
+    FuType.bru -> brurs.io.in.ready,
+    FuType.alu -> alu2rs.io.in.ready,
+    FuType.lsu -> lsurs.io.in.ready,
+    FuType.mdu -> mdurs.io.in.ready,
+    FuType.csr -> csrrs.io.in.ready,
+    FuType.mou -> csrrs.io.in.ready
+  ))
+  val dispatchConflict = bruCnt > 1.U || lsuCnt > 1.U || mduCnt > 1.U || csrCnt > 1.U
+  BoringUtils.addSource(io.in(0).valid && (hasBlockInst(0) && !pipeLineEmpty || blockReg), "perfCntCondMdp1StBlk")
+  BoringUtils.addSource(io.in(0).valid && inst1RSfull, "perfCntCondMdp1StRSf")
+  BoringUtils.addSource(io.in(0).valid && !rob.io.in(0).ready, "perfCntCondMdp1StROBf")
+  BoringUtils.addSource(dispatchConflict, "perfCntCondMdp1StConf")
+  BoringUtils.addSource(io.in(0).valid && !instCango(0), "perfCntCondMdp1StCnt")
+
+  BoringUtils.addSource(io.in(1).valid && (hasBlockInst(0) || hasBlockInst(1) || blockReg), "perfCntCondMdp2StBlk")
+  BoringUtils.addSource(io.in(1).valid && inst2RSfull, "perfCntCondMdp2StRSf")
+  BoringUtils.addSource(io.in(1).valid && !rob.io.in(1).ready, "perfCntCondMdp2StROBf")
+  BoringUtils.addSource(dispatchConflict, "perfCntCondMdp2StConf")
+  BoringUtils.addSource(io.in(1).valid && !instCango(0), "perfCntCondMdp2StSeq")
+  BoringUtils.addSource(io.in(1).valid && !instCango(1), "perfCntCondMdp2StCnt")
+
 
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")
