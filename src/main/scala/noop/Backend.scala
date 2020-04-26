@@ -12,7 +12,7 @@ trait HasBackendConst{
   val robSize = 16
   val robWidth = 2
   val robInstCapacity = robSize * robWidth
-  val checkpointSize = 8 // register map checkpoint size
+  val checkpointSize = 4 // register map checkpoint size
   val prfAddrWidth = log2Up(robSize) + log2Up(robWidth) // physical rf addr width
 
   val DispatchWidth = 2
@@ -48,11 +48,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val rob = Module(new ROB)
 
   val brurs  = Module(new RS(priority = true, size = checkpointSize, checkpoint = true, name = "BRURS"))
-  val alu1rs = Module(new RS(priority = true, size = 8, name = "ALU1RS"))
-  val alu2rs = Module(new RS(priority = true, size = 8, name = "ALU2RS"))
-  val csrrs  = Module(new RS(priority = true, name = "CSRRS", size = 1)) // CSR & MOU
-  val lsurs  = Module(new RS(storeBarrier = true, size = 8, name = "LSURS")) // FIXIT: out of order l/s disabled
-  val mdurs  = Module(new RS(priority = true, pipelined = false, name = "MDURS"))
+  val alu1rs = Module(new RS(priority = true, size = 4, name = "ALU1RS"))
+  val alu2rs = Module(new RS(priority = true, size = 4, name = "ALU2RS"))
+  val csrrs  = Module(new RS(priority = true, size = 1, name = "CSRRS")) // CSR & MOU
+  val lsurs  = Module(new RS(storeBarrier = true, size = 4, name = "LSURS")) // FIXIT: out of order l/s disabled
+  val mdurs  = Module(new RS(priority = true, size = 4, pipelined = false, name = "MDURS"))
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
@@ -131,7 +131,6 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     when(rob.io.rvalid(2*i) && rob.io.rcommited(2*i)){inst(i).decode.data.src1 := rob.io.rprf(2*i)}
     inst(i).decode.data.src2 := rf.read(rfSrc(2*i + 1)) 
     when(rob.io.rvalid(2*i+1) && rob.io.rcommited(2*i+1)){inst(i).decode.data.src2 := rob.io.rprf(2*i+1)}
-    // TODO: ROB WB
   })
   inst(DispatchWidth) := DontCare
 
