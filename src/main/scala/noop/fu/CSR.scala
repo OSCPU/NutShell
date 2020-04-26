@@ -789,6 +789,13 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
       printf("======== PerfCnt =========\n")
       perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
         printf("%d <- " + name + "\n", readWithScala(addr)) }
+      printf("======== PerfCntCSV =========\n\n\n")
+      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+        printf(name + ", ") }
+      printf("\n\n")
+      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+        printf("%d, ", readWithScala(addr)) }
+      printf("\n\n")
     }
 
     // for differential testing
