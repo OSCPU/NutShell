@@ -291,6 +291,39 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     }
   }
 
+  val lsupc = Wire(UInt(VAddrBits.W))
+  val storeTBCV = Wire(Bool())
+  val Q1 = Module(new Queue(UInt(VAddrBits.W), 32, pipe = true, flow = true))
+  val Q2 = Module(new Queue(UInt(VAddrBits.W), 32, pipe = true, flow = true))
+  Q1.io.enq.valid := io.scommit
+  Q1.io.deq.ready := storeTBCV
+  Q1.io.enq.bits := decode(ringBufferTail)(0).cf.pc
+  Q2.io.enq.valid := io.scommit
+  Q2.io.deq.ready := storeTBCV
+  Q2.io.enq.bits := decode(ringBufferTail)(1).cf.pc
+  lsupc := DontCare
+  storeTBCV := DontCare
+  BoringUtils.addSink(lsupc, "GSPC")
+  BoringUtils.addSink(storeTBCV, "GSPCV")
+
+  when(
+    storeTBCV &&
+    (
+      Q1.io.deq.bits =/= lsupc &&
+      Q2.io.deq.bits =/= lsupc ||
+      !Q1.io.deq.valid
+    ) 
+  ){
+    printf("[ERROR] robpc1 %x robpc2 %x v %x lsupc %x time %d\n", 
+      Q1.io.deq.bits,
+      Q2.io.deq.bits,
+      Q1.io.deq.valid,
+      lsupc,
+      GTimer()
+    )
+  }
+
+
   // In current version, only one l/s inst can be sent to agu in a cycle
   // therefore, in all banks, there is no more than 1 store insts
 
@@ -382,9 +415,9 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       printf("\n")
     }
     
-    for(i <- 0 to (robSize - 1)){
-      printf("[ROB] %b %b " + i + "\n", brMask(i)(0), brMask(i)(1))
-    }
+    // for(i <- 0 to (robSize - 1)){
+    //   printf("[ROB] %b %b " + i + "\n", brMask(i)(0), brMask(i)(1))
+    // }
 
     // for(i <- 0 until NRReg){
     //   printf("[ROB] prMap %b %d " + i + "\n", rmtValid(i), rmtMap(i))

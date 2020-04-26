@@ -489,6 +489,12 @@ class LSU extends NOOPModule with HasLSUConst {
     storeQueue(storeQueueEnqPtr).isMMIO := Mux(havePendingStqEnq, loadQueue(loadDmemPtr).isMMIO, paddrIsMMIO)
     storeQueue(storeQueueEnqPtr).valid := true.B && !(loadQueue(storeQueueEnqSrcPick).brMask(branchIndex) && bruFlush)
   }
+  
+  // For debug
+  val storeTBCV = io.dmem.req.fire() && io.dmem.req.bits.cmd === SimpleBusCmd.write
+  val storeTBC = WireInit(storeQueue(0.U).pc)
+  BoringUtils.addSource(storeTBCV, "GSPCV")
+  BoringUtils.addSource(storeTBC, "GSPC")
 
   Debug(){
     when(storeQueueEnqueue || storeQueueAMOEnqueue){
@@ -868,11 +874,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   val printMemTrace = false
   val addrTrack = List(
-    "h12345678".U,
-    "h8332b9c8".U,
-    "h8332b9ca".U,
-    "h8332b9cc".U,
-    "h8332b9ce".U
+    "h12345678".U
   )
 
   when(printMemTrace.B || addrTrack.map(i => dmem.req.bits.addr === i).foldRight(false.B)((sum, i) => sum | i)){
