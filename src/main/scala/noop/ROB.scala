@@ -450,11 +450,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.isRVC), "difftestIsRVC2")
     BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
   } else {
-    BoringUtils.addSource(DontCare, "ilaWBUvalid")
-    BoringUtils.addSource(DontCare, "ilaWBUpc")
-    BoringUtils.addSource(DontCare, "ilaWBUrfWen")
-    BoringUtils.addSource(DontCare, "ilaWBUrfDest")
-    BoringUtils.addSource(DontCare, "ilaWBUrfData")
+    BoringUtils.addSource(retireATerm, "ilaWBUvalid")
+    BoringUtils.addSource(retirePC, "ilaWBUpc")
+    BoringUtils.addSource(io.wb(0).rfWen, "ilaWBUrfWen")
+    BoringUtils.addSource(io.wb(0).rfDest, "ilaWBUrfDest")
+    BoringUtils.addSource(io.wb(0).rfData, "ilaWBUrfData")
   }
 
   Debug(){

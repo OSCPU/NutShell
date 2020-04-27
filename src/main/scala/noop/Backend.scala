@@ -527,9 +527,12 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   // Commit to CDB
   // ------------------------------------------------
 
+  val nullCommit = Wire(new OOCommitIO)
+  nullCommit := DontCare
+
   // CDB arbit
   val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU, srcNone) = (0, 1, 2, 3, 4, 5, 6, 7)
-  val commit = List(brucommit, alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit, DontCare)
+  val commit = List(brucommit, alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit, nullCommit)
   val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
 
   val WritebackPriority = Seq(
