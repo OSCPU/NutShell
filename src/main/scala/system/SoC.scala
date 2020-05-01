@@ -45,7 +45,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   axi2sb.io.in <> io.frontend
   noop.io.frontend <> axi2sb.io.out
 
-  if (HasL2cache) {
+  val mem = if (HasL2cache) {
     val l2cacheOut = Wire(new SimpleBusC)
     val l2cacheIn = if (HasPrefetch) {
       val prefetcher = Module(new Prefetcher)
@@ -58,13 +58,17 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     val l2Empty = Wire(Bool())
     l2cacheOut <> Cache(in = l2cacheIn, mmio = 0.U.asTypeOf(new SimpleBusUC) :: Nil, flush = "b00".U, empty = l2Empty, enable = true)(
       CacheConfig(name = "l2cache", totalSize = 128, cacheLevel = 2))
-    io.mem <> l2cacheOut.mem.toAXI4()
     l2cacheOut.coh.resp.ready := true.B
     l2cacheOut.coh.req.valid := false.B
     l2cacheOut.coh.req.bits := DontCare
+    l2cacheOut.mem
   } else {
-    io.mem <> xbar.io.out.toAXI4()
+    xbar.io.out
   }
+
+  val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L)))
+  memAddrMap.io.in <> mem
+  io.mem <> memAddrMap.io.out.toAXI4()
   
   noop.io.imem.coh.resp.ready := true.B
   noop.io.imem.coh.req.valid := false.B
@@ -78,11 +82,15 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   mmioXbar.io.in <> noop.io.mmio
 
   val extDev = mmioXbar.io.out(0)
-  val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
-  clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
-  if (p.FPGAPlatform) io.mmio <> extDev.toAXI4Lite()
+  if (p.FPGAPlatform) {
+    val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L)))
+    mmioAddrMap.io.in <> extDev
+    io.mmio <> mmioAddrMap.io.out.toAXI4Lite()
+  }
   else io.mmio <> extDev
 
+  val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
+  clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
   val mtipSync = clint.io.extra.get.mtip
   val meipSync = RegNext(RegNext(io.meip))
   BoringUtils.addSource(mtipSync, "mtip")
