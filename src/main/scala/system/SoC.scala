@@ -3,7 +3,7 @@ package system
 import noop._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
-import device.AXI4Timer
+import device.{AXI4Timer, AXI4PLIC}
 
 import chisel3._
 import chisel3.util._
@@ -75,8 +75,9 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   noop.io.imem.coh.req.bits := DontCare
 
   val addrSpace = List(
-    (0x40000000L, 0x08000000L), // external devices
-    (0x48000000L, 0x00010000L)  // CLINT
+    (0x40000000L, 0x01000000L), // external devices
+    (0x48000000L, 0x00010000L), // CLINT
+    (0x4c000000L, 0x04000000L)  // PLIC
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> noop.io.mmio
@@ -92,8 +93,12 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
   val mtipSync = clint.io.extra.get.mtip
-  val meipSync = RegNext(RegNext(io.meip))
   BoringUtils.addSource(mtipSync, "mtip")
+
+  val plic = Module(new AXI4PLIC(nrIntr = 1, nrHart = 1))
+  plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
+  plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
+  val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
 
   // ILA
