@@ -15,12 +15,12 @@ trait HasSoCParameter {
   val HasPrefetch = true
 }
 
-class ILABundle extends Bundle {
-  val WBUpc = UInt(32.W)
+class ILABundle extends NOOPBundle {
+  val WBUpc = UInt(VAddrBits.W)
   val WBUvalid = UInt(1.W)
   val WBUrfWen = UInt(1.W)
   val WBUrfDest = UInt(5.W)
-  val WBUrfData = UInt(64.W)
+  val WBUrfData = UInt(XLEN.W)
   val InstrCnt = UInt(64.W)
 }
 
