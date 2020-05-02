@@ -84,12 +84,13 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
+  val aw_bypass = Mux(axi.aw.valid, aw, aw_reg)
   when (axi.w.valid) {
     mem.req.valid := true.B
-    req.cmd := Mux(aw_reg.len === 0.U, SimpleBusCmd.write,
+    req.cmd := Mux(aw_bypass.len === 0.U, SimpleBusCmd.write,
       Mux(w.last, SimpleBusCmd.writeLast, SimpleBusCmd.writeBurst))
-    req.addr := aw_reg.addr
-    req.size := aw_reg.size
+    req.addr := aw_bypass.addr
+    req.size := aw_bypass.size
     req.wmask := w.strb
     req.wdata := w.data
     req.user.foreach(_ := aw.user)
