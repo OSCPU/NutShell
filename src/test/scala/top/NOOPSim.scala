@@ -42,7 +42,7 @@ class NOOPSimTop extends Module {
   val memdelay = Module(new AXI4Delayer(0))
   val mmio = Module(new SimMMIO)
 
-  soc.io.frontend := DontCare
+  soc.io.frontend <> mmio.io.dma
 
   memdelay.io.in <> soc.io.mem
   mem.io.in <> memdelay.io.out
