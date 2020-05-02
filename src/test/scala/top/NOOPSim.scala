@@ -49,8 +49,7 @@ class NOOPSimTop extends Module {
 
   mmio.io.rw <> soc.io.mmio
 
-  // soc.io.meip := Counter(true.B, 9973)._2  // use prime here to not overlapped by mtip
-  soc.io.meip := false.B  // use prime here to not overlapped by mtip
+  soc.io.meip := mmio.io.meip
 
   val difftest = WireInit(0.U.asTypeOf(new DiffTestIO))
   BoringUtils.addSink(difftest.commit, "difftestCommit")
