@@ -27,8 +27,8 @@ class ILABundle extends NOOPBundle {
 class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
-    val mmio = (if (p.FPGAPlatform) { new AXI4Lite } else { new SimpleBusUC })
-    val slcr = (if (p.FPGAPlatform) { new AXI4Lite } else null)
+    val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
+    val slcr = (if (p.FPGAPlatform) { new AXI4 } else null)
     val frontend = Flipped(new AXI4)
     val meip = Input(Bool())
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
@@ -88,11 +88,11 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   if (p.FPGAPlatform) {
     val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L)))
     mmioAddrMap.io.in <> extDev
-    io.mmio <> mmioAddrMap.io.out.toAXI4Lite()
+    io.mmio <> mmioAddrMap.io.out.toAXI4()
 
     val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L)))
     slcrAddrMap.io.in <> mmioXbar.io.out(3)
-    io.slcr <> slcrAddrMap.io.out.toAXI4Lite()
+    io.slcr <> slcrAddrMap.io.out.toAXI4()
   }
   else {
     io.mmio <> extDev
