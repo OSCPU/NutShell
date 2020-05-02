@@ -28,6 +28,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4Lite } else { new SimpleBusUC })
+    val slcr = (if (p.FPGAPlatform) { new AXI4Lite } else null)
     val frontend = Flipped(new AXI4)
     val meip = Input(Bool())
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
@@ -77,7 +78,8 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val addrSpace = List(
     (0x40000000L, 0x08000000L), // external devices
     (0x48000000L, 0x00010000L), // CLINT
-    (0x4c000000L, 0x04000000L)  // PLIC
+    (0x4c000000L, 0x04000000L), // PLIC
+    (0x49000000L, 0x00010000L)  // SLCR for pynq
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> noop.io.mmio
@@ -87,8 +89,15 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L)))
     mmioAddrMap.io.in <> extDev
     io.mmio <> mmioAddrMap.io.out.toAXI4Lite()
+
+    val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L)))
+    slcrAddrMap.io.in <> mmioXbar.io.out(3)
+    io.slcr <> slcrAddrMap.io.out.toAXI4Lite()
   }
-  else io.mmio <> extDev
+  else {
+    io.mmio <> extDev
+    mmioXbar.io.out(3) := DontCare
+  }
 
   val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
