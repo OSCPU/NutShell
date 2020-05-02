@@ -31,6 +31,7 @@ class DiffTestIO extends Bundle {
 class NOOPSimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
+    val difftestCtrl = new DiffTestCtrlIO
   })
 
   lazy val config = NOOPConfig(FPGAPlatform = false)
@@ -67,6 +68,7 @@ class NOOPSimTop extends Module {
   BoringUtils.addSink(difftest.mcause, "difftestMcause")
   BoringUtils.addSink(difftest.scause, "difftestScause")
   io.difftest := difftest
+  io.difftestCtrl <> mmio.io.difftestCtrl
 }
 
 object TestMain extends App {

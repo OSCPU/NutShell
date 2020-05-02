@@ -75,7 +75,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   noop.io.imem.coh.req.bits := DontCare
 
   val addrSpace = List(
-    (0x40000000L, 0x01000000L), // external devices
+    (0x40000000L, 0x80000000L), // external devices
     (0x48000000L, 0x00010000L), // CLINT
     (0x4c000000L, 0x04000000L)  // PLIC
   )
