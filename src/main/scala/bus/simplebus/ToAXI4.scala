@@ -7,8 +7,9 @@ import bus.axi4._
 import utils._
 
 class AXI42SimpleBusConverter() extends Module {
+  val idBits = 18
   val io = IO(new Bundle {
-    val in = Flipped(new AXI4(idBits = 18))
+    val in = Flipped(new AXI4(idBits = idBits))
     val out = new SimpleBusUC()
   })
 
@@ -72,7 +73,7 @@ class AXI42SimpleBusConverter() extends Module {
   }
 
   // Write Path
-  val aw_reg = Reg(new AXI4BundleA(AXI4Parameters.idBits))
+  val aw_reg = Reg(new AXI4BundleA(idBits))
   val bresp_en = RegInit(false.B)
 
   when (axi.aw.valid && !axi.ar.valid) {
