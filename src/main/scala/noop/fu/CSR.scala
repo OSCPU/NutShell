@@ -824,8 +824,9 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     "MpendingSReq"-> (0xb65, "perfCntCondMpendingSReq"   ), //Maunally updated
     "MicacheReq"  -> (0xb66, "perfCntCondMicacheReq"   ),
     "MdcacheReq"  -> (0xb67, "perfCntCondMdcacheReq"   ),
-    "Ml2cacheReq" -> (0xb68, "perfCntCondMl2cacheReq"   )
-    // "MmemLBS"  -> (0xb69, "perfCntCondMmemLBS"   ),//TODO
+    "Ml2cacheReq" -> (0xb68, "perfCntCondMl2cacheReq"   ),
+    "MdpNoInst"   -> (0xb69, "perfCntCondMdpNoInst"   )
+    // "MmemLBS"  -> (0xb6a, "perfCntCondMmemLBS"   ),//TODO
   )
 
   val perfCntList = generalPerfCntList ++  (if (EnableOutOfOrderExec) outOfOrderPerfCntList else sequentialPerfCntList) 

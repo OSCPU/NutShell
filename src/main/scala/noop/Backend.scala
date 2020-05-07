@@ -51,7 +51,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val alu1rs = Module(new RS(priority = true, size = 4, name = "ALU1RS"))
   val alu2rs = Module(new RS(priority = true, size = 4, name = "ALU2RS"))
   val csrrs  = Module(new RS(priority = true, size = 1, name = "CSRRS")) // CSR & MOU
-  val lsurs  = Module(new RS(storeBarrier = true, size = 4, name = "LSURS")) // FIXIT: out of order l/s disabled
+  val lsurs  = Module(new RS(storeSeq = true, size = 4, name = "LSURS")) // FIXIT: out of order l/s disabled
   val mdurs  = Module(new RS(priority = true, size = 4, pipelined = false, name = "MDURS"))
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
@@ -414,6 +414,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   )
   lsu.io.uopIn := lsuUop
   lsu.io.brMaskIn := lsurs.io.brMaskOut
+  lsu.io.stMaskIn := lsurs.io.stMaskOut.get
+  lsu.io.robAllocate.valid := io.in(0).fire()
+  lsu.io.robAllocate.bits := rob.io.index
   lsu.io.cdb := cdb
   lsu.io.scommit := rob.io.scommit
   haveUnfinishedStore := lsu.io.haveUnfinishedStore
@@ -429,8 +432,6 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsucommit.isMMIO := lsu.io.isMMIO
   lsucommit.commits := lsuOut
   lsucommit.prfidx := lsu.io.uopOut.prfDest
-  lsucommit.decode.cf.redirect.valid := false.B
-  lsucommit.decode.cf.redirect.rtype := DontCare
   lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
   // fix exceptionVec
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
@@ -614,7 +615,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   BoringUtils.addSource(!rob.io.in(0).ready, "perfCntCondMrobFull")
   BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMalu1rsFull")
   BoringUtils.addSource(!alu2rs.io.in.ready, "perfCntCondMalu2rsFull")
-  BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMbrursFull")
+  BoringUtils.addSource(!brurs.io.in.ready, "perfCntCondMbrursFull")
   BoringUtils.addSource(!lsurs.io.in.ready, "perfCntCondMlsursFull")
   BoringUtils.addSource(!mdurs.io.in.ready, "perfCntCondMmdursFull")
   BoringUtils.addSource(lsurs.io.out.fire(), "perfCntCondMlsuIssue")
@@ -659,7 +660,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   BoringUtils.addSource(dispatchConflict, "perfCntCondMdp2StConf")
   BoringUtils.addSource(io.in(1).valid && !instCango(0), "perfCntCondMdp2StSeq")
   BoringUtils.addSource(io.in(1).valid && !instCango(1), "perfCntCondMdp2StCnt")
-
+  BoringUtils.addSource(!io.in(0).valid, "perfCntCondMdpNoInst")
 
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")

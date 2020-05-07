@@ -276,7 +276,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     valid(ringBufferTail)(i) && 
     decode(ringBufferTail)(i).ctrl.fuType === FuType.lsu && 
     LSUOpType.needMemWrite(decode(ringBufferTail)(i).ctrl.fuOpType) && 
-    List.tabulate(i+1)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
+    List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
     List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k)
   ).reduce(_ || _) && retireATerm
 
@@ -375,6 +375,19 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   }
   forAllROBBanks((i: Int) => io.in(i).ready := ringBufferAllowin)
   assert(!(validEnqueueRequest && ringBufferAllowin && io.recoverCheckpoint.valid))
+
+  // Send robInstValid signal to LSU for "backward"
+  val robLoadInstVec = WireInit(VecInit((0 until robSize).map(i => {
+    valid(i)(0) && decode(i)(0).ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(decode(i)(0).ctrl.fuOpType) ||
+    valid(i)(1) && decode(i)(1).ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(decode(i)(1).ctrl.fuOpType)
+  })).asUInt) 
+  val robStoreInstVec = WireInit(VecInit((0 until robSize).map(i => {
+    valid(i)(0) && decode(i)(0).ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(decode(i)(0).ctrl.fuOpType) ||
+    valid(i)(1) && decode(i)(1).ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(decode(i)(1).ctrl.fuOpType)
+  })).asUInt) 
+  // TODO: use a single bit in rob misc field to save "isload"
+  BoringUtils.addSource(robLoadInstVec, "ROBLoadInstVec")
+  BoringUtils.addSource(robStoreInstVec, "ROBStoreInstVec")
 
   // Generate Debug Info
   Debug(){

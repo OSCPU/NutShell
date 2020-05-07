@@ -12,7 +12,7 @@ trait HasRSConst{
 }
 
 // Reservation Station
-class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, checkpoint: Boolean = false, storeBarrier: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
+class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, checkpoint: Boolean = false, storeBarrier: Boolean = false, storeSeq: Boolean = false, name: String = "unnamedRS") extends NOOPModule with HasRSConst with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
@@ -23,6 +23,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     val empty = Output(Bool())
     val updateCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
     val recoverCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
+    val stMaskOut = if (storeSeq) Some(Output(UInt(robSize.W))) else None
     val commit = if (!pipelined) Some(Input(Bool())) else None
   })
 
@@ -227,6 +228,63 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     }
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
+  }
+
+  if(storeSeq){
+    require(!priority || !fifo || !storeBarrier)
+    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
+    val stMask = Reg(Vec(rsSize, Vec(robSize, Bool())))
+    // val stMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(robSize)(false.B)))))
+    val needStore = Reg(Vec(rsSize, Bool()))
+    val stMaskReg = RegInit(VecInit(Seq.fill(robSize)(false.B)))
+    val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
+      valid(i) &&
+      Mux(
+        needStore(i), 
+        !(priorityMask(i).asUInt.orR), // there is no other inst ahead
+        true.B
+      ) &&
+      !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
+    }))
+    dequeueSelect := OHToUInt(dequeueSelectVec)
+    io.out.valid := instRdy(dequeueSelect) && dequeueSelectVec(dequeueSelect)
+    // update priorityMask
+    List.tabulate(rsSize)(i => 
+      when(needMispredictionRecovery(brMask(i))){ 
+        List.tabulate(rsSize)(j => 
+          priorityMask(j)(i):= false.B 
+        )
+      }
+    )
+    when(io.in.fire()){
+      priorityMask(enqueueSelect) := valid
+      needStore(enqueueSelect) := LSUOpType.needMemWrite(io.in.bits.decode.ctrl.fuOpType)
+    }
+    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
+
+    //update stMask
+    val robStoreInstVec = WireInit(0.U(robSize.W))
+    BoringUtils.addSink(robStoreInstVec, "ROBStoreInstVec")
+    (0 until robSize).map(i => {
+      when(!robStoreInstVec(i)){stMaskReg(i) := false.B}
+    })
+    when(io.in.fire() && LSUOpType.needMemWrite(io.in.bits.decode.ctrl.fuOpType)){
+      stMaskReg(io.in.bits.prfDest(prfAddrWidth-1,1)) := true.B
+    }
+    when(io.in.fire()){
+      stMask(enqueueSelect) := stMaskReg
+    }
+    when(io.out.fire()){
+      stMaskReg(io.out.bits.prfDest(prfAddrWidth-1,1)) := false.B
+      (0 until rsSize).map(i => {
+        stMask(i)(io.out.bits.prfDest(prfAddrWidth-1,1)) := false.B
+      })
+    }
+    when(io.flush){(0 until robSize).map(i => {
+      stMaskReg(i) := false.B
+    })}
+    io.stMaskOut.get := stMask(dequeueSelect).asUInt
   }
 
   if(checkpoint){
