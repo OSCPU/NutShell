@@ -532,13 +532,17 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     }.otherwise{
       stval := tval
     }
-    printf("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    Debug(){
+      printf("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    }
   }
 
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
-      mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
+    mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
+    Debug(){
       printf("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    }
   }
 
   // Exception and Intr
