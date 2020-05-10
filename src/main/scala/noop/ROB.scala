@@ -272,12 +272,17 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // Raise decoupled store request
   // If l/s are decoupled, store request is sent to store buffer here.
   // Note: only # of safe store ops is sent to LSU
+  val cancelScommit = RegInit(false.B)
+  when(io.exception){ cancelScommit := true.B }
+  when(io.flush){ cancelScommit := false.B }
+
   io.scommit := List.tabulate(robWidth)(i => 
     valid(ringBufferTail)(i) && 
     decode(ringBufferTail)(i).ctrl.fuType === FuType.lsu && 
     LSUOpType.needMemWrite(decode(ringBufferTail)(i).ctrl.fuOpType) && 
     List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
-    List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k)
+    List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k) &&
+    !cancelScommit
   ).reduce(_ || _) && retireATerm
 
   Debug(){
