@@ -256,13 +256,15 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // `beUop` stands for `backend exception uop`
   val exceptionSelect = Mux(exception(ringBufferTail)(0), 0.U, 1.U)
   io.beUop := DontCare
-  io.beUop.decode := decode(ringBufferTail)(exceptionSelect)
+  // io.beUop.decode := decode(ringBufferTail)(exceptionSelect)
+  io.beUop.decode.cf.pc := decode(ringBufferTail)(exceptionSelect).cf.pc
   for(i <- 0 to storePageFault){io.beUop.decode.cf.exceptionVec(i) := false.B}
   io.beUop.decode.cf.exceptionVec(loadPageFault) := intrNO(ringBufferTail)(exceptionSelect)(loadPageFault)
   io.beUop.decode.cf.exceptionVec(storePageFault) := intrNO(ringBufferTail)(exceptionSelect)(storePageFault)
   io.beUop.decode.cf.exceptionVec(loadAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(loadAddrMisaligned)
   io.beUop.decode.cf.exceptionVec(storeAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(storeAddrMisaligned)
   io.beUop.decode.data.src1 := prf(Cat(ringBufferTail, exceptionSelect)) //FIXIT
+  // io.beUop.decode.data.src2 := DontCare
   io.beUop.prfDest := Cat(ringBufferTail, exceptionSelect)
 
   assert(!(exception(ringBufferTail)(0) && exception(ringBufferTail)(1) && valid(ringBufferTail)(0) && valid(ringBufferTail)(1)))

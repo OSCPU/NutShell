@@ -40,7 +40,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   })
 
   // For current version:
-  // There is only 1 BRU (combined with ALU1)
+  // There is only 1 BRU
   // There is only 1 LSU
 
   val cdb = Wire(Vec(CommitWidth, Valid(new OOCommitIO)))
@@ -53,6 +53,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val csrrs  = Module(new RS(priority = true, size = 1, name = "CSRRS")) // CSR & MOU
   val lsurs  = Module(new RS(storeSeq = true, size = 4, name = "LSURS")) // FIXIT: out of order l/s disabled
   val mdurs  = Module(new RS(priority = true, size = 4, pipelined = false, name = "MDURS"))
+
+  val bruDelayer = Module(new WritebackDelayer(bru = true))
+  val mduDelayer = Module(new WritebackDelayer())
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
@@ -75,7 +78,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   })
 
   brurs.io.updateCheckpoint.get <> rob.io.updateCheckpoint
-  brurs.io.recoverCheckpoint.get <> rob.io.recoverCheckpoint
+  rob.io.recoverCheckpoint.bits := bruDelayer.io.freeCheckpoint.get.bits
+  brurs.io.freeCheckpoint.get <> bruDelayer.io.freeCheckpoint.get
   if(enableCheckpoint){
     rob.io.recoverCheckpoint.valid := io.redirect.valid && io.redirect.rtype === 1.U
   } else {
@@ -258,7 +262,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   brMask(1) := brMaskGen | (UIntToOH(inst(0).prfDest) & Fill(robInstCapacity, io.in(0).fire() && isBranch(0)))
   brMask(2) := DontCare
   brMask(3) := brMask(1) | (UIntToOH(inst(1).prfDest) & Fill(robInstCapacity, io.in(1).fire() && isBranch(1)))
-  brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(brurs.io.brMaskOut), brMask(3)))
+  brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bruDelayer.io.brMaskOut), brMask(3)))
 
   Debug(){
     printf("[brMAsk] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
@@ -328,6 +332,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val bru = Module(new ALU(hasBru = true))
   val brucommit = Wire(new OOCommitIO)
+  val brucommitdelayed = Wire(new OOCommitIO)
   val bruOut = bru.access(
     valid = brurs.io.out.valid, 
     src1 = brurs.io.out.bits.decode.data.src1, 
@@ -337,24 +342,34 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val bruWritebackReady = Wire(Bool())
   bru.io.cfIn := brurs.io.out.bits.decode.cf
   bru.io.offset := brurs.io.out.bits.decode.data.imm
-  bru.io.out.ready := bruWritebackReady
+  bru.io.out.ready := bruDelayer.io.in.ready
   brucommit.decode := brurs.io.out.bits.decode
   brucommit.isMMIO := false.B
   brucommit.intrNO := 0.U
   brucommit.commits := bruOut
   brucommit.prfidx := brurs.io.out.bits.prfDest
+  brucommit.decode.cf.redirect := bru.io.redirect
   // commit redirect
-  bruRedirect :=  bru.io.redirect
+  bruRedirect :=  bruDelayer.io.out.bits.decode.cf.redirect
   if(enableBranchEarlyRedirect){
     brucommit.decode.cf.redirect := bru.io.redirect
     brucommit.exception := false.B
-    bruRedirect.valid := bru.io.redirect.valid && brurs.io.out.fire()
+    // bruRedirect.valid := bru.io.redirect.valid && brurs.io.out.fire()
+    bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire()
   } else {
     brucommit.decode.cf.redirect := bru.io.redirect
     brucommit.decode.cf.redirect.rtype := 0.U // force set rtype to 0
     brucommit.exception := false.B
     bruRedirect.valid := false.B
   }
+  bruDelayer.io.in.bits := brucommit
+  bruDelayer.io.in.valid := bru.io.out.valid
+  bruDelayer.io.out.ready := bruWritebackReady
+  bruDelayer.io.cdb := cdb
+  bruDelayer.io.brMaskIn := brurs.io.brMaskOut
+  bruDelayer.io.flush := io.flush
+  bruDelayer.io.checkpointIn.get := brurs.io.recoverCheckpoint.get.bits
+  brucommitdelayed := bruDelayer.io.out.bits
 
   val alu1 = Module(new ALU())
   val alu1commit = Wire(new OOCommitIO)
@@ -444,6 +459,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val mdu = Module(new MDU)
   val mducommit = Wire(new OOCommitIO)
+  val mducommitdelayed = Wire(new OOCommitIO)
   val mduOut = mdu.access(
     valid = mdurs.io.out.valid, 
     src1 = mdurs.io.out.bits.decode.data.src1, 
@@ -451,8 +467,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     func = mdurs.io.out.bits.decode.ctrl.fuOpType
   )
   val mduWritebackReady = Wire(Bool())
-  mdu.io.out.ready := mduWritebackReady
-  // assert(!(mdu.io.out.valid && !mdu.io.out.ready))
+  mdu.io.out.ready := mduDelayer.io.in.ready
   mducommit.decode := mdurs.io.out.bits.decode
   mducommit.isMMIO := false.B
   mducommit.intrNO := 0.U
@@ -462,6 +477,15 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.decode.cf.redirect.rtype := DontCare
   mducommit.exception := false.B
   mdurs.io.commit.get := mdu.io.out.valid
+
+  // assert(!(mdu.io.out.valid && !mduDelayer.io.in.ready))
+  mduDelayer.io.in.bits := mducommit
+  mduDelayer.io.in.valid := mdu.io.out.valid && mdurs.io.out.valid
+  mduDelayer.io.out.ready := mduWritebackReady
+  mduDelayer.io.cdb := cdb
+  mduDelayer.io.brMaskIn := mdurs.io.brMaskOut
+  mduDelayer.io.flush := io.flush
+  mducommitdelayed := mduDelayer.io.out.bits
 
   val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr || commitBackendException
   val csrUop = WireInit(csrrs.io.out.bits)
@@ -533,8 +557,8 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   // CDB arbit
   val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU, srcNone) = (0, 1, 2, 3, 4, 5, 6, 7)
-  val commit = List(brucommit, alu1commit, alu2commit, lsucommit, mducommit, csrcommit, moucommit, nullCommit)
-  val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid && mdurs.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
+  val commit = List(brucommitdelayed, alu1commit, alu2commit, lsucommit, mducommitdelayed, csrcommit, moucommit, nullCommit)
+  val commitValid = List(bruDelayer.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mduDelayer.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
 
   val WritebackPriority = Seq(
     srcCSR,

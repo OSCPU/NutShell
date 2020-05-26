@@ -23,6 +23,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     val empty = Output(Bool())
     val updateCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
     val recoverCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
+    val freeCheckpoint = if (checkpoint) Some(Input(Valid(UInt(log2Up(size).W)))) else None
     val stMaskOut = if (storeSeq) Some(Output(UInt(robSize.W))) else None
     val commit = if (!pipelined) Some(Input(Bool())) else None
   })
@@ -47,6 +48,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val rsReadygo = Wire(Bool())
   rsReadygo := instRdy.foldRight(false.B)((sum, i) => sum|i)
 
+  val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
   val forceDequeue = WireInit(false.B)
 
   def needMispredictionRecovery(brMask: UInt) = {
@@ -104,7 +106,9 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val dequeueSelect = Wire(UInt(log2Up(size).W))
   dequeueSelect := PriorityEncoder(instRdy)
   when(io.out.fire() || forceDequeue){
-    valid(dequeueSelect) := false.B
+    if(!checkpoint){
+      valid(dequeueSelect) := false.B
+    }
   }
 
   io.out.valid := rsReadygo // && validNext(dequeueSelect)
@@ -145,13 +149,14 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     brMaskPReg := updateBrMask(brMaskPReg)
     when(io.out.fire()){ 
       fuValidReg := true.B 
-      brMaskPReg := updateBrMask(io.brMaskOut)
+      brMaskPReg := updateBrMask(brMask(dequeueSelect))
     }
     when(io.commit.get){ fuValidReg := false.B }
-    when((io.flush || needMispredictionRecovery(brMaskPReg)) && fuValidReg || (io.flush || needMispredictionRecovery(io.brMaskOut)) && io.out.fire()){ fuFlushReg := true.B }
+    when((io.flush || needMispredictionRecovery(brMaskPReg)) && fuValidReg || (io.flush || needMispredictionRecovery(brMask(dequeueSelect))) && io.out.fire()){ fuFlushReg := true.B }
     when(io.commit.get){ fuFlushReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
+    io.brMaskOut := brMaskPReg
     Debug(){
       printf("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire())
     }
@@ -160,7 +165,6 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   if(fifo){
     require(!priority)
     require(!storeBarrier)
-    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
     dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
       !priorityMask(i).asUInt.orR && valid(i)
     }))
@@ -181,7 +185,6 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   if(priority){
     require(!fifo)
     require(!storeBarrier)
-    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
     dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
       !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
     }))
@@ -193,7 +196,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
         )
       }
     )
-    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
+    when(io.in.fire()){ priorityMask(enqueueSelect) := valid}
     when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
@@ -201,7 +204,6 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   if(storeBarrier){
     require(!priority)
     require(!fifo)
-    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
     val needStore = Reg(Vec(rsSize, Bool()))
     val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
       valid(i) &&
@@ -232,7 +234,6 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
 
   if(storeSeq){
     require(!priority || !fifo || !storeBarrier)
-    val priorityMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(rsSize)(false.B)))))
     val stMask = Reg(Vec(rsSize, Vec(robSize, Bool())))
     // val stMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(robSize)(false.B)))))
     val needStore = Reg(Vec(rsSize, Bool()))
@@ -288,10 +289,30 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   }
 
   if(checkpoint){
+    require(priority)
+
     io.updateCheckpoint.get.valid := io.in.fire()
     io.updateCheckpoint.get.bits := enqueueSelect
     io.recoverCheckpoint.get.valid := DontCare
     io.recoverCheckpoint.get.bits := dequeueSelect
+
+    val pending = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
+    when(io.in.fire()){pending(enqueueSelect) := true.B}
+    when(io.out.fire()){pending(dequeueSelect) := false.B}
+    when(io.flush){List.tabulate(rsSize)(i => pending(i) := false.B)}
+    instRdy := VecInit(List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i) && pending(i)))
+    when(io.freeCheckpoint.get.valid){valid(io.freeCheckpoint.get.bits) := false.B}
+
+    List.tabulate(rsSize)(i => 
+      when(needMispredictionRecovery(brMask(i))){ 
+        List.tabulate(rsSize)(j => 
+          priorityMask(j)(i):= false.B 
+        )
+      }
+    )
+    when(io.in.fire()){priorityMask(enqueueSelect) := (valid.asUInt & pending.asUInt).asBools}
+    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
 
     BoringUtils.addSource(PopCount(valid) === 0.U, "perfCntCondMbrInROB_0")
     BoringUtils.addSource(PopCount(valid) === 1.U, "perfCntCondMbrInROB_1")
