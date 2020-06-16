@@ -1,10 +1,16 @@
 # usage: hsi -nojournal -nolog -source [this tcl file] -tclargs [hdf file] [prj-brd]
 
 if {[llength $argv] > 0} {
-  set hdf_file [lindex $argv 0]
-  set project_name [lindex $argv 1]
+  set project_name [lindex $argv 0]
 } else {
   puts "hdf file path is not given!"
+  return 1
+}
+
+if {[llength $argv] > 1} {
+  set standalone [lindex $argv 1]
+} else {
+  puts "standalone mode is not given!"
   return 1
 }
 
@@ -17,10 +23,8 @@ set build_dir ${script_dir}/build/${project_name}
 
 set device_tree_repo_path "/home/yzh/xilinx/device-tree-xlnx"
 
-set hw_design [open_hw_design ${hdf_file}]
-
 switch -regexp -- $brd {
-  zedboard {
+  zedboard|pynq {
     set processor ps7_cortexa9_0
     set brd_version zedboard
     set arch zynq
@@ -29,16 +33,16 @@ switch -regexp -- $brd {
     set processor psu_cortexa53_0
     set brd_version zcu102-rev1.0
     set arch zynqmp
-
-    generate_app -hw $hw_design -os standalone -proc psu_pmu_0 -app zynqmp_pmufw -compile -sw pmufw -dir ${build_dir}/pmufw
-    exec mkdir -p ${script_dir}/build/${arch}
-    exec ln -sf ${build_dir}/pmufw/executable.elf ${script_dir}/build/${arch}/pmufw.elf
   }
   default {
     puts "Unsupported board $brd"
     return 1
   }
 }
+
+exec mkdir -p ${script_dir}/build/${arch}
+set hdf_file ${script_dir}/build/${arch}/ps.hdf
+set hw_design [open_hw_design ${hdf_file}]
 
 generate_app -hw $hw_design -os standalone -proc $processor -app ${arch}_fsbl -sw fsbl -dir ${build_dir}/fsbl
 if {$brd == "sidewinder"} {
@@ -47,9 +51,21 @@ if {$brd == "sidewinder"} {
 }
 if { [catch { exec make -C ${build_dir}/fsbl } msg ] } { }
 
+if {$arch == "zynqmp"} {
+  generate_app -hw $hw_design -os standalone -proc psu_pmu_0 -app zynqmp_pmufw -compile -sw pmufw -dir ${build_dir}/pmufw
+  exec ln -sf ${build_dir}/pmufw/executable.elf ${script_dir}/build/${arch}/pmufw.elf
+}
+
 exec mkdir -p ${script_dir}/build/${arch}
 exec ln -sf ${build_dir}/fsbl/executable.elf ${script_dir}/build/${arch}/fsbl.elf
-exec bootgen -arch ${arch} -image ${script_dir}/bootgen-${arch}.bif -w -o i ${build_dir}/BOOT.BIN
+
+if {$standalone == "true"} {
+  set bif_file ${script_dir}/bootgen-${arch}-standalone.bif
+  if { [catch { exec make -C ${script_dir}/../resource/fsbl-loader } msg ] } { }
+} else {
+  set bif_file ${script_dir}/bootgen-${arch}.bif
+}
+exec bootgen -arch ${arch} -image $bif_file -w -o i ${build_dir}/BOOT.BIN
 
 #device tree
 set_repo_path ${device_tree_repo_path}
