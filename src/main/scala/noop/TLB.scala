@@ -8,7 +8,235 @@ import bus.simplebus._
 import bus.axi4._
 import utils._
 
-class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
+sealed trait Sv39Const extends HasNOOPParameter{
+  val Level = 3
+  val offLen  = 12
+  val ppn0Len = 9
+  val ppn1Len = 9
+  val ppn2Len = PAddrBits - offLen - ppn0Len - ppn1Len // 2
+  val ppnLen = ppn2Len + ppn1Len + ppn0Len
+  val vpn2Len = 9
+  val vpn1Len = 9
+  val vpn0Len = 9
+  val vpnLen = vpn2Len + vpn1Len + vpn0Len
+  
+  //val paddrLen = PAddrBits
+  //val vaddrLen = VAddrBits
+  val satpLen = XLEN
+  val satpModeLen = 4
+  val asidLen = 16
+  val flagLen = 8
+
+  val ptEntryLen = XLEN
+  val satpResLen = XLEN - ppnLen - satpModeLen - asidLen
+  //val vaResLen = 25 // unused
+  //val paResLen = 25 // unused 
+  val pteResLen = XLEN - ppnLen - 2 - flagLen
+
+  def vaBundle = new Bundle {
+    val vpn2 = UInt(vpn2Len.W)
+    val vpn1 = UInt(vpn1Len.W)
+    val vpn0 = UInt(vpn0Len.W)
+    val off  = UInt( offLen.W)
+  }
+
+  def vaBundle2 = new Bundle {
+    val vpn  = UInt(vpnLen.W)
+    val off  = UInt(offLen.W)
+  }
+
+  def vaBundle3 = new Bundle {
+    val vpn = UInt(vpnLen.W)
+    val off = UInt(offLen.W)
+  }
+
+  def vpnBundle = new Bundle {
+    val vpn2 = UInt(vpn2Len.W)
+    val vpn1 = UInt(vpn1Len.W)
+    val vpn0 = UInt(vpn0Len.W)
+  }
+
+  def paBundle = new Bundle {
+    val ppn2 = UInt(ppn2Len.W)
+    val ppn1 = UInt(ppn1Len.W)
+    val ppn0 = UInt(ppn0Len.W)
+    val off  = UInt( offLen.W)
+  }
+
+  def paBundle2 = new Bundle {
+    val ppn  = UInt(ppnLen.W)
+    val off  = UInt(offLen.W)
+  }
+
+  def paddrApply(ppn: UInt, vpnn: UInt):UInt = {
+    Cat(Cat(ppn, vpnn), 0.U(3.W))
+  }
+  
+  def pteBundle = new Bundle {
+    val reserved  = UInt(pteResLen.W)
+    val ppn  = UInt(ppnLen.W)
+    val rsw  = UInt(2.W)
+    val flag = new Bundle {
+      val d    = UInt(1.W)
+      val a    = UInt(1.W)
+      val g    = UInt(1.W)
+      val u    = UInt(1.W)
+      val x    = UInt(1.W)
+      val w    = UInt(1.W)
+      val r    = UInt(1.W)
+      val v    = UInt(1.W)
+    }
+  }
+
+  def satpBundle = new Bundle {
+    val mode = UInt(satpModeLen.W)
+    val asid = UInt(asidLen.W)
+    val res = UInt(satpResLen.W)
+    val ppn  = UInt(ppnLen.W)
+  }
+
+  def flagBundle = new Bundle {
+    val d    = Bool()//UInt(1.W)
+    val a    = Bool()//UInt(1.W)
+    val g    = Bool()//UInt(1.W)
+    val u    = Bool()//UInt(1.W)
+    val x    = Bool()//UInt(1.W)
+    val w    = Bool()//UInt(1.W)
+    val r    = Bool()//UInt(1.W)
+    val v    = Bool()//UInt(1.W)
+  }
+
+  def maskPaddr(ppn:UInt, vaddr:UInt, mask:UInt) = {
+    MaskData(vaddr, Cat(ppn, 0.U(offLen.W)), Cat(Fill(ppn2Len, 1.U(1.W)), mask, 0.U(offLen.W)))
+  }
+
+  def MaskEQ(mask: UInt, pattern: UInt, vpn: UInt) = {
+    (Cat("h1ff".U(vpn2Len.W), mask) & pattern) === (Cat("h1ff".U(vpn2Len.W), mask) & vpn)
+  }
+
+}
+
+sealed case class TLBConfig (
+  name: String = "tlb",
+  userBits: Int = 0,
+
+  totalEntry: Int = 4,
+  ways: Int = 4
+)
+
+sealed trait HasTlbConst extends Sv39Const{
+  implicit val tlbConfig: TLBConfig
+
+  val AddrBits: Int
+  val PAddrBits: Int
+  val VAddrBits: Int
+  val XLEN: Int
+
+  val tlbname = tlbConfig.name
+  val userBits = tlbConfig.userBits
+
+  val maskLen = vpn0Len + vpn1Len  // 18
+  val metaLen = vpnLen + asidLen + maskLen + flagLen // 27 + 16 + 18 + 8 = 69, is asid necessary 
+  val dataLen = ppnLen + PAddrBits // 
+  val tlbLen = metaLen + dataLen
+  val Ways = tlbConfig.ways
+  val TotalEntry = tlbConfig.totalEntry
+  val Sets = TotalEntry / Ways
+  val IndexBits = log2Up(Sets)
+  val TagBits = vpnLen - IndexBits
+
+  val debug = false //&& tlbname == "dtlb"
+
+  def vaddrTlbBundle = new Bundle {
+    val tag = UInt(TagBits.W)
+    val index = UInt(IndexBits.W)
+    val off = UInt(offLen.W)
+  }
+
+  def metaBundle = new Bundle {
+    val vpn = UInt(vpnLen.W)
+    val asid = UInt(asidLen.W)
+    val mask = UInt(maskLen.W) // to support super page
+    val flag = UInt(flagLen.W)
+  }
+
+  def dataBundle = new Bundle {
+    val ppn = UInt(ppnLen.W)
+    val pteaddr = UInt(PAddrBits.W) // pte addr, used to write back pte when flag changes (flag.d, flag.v)
+  }
+
+  def tlbBundle = new Bundle {
+    val vpn = UInt(vpnLen.W)
+    val asid = UInt(asidLen.W)
+    val mask = UInt(maskLen.W)
+    val flag = UInt(flagLen.W)
+    val ppn = UInt(ppnLen.W)
+    val pteaddr = UInt(PAddrBits.W)
+  }
+
+  def tlbBundle2 = new Bundle {
+    val meta = UInt(metaLen.W)
+    val data = UInt(dataLen.W)
+  }
+
+  def getIndex(vaddr: UInt) : UInt = {
+    vaddr.asTypeOf(vaddrTlbBundle).index
+  }
+}
+
+abstract class TlbBundle(implicit tlbConfig: TLBConfig) extends Bundle with HasNOOPParameter with HasTlbConst with Sv39Const
+abstract class TlbModule(implicit tlbConfig: TLBConfig) extends Module with HasNOOPParameter with HasTlbConst with Sv39Const with HasCSRConst
+
+sealed class TLBMDWriteBundle (val IndexBits: Int, val Ways: Int, val tlbLen: Int) extends Bundle with HasNOOPParameter with Sv39Const {
+  val wen = Output(Bool())
+  val windex = Output(UInt(IndexBits.W))
+  val waymask = Output(UInt(Ways.W))
+  val wdata = Output(UInt(tlbLen.W))
+  
+  def apply(wen: UInt, windex: UInt, waymask: UInt, vpn: UInt, asid: UInt, mask: UInt, flag: UInt, ppn: UInt, pteaddr: UInt) {
+    this.wen := wen
+    this.windex := windex
+    this.waymask := waymask
+    this.wdata := Cat(vpn, asid, mask, flag, ppn, pteaddr)
+  }
+}
+
+sealed class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
+  val io = IO(new Bundle {
+    val tlbmd = Output(Vec(Ways, UInt(tlbLen.W)))
+    val write = Flipped(new TLBMDWriteBundle(IndexBits = IndexBits, Ways = Ways, tlbLen = tlbLen))
+    val rindex = Input(UInt(IndexBits.W))
+    val ready = Output(Bool())
+  })
+
+  //val tlbmd = Reg(Vec(Ways, UInt(tlbLen.W)))
+  val tlbmd = Mem(Sets, Vec(Ways, UInt(tlbLen.W)))
+  io.tlbmd := tlbmd(io.rindex)
+
+  //val reset = WireInit(false.B)
+  val resetState = RegInit(true.B)//RegEnable(true.B, init = true.B, reset)
+  val (resetSet, resetFinish) = Counter(resetState, Sets)
+  when (resetFinish) { resetState := false.B }
+
+  val writeWen = io.write.wen//WireInit(false.B)
+  val writeSetIdx = io.write.windex
+  val writeWayMask = io.write.waymask
+  val writeData = io.write.wdata
+
+  val wen = Mux(resetState, true.B, writeWen)
+  val setIdx = Mux(resetState, resetSet, writeSetIdx)
+  val waymask = Mux(resetState, Fill(Ways, "b1".U), writeWayMask)
+  val dataword = Mux(resetState, 0.U, writeData)
+  val wdata = VecInit(Seq.fill(Ways)(dataword))
+
+  when (wen) { tlbmd.write(setIdx, wdata, waymask.asBools) }
+
+  io.ready := !resetState
+  def rready() = !resetState
+  def wready() = !resetState
+}
+
+class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
     val out = new SimpleBusUC(userBits = userBits)
@@ -24,7 +252,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   BoringUtils.addSink(satp, "CSRSATP")
 
   // tlb exec
-  val tlbExec = Module(new EmbeddedTLBExec)
+  val tlbExec = Module(new TLBExec)
   val mdTLB = Module(new TLBMD)
   val mdUpdate = Wire(Bool())
   
@@ -126,7 +354,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
 
 }
 
-sealed class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
+sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, addrBits = VAddrBits)))
     val out = Decoupled(new SimpleBusReqBundle(userBits = userBits))
@@ -374,9 +602,18 @@ sealed class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModul
   }
 }
 
-object EmbeddedTLB {
+sealed class TLBEmpty(implicit val tlbConfig: TLBConfig) extends TlbModule {
+  val io = IO(new Bundle {
+    val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits)))
+    val out = Decoupled(new SimpleBusReqBundle(userBits = userBits))
+  })
+
+  io.out <> io.in
+}
+
+object TLB {
   def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO)(implicit tlbConfig: TLBConfig) = {
-    val tlb = Module(new EmbeddedTLB)
+    val tlb = Module(new TLB)
     tlb.io.in <> in
     tlb.io.mem <> mem
     tlb.io.flush := flush

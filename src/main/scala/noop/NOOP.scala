@@ -164,7 +164,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
 
     val dmemXbar = Module(new SimpleBusCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
 
-    val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
+    val itlb = EmbeddedTLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
