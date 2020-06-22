@@ -15,8 +15,7 @@ class CtrlSignalIO extends NOOPBundle {
   val isNoopTrap = Output(Bool())
   val isSrc1Forward = Output(Bool())
   val isSrc2Forward = Output(Bool())
-  val isSpecExec = Output(Bool())  // This inst is a branch inst, and this branch is speculated
-  val isPipeLined = Output(Bool()) // Function unti for this inst is pipelined
+  val noSpecExec = Output(Bool())  // This inst can not be speculated
   val isBlocked = Output(Bool())   // This inst requires pipeline to be blocked
 }
 
@@ -28,7 +27,7 @@ class DataSrcIO extends NOOPBundle {
 
 class RedirectIO extends NOOPBundle {
   val target = Output(UInt(VAddrBits.W))
-  // val brIdx = Output(UInt(3.W)) // for RVC
+  val rtype = Output(UInt(1.W)) // 1: branch mispredict: only need to flush frontend  0: others: flush the whole pipeline
   val valid = Output(Bool())
 }
 
@@ -40,7 +39,7 @@ class CtrlFlowIO extends NOOPBundle {
   val exceptionVec = Output(Vec(16, Bool()))
   val intrVec = Output(Vec(12, Bool()))
   val brIdx = Output(Bool())
-  val instValid = Output(UInt(4.W))
+  val isRVC = Output(Bool())
   val crossPageIPFFix = Output(Bool())
 }
 

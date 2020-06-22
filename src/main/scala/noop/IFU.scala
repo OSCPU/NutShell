@@ -29,10 +29,12 @@ class IFU extends NOOPModule with HasResetVector {
   val pc = RegInit(resetVector.U(VAddrBits.W))
   // val pcBrIdx = RegInit(0.U(4.W))
   val pcInstValid = RegInit("b1111".U)
-  val pcUpdate = io.redirect.valid || io.imem.req.fire()
+  val pcUpdate = Wire(Bool())
+  pcUpdate := io.redirect.valid || io.imem.req.fire()
   val snpc = Cat(pc(VAddrBits-1, 3), 0.U(3.W)) + CacheReadWidth.U  // IFU will always ask icache to fetch next instline 
   // Note: we define instline as 8 Byte aligned data from icache 
 
+  // Next-line branch predictor
   val nlp = Module(new NLP)
 
   // cross instline inst branch predict logic "lateJump"
@@ -85,11 +87,38 @@ class IFU extends NOOPModule with HasResetVector {
 ))
   brIdx := Mux(io.redirect.valid, 0.U, Mux(lateJumpLatch, 0.U, pbrIdx))
   
-  //TODO: BP will be disabled shortly after a redirect request
-
+  // BP will be disabled shortly after a redirect request
   nlp.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
   nlp.io.in.pc.bits := npc  // predict one cycle early
   nlp.io.flush := io.redirect.valid // redirect means BPU may need to be updated
+
+  // Multi-cycle branch predictor
+  // Multi-cycle branch predictor will not be synthesized if EnableMultiCyclePredictor is set to false
+  val mcp = Module(new DummyPredicter)
+  mcp.io.in.pc.valid := io.imem.req.fire()
+  mcp.io.in.pc.bits := pc
+  mcp.io.flush := io.redirect.valid
+  mcp.io.ignore := lateJumpLatch
+
+  class MCPResult extends NOOPBundle{
+    val redirect = new RedirectIO
+    val brIdx = Output(Vec(4, Bool()))
+  }
+  val mcpResultQueue = Module(new FlushableQueue(new MCPResult, entries = 4, pipe = true, flow = true))
+  mcpResultQueue.io.flush := io.redirect.valid
+  mcpResultQueue.io.enq.valid := mcp.io.valid
+  mcpResultQueue.io.enq.bits.redirect := mcp.io.out
+  mcpResultQueue.io.enq.bits.brIdx := mcp.io.brIdx
+  mcpResultQueue.io.deq.ready := io.imem.resp.fire()
+
+  val validMCPRedirect = 
+    mcpResultQueue.io.deq.bits.redirect.valid && //mcp predicts branch
+    (
+      mcpResultQueue.io.deq.bits.redirect.target =/= io.imem.resp.bits.user.get(VAddrBits*2-1,VAddrBits) || //npc is different
+      mcpResultQueue.io.deq.bits.brIdx.asUInt =/= io.imem.resp.bits.user.get(VAddrBits*2 + 3, VAddrBits*2) //brIdx is different
+    ) &&
+    (mcpResultQueue.io.deq.bits.brIdx.asUInt & io.imem.resp.bits.user.get(VAddrBits*2 + 7, VAddrBits*2 + 4)).orR //mcp reports a valid branch
+
 
   //val bp2 = Module(new BPU2)
   //bp2.io.in.bits := io.out.bits
@@ -109,7 +138,7 @@ class IFU extends NOOPModule with HasResetVector {
     }
   }
 
-  io.flushVec := Mux(io.redirect.valid, "b1111".U, 0.U)
+  io.flushVec := Mux(io.redirect.valid, Mux(io.redirect.rtype === 0.U, "b1111".U, "b0011".U), 0.U)
   io.bpFlush := false.B
 
   io.imem.req.bits.apply(addr = Cat(pc(VAddrBits-1,1),0.U(1.W)), //cache will treat it as Cat(pc(63,3),0.U(3.W))
@@ -126,7 +155,7 @@ class IFU extends NOOPModule with HasResetVector {
       printf("[IFI] pc=%x user=%x redirect %x pcInstValid %b brIdx %b npc %x pc %x pnpc %x\n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, pcInstValid.asUInt, (pcInstValid & brIdx).asUInt, npc, pc, nlp.io.out.target)
     }
     when (io.out.fire()) {
-          printf("[IFO] pc=%x user=%x inst=%x npc=%x bridx %b valid %b ipf %x\n", io.out.bits.pc, io.imem.resp.bits.user.get, io.out.bits.instr, io.out.bits.pnpc, io.out.bits.brIdx.asUInt, io.out.bits.instValid.asUInt, io.ipf)
+      printf("[IFO] pc=%x user=%x inst=%x npc=%x bridx %b valid %b ipf %x\n", io.out.bits.pc, io.imem.resp.bits.user.get, io.out.bits.instr, io.out.bits.pnpc, io.out.bits.brIdx.asUInt, io.out.bits.instValid.asUInt, io.ipf)
     }
   }
 
@@ -142,6 +171,42 @@ class IFU extends NOOPModule with HasResetVector {
   io.out.bits.icachePF := io.ipf
   // assert(!io.out.bits.icachePF)
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
+
+  if(EnableMultiCyclePredictor){
+    when(validMCPRedirect && !io.redirect.valid){
+      io.out.bits.pnpc := mcpResultQueue.io.deq.bits.redirect.target
+      io.out.bits.brIdx := mcpResultQueue.io.deq.bits.brIdx.asUInt
+      npc := mcpResultQueue.io.deq.bits.redirect.target
+      pcUpdate := true.B
+      lateJumpLatch := false.B  // reset crossline fetch fsm
+      io.bpFlush := true.B      // flush imem
+    }
+  }
+
+  // Illegal branch predict check
+  val FixInvalidBranchPredict = false
+
+  def preDecodeIsBranch(x: UInt) = {
+    require(x.getWidth == 16)
+    val res :: Nil = ListLookup(x, List(false.B), PreDecode.branchTable)
+    res
+  }
+
+  if(FixInvalidBranchPredict){
+    val maybeBranch = Wire(Vec(4, Bool()))
+    val brIdxByPredictor = Mux(validMCPRedirect, mcpResultQueue.io.deq.bits.brIdx.asUInt, io.imem.resp.bits.user.get(VAddrBits*2 + 3, VAddrBits*2))
+    (0 until 4).map(i => maybeBranch(i) := preDecodeIsBranch(io.out.bits.instr(16*(i+1)-1, 16*i))) //TODO: use icache pre-decode result
+    // When branch predicter set non-sequential npc for a non-branch inst,
+    // flush IFU, fetch sequential inst instead.
+    when((brIdxByPredictor & ~maybeBranch.asUInt).orR && io.out.fire()){
+      printf("[ERROR] FixInvalidBranchPredict\n")
+      io.bpFlush := true.B
+      io.out.bits.brIdx := 0.U
+      npc := io.out.bits.pc + 8.U
+      pcUpdate := true.B
+    }
+    // TODO: update BPU
+  }
 
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire()), "perfCntCondMimemStall")
   BoringUtils.addSource(io.flushVec.orR, "perfCntCondMifuFlush")

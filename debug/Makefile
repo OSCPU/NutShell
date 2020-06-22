@@ -1,10 +1,12 @@
 ARCH = ARCH=riscv64-noop
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
 SINGLETEST = ALL=recursion
+RVTEST_TARGET = towers
 
-CPU_TEST_RESULT = $(shell cat cpu.log | grep different)
+CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
 MB_RESULT = $(shell cat microbench.log | grep IPC)
 MBT_RESULT = $(shell cat microbench-train.log | grep IPC)
+CM_RESULT = $(shell cat coremark.log | grep IPC)
 
 # ------------------------------------------------------------------
 # bulid CPU and run dummy test
@@ -24,7 +26,7 @@ ifeq ($(CPU_TEST_RESULT),)
 	@echo "simple CPU test passed"
 else
 	@echo $(CPU_TEST_RESULT)
-	@echo "simple CPU test falied"
+	@echo "simple CPU test failed"
 endif
 
 bputest:
@@ -33,7 +35,7 @@ bputest:
 
 unittest:
 	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) $(SINGLETEST) run 2>&1 | tee > test.log
-	cat test.log | grep different
+	cat test.log | grep -E "different|stuck|GOOD"
 	cat test.log | grep ISU > isu.log
 
 microbench:
@@ -52,10 +54,20 @@ microbench-train:
 coremark:
 	$(MAKE) -C $(AM_HOME)/apps/coremark $(ARCH) mainargs=test run 2>&1 | tee > coremark.log
 	cat coremark.log | grep IPC
+	@date >> cm_history.log
+	@git log --pretty=format:"%h %an %ad %s" -1 >> cm_history.log
+	@echo -e "" >> cm_history.log
+	@echo $(CM_RESULT) >> cm_history.log
+	@echo -e "" >> cm_history.log
+
 
 dhrystone:
 	$(MAKE) -C $(AM_HOME)/apps/dhrystone $(ARCH) mainargs=test run 2>&1 | tee > dhrystone.log
 	cat dhrystone.log | grep IPC
+
+rvtest:
+	$(MAKE) -C $(AM_HOME)/tests/riscv-test/benchmarks/$(RVTEST_TARGET) $(ARCH) run
+	# usage: make rvtest RVTEST_TARGET=dhrystone
 
 xj:
 	$(MAKE) -C $(NANOS_HOME) $(ARCH) run
@@ -80,6 +92,9 @@ xv6-debug:
 
 linux:
 	$(MAKE) -C $(BBL_LINUX_HOME) noop
+
+linux-debug:
+	$(MAKE) -C $(BBL_LINUX_HOME) noop 2>&1 | tee > linux.log
 
 # ------------------------------------------------------------------
 # test set

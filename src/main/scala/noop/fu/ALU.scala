@@ -103,10 +103,21 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
   val target = Mux(isBranch, io.cfIn.pc + io.offset, adderRes)(VAddrBits-1,0)
   val predictWrong = Mux(!taken && isBranch, io.cfIn.brIdx, !io.cfIn.brIdx || (io.redirect.target =/= io.cfIn.pnpc))
   // val predictWrong = (io.redirect.target =/= io.cfIn.pnpc)
-  val isRVC = (io.cfIn.instr(1,0) =/= "b11".U)
+  val isRVC = io.cfIn.isRVC
+  // when(!(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)){
+  //   printf("[ERROR] io.cfIn.instr %x\n", io.cfIn.instr)
+  // }
+  assert(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)
+  when(valid){
+    when((io.cfIn.instr(1,0) === "b11".U) =/= !isRVC){
+      printf("[ERROR] pc %x inst %x rvc %x\n",io.cfIn.pc, io.cfIn.instr, isRVC)
+    }
+  }
   io.redirect.target := Mux(!taken && isBranch, Mux(isRVC, io.cfIn.pc + 2.U, io.cfIn.pc + 4.U), target)
   // with branch predictor, this is actually to fix the wrong prediction
   io.redirect.valid := valid && isBru && predictWrong
+  io.redirect.rtype := 1.U
+  // mark redirect type as speculative exec fix
   // may be can be moved to ISU to calculate pc + 4
   // this is actually for jal and jalr to write pc + 4/2 to rd
   io.out.bits := Mux(isBru, Mux(!isRVC, SignExt(io.cfIn.pc, AddrBits) + 4.U, SignExt(io.cfIn.pc, AddrBits) + 2.U), aluRes)
@@ -140,7 +151,10 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
       printf(" bpuUpdateReq: valid:%d pc:%x isMissPredict:%d actualTarget:%x actualTaken:%x fuOpType:%x btbType:%x isRVC:%d \n", valid && isBru, io.cfIn.pc, predictWrong, target, taken, func, LookupTree(func, RV32I_BRUInstr.bruFuncTobtbTypeTable), isRVC)
     }
   }
-  io.in.ready := true.B
+  when(valid && isBru && io.cfIn.pc === "h7f809ad9b8".U){
+    printf("[ERROR] bpuUpdateReq: %d: valid:%d pc:%x inst:%x isMissPredict:%d actualTarget:%x actualTaken:%x fuOpType:%x btbType:%x isRVC:%d \n", GTimer(), valid && isBru, io.cfIn.pc, io.cfIn.instr, predictWrong, target, taken, func, LookupTree(func, RV32I_BRUInstr.bruFuncTobtbTypeTable), isRVC)
+  }
+  io.in.ready := io.out.ready
   io.out.valid := valid
 
   val bpuUpdateReq = WireInit(0.U.asTypeOf(new BPUUpdateReq))

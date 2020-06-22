@@ -42,7 +42,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   alu2.io.offset := io.in.bits(1).data.imm
   alu2.io.out.ready := true.B
 
-  val lsu = Module(new LSU)
+  val lsu = Module(new UnpipelinedLSU)
   val lsuTlbPF = WireInit(false.B)
   val lsuOut = lsu.access(valid = fuValids(FuType.lsu), src1 = src1, src2 = io.in.bits(0).data.imm, func = fuOpType, dtlbPF = lsuTlbPF)
   lsu.io.wdata := src2

@@ -65,7 +65,7 @@ void init_difftest(uint64_t *reg) {
   ref_difftest_init();
   void* get_img_start();
   long get_img_size();
-  ref_difftest_memcpy_from_dut(0x0, get_img_start(), get_img_size());
+  ref_difftest_memcpy_from_dut(0x80000000, get_img_start(), get_img_size());
   ref_difftest_setregs(reg);
 }
 
@@ -102,9 +102,18 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   static uint32_t multi_commit_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t skip_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static int pc_retire_pointer = 7;
+  static int need_copy_pc = 0;
   #ifdef NO_DIFFTEST
   return 0;
   #endif
+
+  if (need_copy_pc) {
+    need_copy_pc = 0;
+    ref_difftest_getregs(&ref_r); // get rf info saved in former cycle
+    nemu_this_pc = reg_scala[DIFFTEST_THIS_PC]; // we assume target's pc is right
+    ref_r[DIFFTEST_THIS_PC] = reg_scala[DIFFTEST_THIS_PC];
+    ref_difftest_setregs(ref_r);
+  }
 
   if (isMMIO) {
     // printf("diff pc: %x isRVC %x\n", this_pc, isRVC);
@@ -121,6 +130,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     inst_retire_queue[pc_retire_pointer] = this_inst;
     multi_commit_queue[pc_retire_pointer] = isMultiCommit;
     skip_queue[pc_retire_pointer] = isMMIO;
+    need_copy_pc = 1;
     return 0;
   }
 
@@ -131,7 +141,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     ref_difftest_exec(1);
   }
 
-  if(isMultiCommit){    
+  if (isMultiCommit) {    
     ref_difftest_exec(1);
     // exec 1 more cycle
   }

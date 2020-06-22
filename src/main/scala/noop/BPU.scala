@@ -163,6 +163,7 @@ class NLP extends NOOPModule {
   (0 to 3).map(i => io.brIdx(i) := btbHit(i) && pcLatchValid(i).asBool && Mux(btbRead(i)._type === BTBtype.B, phtTaken(i), true.B) && btbRead(i).valid)
   io.out.target := PriorityMux(io.brIdx, io.target)
   io.out.valid := io.brIdx.asUInt.orR
+  io.out.rtype := 0.U
   Debug()
   {
     when(io.out.valid){
@@ -202,4 +203,24 @@ class BPU2 extends NOOPModule {
 
   io.out.target := io.in.bits.pc + offset
   io.out.valid := io.in.valid && predict(0)
+  io.out.rtype := 0.U
+}
+
+// multi-cycle predicter must generates NPC from current NPC in no more than 3 cycles
+class DummyPredicter extends NOOPModule {
+  val io = IO(new Bundle {
+    val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
+    val out = new RedirectIO
+    val valid = Output(Bool())
+    val flush = Input(Bool())
+    val ignore = Input(Bool())
+    val brIdx = Output(Vec(4, Bool()))
+  })
+  // Note: when io.ignore, io.out.valid must be false.B for this pc
+  // This limitation is for cross instline inst fetch logic
+  io.valid := io.in.pc.valid // Predicter is returning a result
+  io.out.valid := false.B // Need redirect
+  io.out.target := DontCare // Redirect target
+  io.out.rtype := DontCare // Predicter does not need to care about it 
+  io.brIdx := VecInit(Seq.fill(4)(false.B)) // Which inst triggers jump
 }

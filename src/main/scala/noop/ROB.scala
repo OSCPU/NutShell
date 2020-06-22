@@ -15,6 +15,7 @@ object physicalRFTools{
 class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasBackendConst with HasRegFileParameter{
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
+    val brMaskIn = Input(Vec(robWidth, UInt(robInstCapacity.W)))
     val cdb = Vec(robWidth, Flipped(Valid(new OOCommitIO)))
     val wb = Vec(robWidth, new WriteBackIO)
     val redirect = new RedirectIO
@@ -35,13 +36,27 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     val rvalid = Output(Vec(robWidth * 2, Bool()))
     val rcommited = Output(Vec(robWidth * 2, Bool()))
 
+    // Misprediction recovery
+    val brMaskClearVec = Output(UInt(robInstCapacity.W))
+    val updateCheckpoint = Input(Valid(UInt(log2Up(checkpointSize).W)))
+    val recoverCheckpoint = Input(Valid(UInt(log2Up(checkpointSize).W)))
   })
 
+  def needMispredictionRecovery(brMask: UInt) = {
+    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
+  }
+
+  def updateBrMask(brMask: UInt) = {
+    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+  }
+
   val decode = Reg(Vec(robSize, Vec(robWidth, new DecodeIO)))
+  val brMask = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(0.U(robInstCapacity.W))))))
   val valid = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
   // val valid = List.fill(robWidth)(Mem(robSize, Bool()))
   // val validReg = RegInit(0.U.asTypeOf(Vec(robSize * robWidth, Bool())))
   val commited = Reg(Vec(robSize, Vec(robWidth, Bool())))
+  val canceled = Reg(Vec(robSize, Vec(robWidth, Bool())))
   val redirect = Reg(Vec(robSize, Vec(robWidth, new RedirectIO)))
   val exception = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Backend exception
   val isMMIO = Reg(Vec(robSize, Vec(robWidth, Bool())))
@@ -70,9 +85,21 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.empty := ringBufferEmpty
 
   // Register Map  
-  val rmtMap = Mem(NRReg, UInt(prfAddrWidth.W))
+  val rmtMap = Reg(Vec(NRReg, UInt(prfAddrWidth.W)))
   val rmtValid = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
-  // val rmtCommited = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
+
+  sealed class Checkpoint extends NOOPBundle {
+    val map = Vec(NRReg, UInt(prfAddrWidth.W))
+    val valid = Vec(NRReg, Bool())
+  }
+
+  val checkpoints= Reg(Vec(checkpointSize, new Checkpoint))
+  val cpUpdate = Wire(new Checkpoint)
+  cpUpdate.map := rmtMap
+  cpUpdate.valid := rmtValid
+
+  val rmtValidRecovery = Wire(Vec(NRReg, Bool()))
+  rmtValidRecovery := checkpoints(io.recoverCheckpoint.bits).valid
 
   forAllROBBanks((i: Int) => {
     io.aprf(2*i)        := rmtMap(io.in(i).bits.ctrl.rfSrc1)
@@ -81,8 +108,8 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     io.rprf(2*i+1)      := prf(io.aprf(2*i+1))
     io.rvalid(2*i)      := rmtValid(io.in(i).bits.ctrl.rfSrc1)
     io.rvalid(2*i+1)    := rmtValid(io.in(i).bits.ctrl.rfSrc2)
-    io.rcommited(2*i)   := commited(io.aprf(2*i)>>1)(io.aprf(2*i)(0))
-    io.rcommited(2*i+1) := commited(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0))
+    io.rcommited(2*i)   := commited(io.aprf(2*i)>>1)(io.aprf(2*i)(0)) && !canceled(io.aprf(2*i)>>1)(io.aprf(2*i)(0))
+    io.rcommited(2*i+1) := commited(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0)) && !canceled(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0))
   })
 
   //---------------------------------------------------------
@@ -120,12 +147,21 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           intrNO(i)(j) := io.cdb(k).bits.intrNO
           // Write redirect info
           redirect(i)(j) := io.cdb(k).bits.decode.cf.redirect
+          redirect(i)(j).valid := io.cdb(k).bits.decode.cf.redirect.valid
           exception(i)(j) := io.cdb(k).bits.exception
           // Update wen
           // In several cases, FU will invalidate rfWen
           decode(i)(j).ctrl.rfWen := io.cdb(k).bits.decode.ctrl.rfWen
         }
+        when(valid(i)(j) && brMask(i)(j)(io.cdb(k).bits.prfidx) && io.cdb(k).valid && io.cdb(k).bits.decode.cf.redirect.valid ){
+          valid(i)(j) := false.B
+          canceled(i)(j) := true.B
+          Debug(){
+            printf("[MB] %d: robIdx %d %x (%b) reset by %d %x\n", GTimer(), robIdx, decode(i)(j).cf.pc, brMask(i)(j), io.cdb(k).bits.prfidx, io.cdb(k).bits.decode.cf.pc)
+          }
+        }
       }
+      brMask(i)(j) := updateBrMask(brMask(i)(j) & ~io.brMaskClearVec)
     }
   }
 
@@ -142,7 +178,8 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // TODO: refactor retire logic
   val skipException = valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid && commited(ringBufferTail)(0) && exception(ringBufferTail)(1)
   val retireATerm = tailBankNotUsed.foldRight(true.B)((sum, i) => sum & i) && !tailTermEmpty || skipException
-  when(retireATerm){
+  val recycleATerm = tailTermEmpty && (ringBufferTail =/= ringBufferHead)
+  when(retireATerm || recycleATerm){
     forAllROBBanks((i: Int) =>{
       valid(ringBufferTail)(i) := false.B
       // free prf (update RMT)
@@ -151,28 +188,42 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
         rmtMap(decode(ringBufferTail)(i).ctrl.rfDest) === Cat(ringBufferTail, i.U(1.W)) && // no other in flight inst will write this reg 
         valid(ringBufferTail)(i)
       ){
-        //TODO: make it prettier
         rmtValid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
+      }
+      when(
+        decode(ringBufferTail)(i).ctrl.rfWen && 
+        valid(ringBufferTail)(i)
+      ){
+        (0 until checkpointSize).map(k => {
+          when(checkpoints(k).map(decode(ringBufferTail)(i).ctrl.rfDest) === Cat(ringBufferTail, i.U(1.W))){
+            checkpoints(k).valid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
+          }
+        })
+        when(checkpoints(io.recoverCheckpoint.bits).map(decode(ringBufferTail)(i).ctrl.rfDest) === Cat(ringBufferTail, i.U(1.W))){
+          rmtValidRecovery(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
+        }
+        when(cpUpdate.map(decode(ringBufferTail)(i).ctrl.rfDest) === Cat(ringBufferTail, i.U(1.W))){
+          cpUpdate.valid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
+        }
       }
     })
     ringBufferTail := ringBufferTail + 1.U
   }
 
-  // speculative execution
+  // FIXIT
+  io.brMaskClearVec := 0.U
 
-  // register map queue
-  val rmq = Module(new Queue(UInt(VAddrBits.W), rmqSize)) //TODO: for explicit rename
-  
-  // when speculated branch enters ROB, add current reg map into rmq
-  // when a speculated branch inst retires, delete it from rmq
-  // TODO
-  rmq.io.enq.valid := List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.isSpecExec).foldRight(false.B)((sum, i) => sum | i) // when(io.in(0).ctrl.isSpecExec)
-  rmq.io.enq.bits := DontCare //TODO
-  rmq.io.deq.ready := List.tabulate(robWidth)(i => 
-    valid(ringBufferTail)(i) && decode(ringBufferTail)(i).ctrl.isSpecExec
-  ).foldRight(false.B)((sum, i) => sum || i)
-
-  // rmap recover := rmq.io.deq.bits
+  // mispredict checkpoint recovery
+  when(io.updateCheckpoint.valid){
+    checkpoints(io.updateCheckpoint.bits) := cpUpdate
+    Debug(){printf("[CP] checkpoint %d set\n", io.updateCheckpoint.bits)}
+    // Debug(){printf("[CP] %d %d\n", cpUpdate.valid(14), cpUpdate.map(14))}
+  }
+  when(io.recoverCheckpoint.valid){
+    rmtMap := checkpoints(io.recoverCheckpoint.bits).map
+    rmtValid := rmtValidRecovery
+    Debug(){printf("[CP] recover rmt to checkpoint %d\n", io.recoverCheckpoint.bits)}
+  }
 
   // retire: trigger redirect
   // exception/interrupt/branch mispredict redirect is raised by ROB
@@ -181,6 +232,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   io.redirect.valid := retireATerm && List.tabulate(robWidth)(i => 
     redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i)
   ).foldRight(false.B)((sum, i) => sum || i)
+  // io.redirect.rtype := 0.U
   // TODO: redirect when inst1 is valid
 
   // retire: trigger exception
@@ -204,12 +256,15 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // `beUop` stands for `backend exception uop`
   val exceptionSelect = Mux(exception(ringBufferTail)(0), 0.U, 1.U)
   io.beUop := DontCare
-  io.beUop.decode := decode(ringBufferTail)(exceptionSelect)
+  // io.beUop.decode := decode(ringBufferTail)(exceptionSelect)
+  io.beUop.decode.cf.pc := decode(ringBufferTail)(exceptionSelect).cf.pc
   for(i <- 0 to storePageFault){io.beUop.decode.cf.exceptionVec(i) := false.B}
   io.beUop.decode.cf.exceptionVec(loadPageFault) := intrNO(ringBufferTail)(exceptionSelect)(loadPageFault)
   io.beUop.decode.cf.exceptionVec(storePageFault) := intrNO(ringBufferTail)(exceptionSelect)(storePageFault)
   io.beUop.decode.cf.exceptionVec(loadAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(loadAddrMisaligned)
   io.beUop.decode.cf.exceptionVec(storeAddrMisaligned) := intrNO(ringBufferTail)(exceptionSelect)(storeAddrMisaligned)
+  io.beUop.decode.data.src1 := prf(Cat(ringBufferTail, exceptionSelect)) //FIXIT
+  // io.beUop.decode.data.src2 := DontCare
   io.beUop.prfDest := Cat(ringBufferTail, exceptionSelect)
 
   assert(!(exception(ringBufferTail)(0) && exception(ringBufferTail)(1) && valid(ringBufferTail)(0) && valid(ringBufferTail)(1)))
@@ -219,11 +274,63 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // Raise decoupled store request
   // If l/s are decoupled, store request is sent to store buffer here.
   // Note: only # of safe store ops is sent to LSU
+  val cancelScommit = RegInit(false.B)
+  when(io.exception){ cancelScommit := true.B }
+  when(io.flush){ cancelScommit := false.B }
+
   io.scommit := List.tabulate(robWidth)(i => 
     valid(ringBufferTail)(i) && 
     decode(ringBufferTail)(i).ctrl.fuType === FuType.lsu && 
-    LSUOpType.isStore(decode(ringBufferTail)(i).ctrl.fuOpType)
-  ).foldRight(false.B)((sum, i) => sum || i)
+    LSUOpType.needMemWrite(decode(ringBufferTail)(i).ctrl.fuOpType) && 
+    List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
+    List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k) &&
+    !cancelScommit
+  ).reduce(_ || _) && retireATerm
+
+  Debug(){
+    when(io.scommit){
+      printf("[SCommit] %x %x %x %x\n", 
+        redirect(ringBufferTail)(0).valid,
+        redirect(ringBufferTail)(1).valid,
+        exception(ringBufferTail)(0),
+        exception(ringBufferTail)(1)
+      )
+    }
+  }
+
+  val lsupc = Wire(UInt(VAddrBits.W))
+  val storeTBCV = Wire(Bool())
+  val Q1 = Module(new Queue(UInt(VAddrBits.W), 32, pipe = true, flow = true))
+  val Q2 = Module(new Queue(UInt(VAddrBits.W), 32, pipe = true, flow = true))
+  Q1.io.enq.valid := io.scommit
+  Q1.io.deq.ready := storeTBCV
+  Q1.io.enq.bits := decode(ringBufferTail)(0).cf.pc
+  Q2.io.enq.valid := io.scommit
+  Q2.io.deq.ready := storeTBCV
+  Q2.io.enq.bits := decode(ringBufferTail)(1).cf.pc
+  lsupc := DontCare
+  storeTBCV := DontCare
+  BoringUtils.addSink(lsupc, "GSPC")
+  BoringUtils.addSink(storeTBCV, "GSPCV")
+
+  when(
+    storeTBCV &&
+    (
+      Q1.io.deq.bits =/= lsupc &&
+      Q2.io.deq.bits =/= lsupc ||
+      !Q1.io.deq.valid
+    ) 
+  ){
+    printf("[ERROR] robpc1 %x robpc2 %x v %x lsupc %x time %d\n", 
+      Q1.io.deq.bits,
+      Q2.io.deq.bits,
+      Q1.io.deq.valid,
+      lsupc,
+      GTimer()
+    )
+  }
+
+
   // In current version, only one l/s inst can be sent to agu in a cycle
   // therefore, in all banks, there is no more than 1 store insts
 
@@ -251,8 +358,10 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   when(validEnqueueRequest && ringBufferAllowin){
     ringBufferHead := ringBufferHead + 1.U
     forAllROBBanks((i: Int) => decode(ringBufferHead)(i) := io.in(i).bits)
+    forAllROBBanks((i: Int) => brMask(ringBufferHead)(i) := io.brMaskIn(i))
     forAllROBBanks((i: Int) => valid(ringBufferHead)(i) := io.in(i).valid)
     forAllROBBanks((i: Int) => commited(ringBufferHead)(i) := false.B)
+    forAllROBBanks((i: Int) => canceled(ringBufferHead)(i) := false.B)
     forAllROBBanks((i: Int) => redirect(ringBufferHead)(i).valid := false.B)
     forAllROBBanks((i: Int) => exception(ringBufferHead)(i) := false.B)
     forAllROBBanks((i: Int) => 
@@ -262,8 +371,30 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
         // rmtCommited(io.in(i).bits.ctrl.rfDest) := false.B
       }
     )
+    when(io.in(0).valid && io.in(0).bits.ctrl.rfWen && io.in(0).bits.ctrl.rfDest =/= 0.U){
+      cpUpdate.map(io.in(0).bits.ctrl.rfDest) := Cat(ringBufferHead, 0.U)
+      cpUpdate.valid(io.in(0).bits.ctrl.rfDest) := true.B
+    }
+    when(io.in(1).valid && io.in(1).bits.ctrl.rfWen && io.in(1).bits.ctrl.rfDest =/= 0.U && !(io.in(0).valid && io.in(0).bits.ctrl.fuType === FuType.bru)){
+      cpUpdate.map(io.in(1).bits.ctrl.rfDest) := Cat(ringBufferHead, 1.U)
+      cpUpdate.valid(io.in(1).bits.ctrl.rfDest) := true.B
+    }
   }
   forAllROBBanks((i: Int) => io.in(i).ready := ringBufferAllowin)
+  assert(!(validEnqueueRequest && ringBufferAllowin && io.recoverCheckpoint.valid))
+
+  // Send robInstValid signal to LSU for "backward"
+  val robLoadInstVec = WireInit(VecInit((0 until robSize).map(i => {
+    valid(i)(0) && decode(i)(0).ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(decode(i)(0).ctrl.fuOpType) ||
+    valid(i)(1) && decode(i)(1).ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(decode(i)(1).ctrl.fuOpType)
+  })).asUInt) 
+  val robStoreInstVec = WireInit(VecInit((0 until robSize).map(i => {
+    valid(i)(0) && decode(i)(0).ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(decode(i)(0).ctrl.fuOpType) ||
+    valid(i)(1) && decode(i)(1).ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(decode(i)(1).ctrl.fuOpType)
+  })).asUInt) 
+  // TODO: use a single bit in rob misc field to save "isload"
+  BoringUtils.addSource(robLoadInstVec, "ROBLoadInstVec")
+  BoringUtils.addSource(robStoreInstVec, "ROBStoreInstVec")
 
   // Generate Debug Info
   Debug(){
@@ -292,17 +423,26 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       .otherwise{printf(" ")}
     }
     printf("\n")
-    printf("[ROB] pc           v c r e   pc           v c r e\n")
+    printf("[ROB] pc           v w c r e   pc           v w c r e\n")
     for(i <- 0 to (robSize - 1)){
-      printf("[ROB] 0x%x %d %d %d %d   0x%x %d %d %d %d  " + i, 
-        decode(i)(0).cf.pc, valid(i)(0), commited(i)(0), redirect(i)(0).valid && valid(i)(0), exception(i)(0),
-        decode(i)(1).cf.pc, valid(i)(1), commited(i)(1), redirect(i)(1).valid && valid(i)(1), exception(i)(1)
+      printf("[ROB] 0x%x %d %d %d %d %d   0x%x %d %d %d %d %d  " + i, 
+        decode(i)(0).cf.pc, valid(i)(0), commited(i)(0), canceled(i)(0), redirect(i)(0).valid && valid(i)(0), exception(i)(0),
+        decode(i)(1).cf.pc, valid(i)(1), commited(i)(1), canceled(i)(1), redirect(i)(1).valid && valid(i)(1), exception(i)(1)
       )
       when(valid(i)(0) || valid(i)(1)){printf("  valid")}
       when(ringBufferHead === i.U){printf("  head")}
       when(ringBufferTail === i.U){printf("  tail")}
       printf("\n")
     }
+    
+    // for(i <- 0 to (robSize - 1)){
+    //   printf("[ROB] %b %b " + i + "\n", brMask(i)(0), brMask(i)(1))
+    // }
+
+    // for(i <- 0 until NRReg){
+    //   printf("[ROB] prMap %b %d " + i + "\n", rmtValid(i), rmtMap(i))
+    // }
+
     // printf("[RMT INFO]")
     // for(i <- 0 to (NRReg - 1)){
     //  // if(i % 6 == 0)printf("\n")
@@ -321,25 +461,33 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   val retirePC2 = SignExt(decode(ringBufferTail)(1).cf.pc, AddrBits)
   
   if (!p.FPGAPlatform) {
-    // TODO: fix debug
     BoringUtils.addSource(RegNext(retireATerm), "difftestCommit")
     BoringUtils.addSource(RegNext(retireMultiTerms), "difftestMultiCommit")
     BoringUtils.addSource(RegNext(retirePC), "difftestThisPC")
-    // BoringUtils.addSource(RegNext(SignExt(decode(ringBufferTail)(1).cf.pc, AddrBits)), "difftestThisPC2")
     BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "difftestThisINST")
-    // BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr), "difftestThisINST2")
-    BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0) && valid(ringBufferTail)(0) || isMMIO(ringBufferTail)(1) && valid(ringBufferTail)(1)), "difftestIsMMIO") //TODO
-    // BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(1)), "difftestIsMMIO2")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr(1,0)=/="b11".U), "difftestIsRVC")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.instr(1,0)=/="b11".U), "difftestIsRVC2")
+    BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0) && valid(ringBufferTail)(0) || isMMIO(ringBufferTail)(1) && valid(ringBufferTail)(1) && !(valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid)), "difftestIsMMIO")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.isRVC), "difftestIsRVC")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.isRVC), "difftestIsRVC2")
     BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
-    // BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(1)), "difftestIntrNO2")
   } else {
-    BoringUtils.addSource(DontCare, "ilaWBUvalid")
-    BoringUtils.addSource(DontCare, "ilaWBUpc")
-    BoringUtils.addSource(DontCare, "ilaWBUrfWen")
-    BoringUtils.addSource(DontCare, "ilaWBUrfDest")
-    BoringUtils.addSource(DontCare, "ilaWBUrfData")
+    BoringUtils.addSource(retireATerm, "ilaWBUvalid")
+    BoringUtils.addSource(retirePC, "ilaWBUpc")
+    BoringUtils.addSource(io.wb(0).rfWen, "ilaWBUrfWen")
+    BoringUtils.addSource(io.wb(0).rfDest, "ilaWBUrfDest")
+    BoringUtils.addSource(io.wb(0).rfData, "ilaWBUrfData")
+  }
+
+  Debug(){
+    when(io.empty){printf("%d: empty\n", GTimer())}
+    when(io.redirect.valid && io.redirect.rtype === 1.U){printf("%d: mbr finished\n", GTimer())}
+  }
+
+  val mispredictionRedirect = (0 until CommitWidth).map(i => io.cdb(i).valid && io.cdb(i).bits.decode.cf.redirect.valid && io.cdb(i).bits.decode.cf.redirect.rtype === 1.U).reduce(_ | _)
+  when(mispredictionRedirect){
+    ringBufferHead := PriorityMux(
+      (0 until CommitWidth).map(i => io.cdb(i).valid && io.cdb(i).bits.decode.cf.redirect.valid && io.cdb(i).bits.decode.cf.redirect.rtype === 1.U),
+      (0 until CommitWidth).map(i => io.cdb(i).bits.prfidx(prfAddrWidth-1, 1))
+    ) + 1.U
   }
 
   // flush control
@@ -350,5 +498,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     List.tabulate(robSize)(i => valid(i)(1) := 0.U) // set valid to 0
     List.tabulate(NRReg)(i => rmtValid(i) := false.B) // flush rmt
   }
+
+  // sim pref counter
+  val retireBruInst = (retireATerm && (decode(ringBufferTail)(0).ctrl.fuType === FuType.bru || decode(ringBufferTail)(1).ctrl.fuType === FuType.bru))
+  val retireBruInstRedirect = retireBruInst && (redirect(ringBufferTail)(0).valid || redirect(ringBufferTail)(1).valid)
+  BoringUtils.addSource(retireBruInst, "perfCntCondMbruCmt")
+  BoringUtils.addSource(retireBruInstRedirect, "perfCntCondMbruCmtWrong")
 
 }
