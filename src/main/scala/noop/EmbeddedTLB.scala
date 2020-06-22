@@ -8,7 +8,7 @@ import bus.simplebus._
 import bus.axi4._
 import utils._
 
-trait Sv39Const extends HasNOOPParameter{
+sealed trait Sv39Const extends HasNOOPParameter{
   val Level = 3
   val offLen  = 12
   val ppn0Len = 9
@@ -116,7 +116,7 @@ trait Sv39Const extends HasNOOPParameter{
 
 }
 
-case class TLBConfig (
+sealed case class TLBConfig (
   name: String = "tlb",
   userBits: Int = 0,
 
@@ -187,7 +187,7 @@ sealed trait HasTlbConst extends Sv39Const{
 sealed abstract class TlbBundle(implicit tlbConfig: TLBConfig) extends Bundle with HasNOOPParameter with HasTlbConst with Sv39Const
 sealed abstract class TlbModule(implicit tlbConfig: TLBConfig) extends Module with HasNOOPParameter with HasTlbConst with Sv39Const with HasCSRConst
 
-class TLBMDWriteBundle (val IndexBits: Int, val Ways: Int, val tlbLen: Int) extends Bundle with HasNOOPParameter with Sv39Const {
+sealed class TLBMDWriteBundle (val IndexBits: Int, val Ways: Int, val tlbLen: Int) extends Bundle with HasNOOPParameter with Sv39Const {
   val wen = Output(Bool())
   val windex = Output(UInt(IndexBits.W))
   val waymask = Output(UInt(Ways.W))
@@ -201,7 +201,7 @@ class TLBMDWriteBundle (val IndexBits: Int, val Ways: Int, val tlbLen: Int) exte
   }
 }
 
-class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
+sealed class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   val io = IO(new Bundle {
     val tlbmd = Output(Vec(Ways, UInt(tlbLen.W)))
     val write = Flipped(new TLBMDWriteBundle(IndexBits = IndexBits, Ways = Ways, tlbLen = tlbLen))
@@ -236,7 +236,7 @@ class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   def wready() = !resetState
 }
 
-class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
+class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
     val out = new SimpleBusUC(userBits = userBits)
@@ -355,7 +355,7 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
 
 }
 
-class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
+sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, addrBits = VAddrBits)))
     val out = Decoupled(new SimpleBusReqBundle(userBits = userBits))
@@ -588,7 +588,7 @@ class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   }
 }
 
-class TLBEmpty(implicit val tlbConfig: TLBConfig) extends TlbModule {
+sealed class TLBEmpty(implicit val tlbConfig: TLBConfig) extends TlbModule {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits)))
     val out = Decoupled(new SimpleBusReqBundle(userBits = userBits))
@@ -597,9 +597,9 @@ class TLBEmpty(implicit val tlbConfig: TLBConfig) extends TlbModule {
   io.out <> io.in
 }
 
-object TLB {
+object EmbeddedTLB {
   def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO)(implicit tlbConfig: TLBConfig) = {
-    val tlb = Module(new TLB)
+    val tlb = Module(new EmbeddedTLB)
     tlb.io.in <> in
     tlb.io.mem <> mem
     tlb.io.flush := flush
