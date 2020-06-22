@@ -91,12 +91,12 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 16)
     backend.io.flush := ifu.io.flushVec(2)
 
-    val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
+    val itlb = EmbeddedTLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
     
-    val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
+    val dtlb = EmbeddedTLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
     io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
 
@@ -141,12 +141,12 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     // forward
     isu.io.forward <> exu.io.forward
 
-    val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
+    val itlb = EmbeddedTLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
     
-    val dtlb = TLB(in = exu.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = exu.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
+    val dtlb = EmbeddedTLB(in = exu.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = exu.io.memMMU.dmem)(TLBConfig(name = "dtlb", totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
     io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
   }
