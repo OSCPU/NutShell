@@ -9,7 +9,7 @@ MEM_GEN = ./scripts/vlsi_mem_gen
 SIMTOP = top.TestMain
 IMAGE ?= temp
 
-DATAWIDTH ?= 32
+DATAWIDTH ?= 64
 
 .DEFAULT_GOAL = verilog
 

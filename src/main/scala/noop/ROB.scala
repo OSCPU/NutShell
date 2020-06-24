@@ -335,11 +335,11 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
     // BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(1)), "difftestIntrNO2")
   } else {
-    BoringUtils.addSource(DontCare, "ilaWBUvalid")
-    BoringUtils.addSource(DontCare, "ilaWBUpc")
-    BoringUtils.addSource(DontCare, "ilaWBUrfWen")
-    BoringUtils.addSource(DontCare, "ilaWBUrfDest")
-    BoringUtils.addSource(DontCare, "ilaWBUrfData")
+    BoringUtils.addSource(retireATerm, "ilaWBUvalid")
+    BoringUtils.addSource(retirePC, "ilaWBUpc")
+    BoringUtils.addSource(io.wb(0).rfWen, "ilaWBUrfWen")
+    BoringUtils.addSource(io.wb(0).rfDest, "ilaWBUrfDest")
+    BoringUtils.addSource(io.wb(0).rfData, "ilaWBUrfData")
   }
 
   // flush control
