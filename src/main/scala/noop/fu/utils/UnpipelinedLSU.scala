@@ -37,7 +37,6 @@ class UnpipelinedLSU extends NOOPModule with HasLSUConst {
     val amoReq   = valid & LSUOpType.isAMO(func)
     val lrReq   = valid & LSUOpType.isLR(func)
     val scReq   = valid & LSUOpType.isSC(func)
-    BoringUtils.addSource(amoReq, "ISAMO")
     BoringUtils.addSource(amoReq, "ISAMO2")
 
     val aq = io.instr(26)

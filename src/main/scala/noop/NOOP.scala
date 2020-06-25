@@ -7,6 +7,7 @@ import chisel3.util.experimental.BoringUtils
 import bus.simplebus._
 import bus.axi4._
 import utils._
+import top.Settings
 
 trait HasNOOPParameter {
   val XLEN = 64
@@ -22,17 +23,17 @@ trait HasNOOPParameter {
   val DataBits = XLEN
   val DataBytes = DataBits / 8
   val EnableMultiCyclePredictor = false
-  val EnableMultiIssue = true
-  val EnableSuperScalarExec = true
-  val EnableOutOfOrderExec = true
-  val EnableVirtualMemory = true
+  val EnableMultiIssue = Settings.EnableMultiIssue
+  val EnableSuperScalarExec = Settings.EnableSuperScalarExec
+  val EnableOutOfOrderExec = Settings.EnableOutOfOrderExec
+  val EnableVirtualMemory = if (Settings.HasDTLB && Settings.HasITLB) true else false
 }
 
 trait HasNOOPConst {
   val CacheReadWidth = 8
   val ICacheUserBundleWidth = 39*2 + 9 // TODO: this const depends on VAddrBits
   val DCacheUserBundleWidth = 16
-  val IndependentBru = true
+  val IndependentBru = if (Settings.EnableOutOfOrderExec) true else false
 }
 
 abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO with HasBackendConst
@@ -162,7 +163,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     // forward
     isu.io.forward <> exu.io.forward
 
-    val dmemXbar = Module(new SimpleBusCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
+    val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
 
     val itlb = EmbeddedTLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = exu.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
