@@ -145,14 +145,16 @@ class Emulator {
 
         extern int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
           int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, int isMultiCommit);
-        if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
+        if (dut_ptr->io_difftestCtrl_enable) {
+          if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
               dut_ptr->io_difftest_isMMIO, dut_ptr->io_difftest_isRVC, dut_ptr->io_difftest_isRVC2,
               dut_ptr->io_difftest_intrNO, dut_ptr->io_difftest_priviledgeMode, 
               dut_ptr->io_difftest_isMultiCommit)) {
 #if VM_TRACE
-          tfp->close();
+            tfp->close();
 #endif
-          set_abort();
+            set_abort();
+          }
         }
         lastcommit = n;
       }

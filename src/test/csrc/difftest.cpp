@@ -8,8 +8,6 @@
 # error Please define REF_SO to the path of NEMU shared object file
 #endif
 
-#define printCSR(x) printf(""#x": 0x%016lx    ", x)
-
 void (*ref_difftest_memcpy_from_dut)(paddr_t dest, void *src, size_t n) = NULL;
 void (*ref_difftest_getregs)(void *c) = NULL;
 void (*ref_difftest_setregs)(const void *c) = NULL;
@@ -185,7 +183,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     }
     printf("\n==============  Reg Diff  ==============\n");
     ref_isa_reg_display();
-    printCSR(priviledgeMode);
+    printf("priviledgeMode = %d\n", priviledgeMode);
     puts("");
     int i;
     for (i = 0; i < DIFFTEST_NR_REG; i ++) {
