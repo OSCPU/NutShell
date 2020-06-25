@@ -9,7 +9,7 @@ import bus.simplebus._
 
 trait HasBackendConst{
   // val multiIssue = true
-  val robSize = 16
+  val robSize = 8
   val robWidth = 2
   val robInstCapacity = robSize * robWidth
   val checkpointSize = 4 // register map checkpoint size

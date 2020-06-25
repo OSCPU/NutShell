@@ -343,3 +343,4 @@ hs_err_pid*
 
 # chore
 *.nocompile
+fpga/.Xil/*
