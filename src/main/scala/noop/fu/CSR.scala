@@ -589,20 +589,6 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with H
   // Exception and Intr
 
   // interrupts
-  
-  val ideleg =  (mideleg & mip.asUInt)
-  def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
-                                   ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
-
-  val intrVecEnable = Wire(Vec(12, Bool()))
-  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
-  val intrVec = mie(11,0) & mip.asUInt & intrVecEnable.asUInt
-  BoringUtils.addSource(intrVec, "intrVecIDU")
-  // val intrNO = PriorityEncoder(intrVec)
-  
-  val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
-  // val intrNO = PriorityEncoder(io.cfIn.intrVec)
-  val raiseIntr = io.cfIn.intrVec.asUInt.orR
 
   val mtip = WireInit(false.B)
   val meip = WireInit(false.B)
@@ -610,6 +596,26 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with H
   BoringUtils.addSink(meip, "meip")
   mipWire.t.m := mtip
   mipWire.e.m := meip
+  
+  // SEIP from PLIC is only used to raise interrupt,
+  // but it is not stored in the CSR
+  val seip = meip    // FIXME: PLIC should generate SEIP different from MEIP
+  val mipRaiseIntr = WireInit(mip)
+  mipRaiseIntr.e.s := mip.e.s | seip
+
+  val ideleg =  (mideleg & mipRaiseIntr.asUInt)
+  def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
+                                   ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
+
+  val intrVecEnable = Wire(Vec(12, Bool()))
+  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
+  val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
+  BoringUtils.addSource(intrVec, "intrVecIDU")
+  // val intrNO = PriorityEncoder(intrVec)
+  
+  val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
+  // val intrNO = PriorityEncoder(io.cfIn.intrVec)
+  val raiseIntr = io.cfIn.intrVec.asUInt.orR
 
   // exceptions
 

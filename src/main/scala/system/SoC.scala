@@ -3,7 +3,7 @@ package system
 import noop._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
-import device.AXI4Timer
+import device.{AXI4Timer, AXI4PLIC}
 import top.Settings
 
 import chisel3._
@@ -16,19 +16,20 @@ trait HasSoCParameter {
   val HasPrefetch = Settings.HasL2cache
 }
 
-class ILABundle extends Bundle {
-  val WBUpc = UInt(32.W)
+class ILABundle extends NOOPBundle {
+  val WBUpc = UInt(VAddrBits.W)
   val WBUvalid = UInt(1.W)
   val WBUrfWen = UInt(1.W)
   val WBUrfDest = UInt(5.W)
-  val WBUrfData = UInt(64.W)
+  val WBUrfData = UInt(XLEN.W)
   val InstrCnt = UInt(64.W)
 }
 
 class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
-    val mmio = (if (p.FPGAPlatform) { new AXI4Lite } else { new SimpleBusUC })
+    val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
+    val slcr = (if (p.FPGAPlatform) { new AXI4 } else null)
     val frontend = Flipped(new AXI4)
     val meip = Input(Bool())
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
@@ -51,7 +52,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   memport.resp.valid := DontCare
   memport.req.ready := DontCare
 
-  if (HasL2cache) {
+  val mem = if (HasL2cache) {
     val l2cacheOut = Wire(new SimpleBusC)
     val l2cacheIn = if (HasPrefetch) {
       val prefetcher = Module(new Prefetcher)
@@ -64,13 +65,17 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     val l2Empty = Wire(Bool())
     l2cacheOut <> Cache(in = l2cacheIn, mmio = 0.U.asTypeOf(new SimpleBusUC) :: Nil, flush = "b00".U, empty = l2Empty, enable = true)(
       CacheConfig(name = "l2cache", totalSize = 128, cacheLevel = 2))
-    io.mem <> l2cacheOut.mem.toAXI4()
     l2cacheOut.coh.resp.ready := true.B
     l2cacheOut.coh.req.valid := false.B
     l2cacheOut.coh.req.bits := DontCare
+    l2cacheOut.mem
   } else {
-    io.mem <> xbar.io.out.toAXI4()
+    xbar.io.out
   }
+
+  val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L)))
+  memAddrMap.io.in <> mem
+  io.mem <> memAddrMap.io.out.toAXI4()
   
   noop.io.imem.coh.resp.ready := true.B
   noop.io.imem.coh.req.valid := false.B
@@ -78,20 +83,37 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
 
   val addrSpace = List(
     (0x40000000L, 0x08000000L), // external devices
-    (0x48000000L, 0x00010000L)  // CLINT
+    (0x48000000L, 0x00010000L), // CLINT
+    (0x4c000000L, 0x04000000L), // PLIC
+    (0x49000000L, 0x00001000L)  // SLCR for pynq
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> noop.io.mmio
 
   val extDev = mmioXbar.io.out(0)
+  if (p.FPGAPlatform) {
+    val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L)))
+    mmioAddrMap.io.in <> extDev
+    io.mmio <> mmioAddrMap.io.out.toAXI4()
+
+    val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L)))
+    slcrAddrMap.io.in <> mmioXbar.io.out(3)
+    io.slcr <> slcrAddrMap.io.out.toAXI4()
+  }
+  else {
+    io.mmio <> extDev
+    mmioXbar.io.out(3) := DontCare
+  }
+
   val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
-  if (p.FPGAPlatform) io.mmio <> extDev.toAXI4Lite()
-  else io.mmio <> extDev
-
   val mtipSync = clint.io.extra.get.mtip
-  val meipSync = RegNext(RegNext(io.meip))
   BoringUtils.addSource(mtipSync, "mtip")
+
+  val plic = Module(new AXI4PLIC(nrIntr = 1, nrHart = 1))
+  plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
+  plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
+  val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
 
   // ILA

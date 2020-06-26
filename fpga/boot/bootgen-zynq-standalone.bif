@@ -1,0 +1,6 @@
+the_ROM_image:
+{
+  [bootloader] build/zynq/fsbl.elf
+  build/zynq/fpga.bit
+  ../resource/fsbl-loader/fsbl-loader.elf
+}
