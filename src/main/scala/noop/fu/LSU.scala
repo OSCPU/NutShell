@@ -5,34 +5,36 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import top.Settings
 
 object LSUOpType {
-  def lb   = "b000000".U
-  def lh   = "b000001".U
-  def lw   = "b000010".U
-  def ld   = "b000011".U
-  def lbu  = "b000100".U
-  def lhu  = "b000101".U
-  def lwu  = "b000110".U
-  def sb   = "b001000".U
-  def sh   = "b001001".U
-  def sw   = "b001010".U
-  def sd   = "b001011".U
+  def lb   = "b0000000".U
+  def lh   = "b0000001".U
+  def lw   = "b0000010".U
+  def ld   = "b0000011".U
+  def lbu  = "b0000100".U
+  def lhu  = "b0000101".U
+  def lwu  = "b0000110".U
+  def sb   = "b0001000".U
+  def sh   = "b0001001".U
+  def sw   = "b0001010".U
+  def sd   = "b0001011".U
 
-  def lr      = "b100000".U
-  def sc      = "b100001".U
-  def amoswap = "b100010".U
-  def amoadd  = "b100011".U
-  def amoxor  = "b100100".U
-  def amoand  = "b100101".U
-  def amoor   = "b100110".U
-  def amomin  = "b110111".U
-  def amomax  = "b110000".U
-  def amominu = "b110001".U
-  def amomaxu = "b110010".U
+  def lr      = "b0100000".U
+  def sc      = "b0100001".U
+  def amoswap = "b0100010".U
+  def amoadd  = "b1100011".U
+  def amoxor  = "b0100100".U
+  def amoand  = "b0100101".U
+  def amoor   = "b0100110".U
+  def amomin  = "b0110111".U
+  def amomax  = "b0110000".U
+  def amominu = "b0110001".U
+  def amomaxu = "b0110010".U
   
-  def isStore(func: UInt): Bool = func(3)
+  def isAdd(func: UInt) = func(6)
   def isAtom(func: UInt): Bool = func(5)
+  def isStore(func: UInt): Bool = func(3)
   def isLoad(func: UInt): Bool = !isStore(func) & !isAtom(func)
   def isLR(func: UInt): Bool = func === lr
   def isSC(func: UInt): Bool = func === sc
@@ -42,14 +44,18 @@ object LSUOpType {
   def atomD = "011".U
 }
 
+sealed trait HasLSUConst {
+  val IndependentAddrCalcState = false
+}
+
 class LSUIO extends FunctionUnitIO {
   val wdata = Input(UInt(XLEN.W))
   val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr
   val dmem = new SimpleBusUC(addrBits = VAddrBits)
   val isMMIO = Output(Bool())
-  val dtlbPF = Output(Bool())
-  val loadAddrMisaligned = Output(Bool())
-  val storeAddrMisaligned = Output(Bool())
+  val dtlbPF = Output(Bool()) // TODO: refactor it for new backend
+  val loadAddrMisaligned = Output(Bool()) // TODO: refactor it for new backend
+  val storeAddrMisaligned = Output(Bool()) // TODO: refactor it for new backend
 }
 
 class StoreQueueEntry extends NOOPBundle{
@@ -63,7 +69,7 @@ class AtomALU extends NOOPModule {
   val io = IO(new NOOPBundle{
     val src1 = Input(UInt(XLEN.W))
     val src2 = Input(UInt(XLEN.W))
-    val func = Input(UInt(6.W))
+    val func = Input(UInt(7.W))
     val isWordOp = Input(Bool())
     val result = Output(UInt(XLEN.W))
   })
@@ -73,7 +79,7 @@ class AtomALU extends NOOPModule {
   val src1 = io.src1
   val src2 = io.src2
   val func = io.func
-  val isAdderSub = (func =/= LSUOpType.amoadd) 
+  val isAdderSub = !LSUOpType.isAdd(func) 
   val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
   val xorRes = src1 ^ src2
   val sltu = !adderRes(XLEN)
@@ -81,7 +87,7 @@ class AtomALU extends NOOPModule {
 
   val res = LookupTreeDefault(func(5, 0), adderRes, List(
     LSUOpType.amoswap -> src2,
-    LSUOpType.amoadd  -> adderRes,
+    // LSUOpType.amoadd  -> adderRes,
     LSUOpType.amoxor  -> xorRes,
     LSUOpType.amoand  -> (src1 & src2),
     LSUOpType.amoor   -> (src1 | src2),
@@ -91,10 +97,10 @@ class AtomALU extends NOOPModule {
     LSUOpType.amomaxu -> Mux(sltu(0), src2, src1)
   ))
 
-  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res)
+  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res(XLEN-1,0))
 }
 
-class LSU extends NOOPModule {
+class LSU extends NOOPModule with HasLSUConst {
   val io = IO(new LSUIO)
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt, dtlbPF: Bool): UInt = {
@@ -115,7 +121,9 @@ class LSU extends NOOPModule {
     val amoReq   = valid & LSUOpType.isAMO(func)
     val lrReq   = valid & LSUOpType.isLR(func)
     val scReq   = valid & LSUOpType.isSC(func)
-    BoringUtils.addSource(amoReq, "ISAMO")
+    if (Settings.HasDTLB) {
+      BoringUtils.addSource(amoReq, "ISAMO")
+    }
     BoringUtils.addSource(amoReq, "ISAMO2")
 
     val aq = io.instr(26)
@@ -143,12 +151,14 @@ class LSU extends NOOPModule {
     val dtlbFinish = WireInit(false.B)
     val dtlbPF = WireInit(false.B)
     val dtlbEnable = WireInit(false.B)
-    BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
-    BoringUtils.addSink(dtlbPF, "DTLBPF")
-    BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+    if (Settings.HasDTLB) {
+      BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
+      BoringUtils.addSink(dtlbPF, "DTLBPF")
+      BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+    }
 
     // LSU control FSM state
-    val s_idle :: s_load :: s_lr :: s_sc :: s_amo_l :: s_amo_a :: s_amo_s :: Nil = Enum(7)
+    val s_idle :: s_exec :: s_load :: s_lr :: s_sc :: s_amo_l :: s_amo_a :: s_amo_s :: Nil = Enum(8)
 
     // LSU control FSM
     val state = RegInit(s_idle)
@@ -159,17 +169,21 @@ class LSU extends NOOPModule {
     atomALU.io.src2 := io.wdata
     atomALU.io.func := func
     atomALU.io.isWordOp := atomWidthW
+
+    val addr = if(IndependentAddrCalcState){RegNext(src1 + src2, state === s_idle)}else{DontCare}
     
     // StoreQueue
     // TODO: inst fence needs storeQueue to be finished
-    val enableStoreQueue = EnableStoreQueue // StoreQueue is disabled for page fault detection
-    val storeQueue = Module(new Queue(new StoreQueueEntry, 4))
-    storeQueue.io.enq.valid := state === s_idle && storeReq
-    storeQueue.io.enq.bits.src1 := src1
-    storeQueue.io.enq.bits.src2 := src2
-    storeQueue.io.enq.bits.wdata := io.wdata
-    storeQueue.io.enq.bits.func := func
-    storeQueue.io.deq.ready := lsExecUnit.io.out.fire()
+    // val enableStoreQueue = EnableStoreQueue // StoreQueue is disabled for page fault detection
+    // if(enableStoreQueue){
+    //   val storeQueue = Module(new Queue(new StoreQueueEntry, 4))
+    //   storeQueue.io.enq.valid := state === s_idle && storeReq
+    //   storeQueue.io.enq.bits.src1 := src1
+    //   storeQueue.io.enq.bits.src2 := src2
+    //   storeQueue.io.enq.bits.wdata := io.wdata
+    //   storeQueue.io.enq.bits.func := func
+    //   storeQueue.io.deq.ready := lsExecUnit.io.out.fire()
+    // }
     
     lsExecUnit.io.in.valid     := false.B
     lsExecUnit.io.out.ready    := DontCare
@@ -181,59 +195,65 @@ class LSU extends NOOPModule {
     io.in.ready                := false.B
 
     switch (state) {
-      is(s_idle){
-        if(enableStoreQueue){
-          lsExecUnit.io.in.valid     := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.valid, io.in.valid)
-          lsExecUnit.io.out.ready    := io.out.ready 
-          lsExecUnit.io.in.bits.src1 := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.src1, src1)
-          lsExecUnit.io.in.bits.src2 := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.src2, src2)
-          lsExecUnit.io.in.bits.func := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.func, func)
-          lsExecUnit.io.wdata        := Mux(storeQueue.io.deq.valid, storeQueue.io.deq.bits.wdata, io.wdata)
-          io.in.ready                := Mux(storeReq, storeQueue.io.enq.ready, false.B) || scInvalid
-          io.out.valid               := Mux(storeReq, storeQueue.io.enq.ready, false.B) || scInvalid
-        }else{
+      is(s_idle){ // calculate address 
+        lsExecUnit.io.in.valid     := false.B
+        lsExecUnit.io.out.ready    := DontCare 
+        lsExecUnit.io.in.bits.src1 := DontCare
+        lsExecUnit.io.in.bits.src2 := DontCare
+        lsExecUnit.io.in.bits.func := DontCare
+        lsExecUnit.io.wdata        := DontCare
+        io.in.ready                := false.B || scInvalid
+        io.out.valid               := false.B || scInvalid
+        when(valid){state := s_exec}
+
+        if(!IndependentAddrCalcState){
           lsExecUnit.io.in.valid     := io.in.valid && !atomReq
           lsExecUnit.io.out.ready    := io.out.ready 
-          lsExecUnit.io.in.bits.src1 := src1
-          lsExecUnit.io.in.bits.src2 := src2
+          lsExecUnit.io.in.bits.src1 := src1 + src2
+          lsExecUnit.io.in.bits.src2 := DontCare
           lsExecUnit.io.in.bits.func := func
           lsExecUnit.io.wdata        := io.wdata
           io.in.ready                := lsExecUnit.io.out.fire() || scInvalid
           io.out.valid               := lsExecUnit.io.out.valid  || scInvalid
+          state := s_idle
         }
 
-        // when(storeReq){
-        //   state := s_idle
-        // }
-        if(enableStoreQueue){
-          when(loadReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_load)}
-          when(amoReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_amo_l)}
-          when(lrReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_lr)}
-          when(scReq){state := Mux(storeQueue.io.deq.valid, s_idle, s_sc)}
-        }else{
-          when(amoReq){state := s_amo_l}
-          when(lrReq){state := s_lr}
-          when(scReq){state := Mux(scInvalid, s_idle, s_sc)}
-        }
-      }
+        when(amoReq){state := s_amo_l}
+        when(lrReq){state := s_lr}
+        when(scReq){state := Mux(scInvalid, s_idle, s_sc)}
+        
+      } 
 
-      is(s_load){
+      is(s_exec){
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready 
-        lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := src2
+        lsExecUnit.io.in.bits.src1 := addr
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := func
-        lsExecUnit.io.wdata        := DontCare
-        io.in.ready                := lsExecUnit.io.out.fire()
-        io.out.valid               := lsExecUnit.io.out.valid
-        when(lsExecUnit.io.out.fire()){state := s_idle}//load finished
+        lsExecUnit.io.wdata        := io.wdata
+        io.in.ready                := lsExecUnit.io.out.fire() 
+        io.out.valid               := lsExecUnit.io.out.valid  
+        assert(!atomReq || !amoReq || !lrReq || !scReq)
+        when(io.out.fire()){state := s_idle}
       }
+
+      // is(s_load){
+      //   lsExecUnit.io.in.valid     := true.B
+      //   lsExecUnit.io.out.ready    := io.out.ready 
+      //   lsExecUnit.io.in.bits.src1 := src1
+      //   lsExecUnit.io.in.bits.src2 := src2
+      //   lsExecUnit.io.in.bits.func := func
+      //   lsExecUnit.io.wdata        := DontCare
+      //   io.in.ready                := lsExecUnit.io.out.fire()
+      //   io.out.valid               := lsExecUnit.io.out.valid
+      //   when(lsExecUnit.io.out.fire()){state := s_idle}//load finished
+      // }
 
       is(s_amo_l){
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := true.B 
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.ld, LSUOpType.lw)
         lsExecUnit.io.wdata        := DontCare
         io.in.ready                := false.B
@@ -264,7 +284,7 @@ class LSU extends NOOPModule {
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.sd, LSUOpType.sw)
         lsExecUnit.io.wdata        := atomMemReg
         io.in.ready                := lsExecUnit.io.out.fire()
@@ -278,7 +298,7 @@ class LSU extends NOOPModule {
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.ld, LSUOpType.lw)
         lsExecUnit.io.wdata        := DontCare
         io.in.ready                := lsExecUnit.io.out.fire()
@@ -292,7 +312,7 @@ class LSU extends NOOPModule {
         lsExecUnit.io.in.valid     := true.B
         lsExecUnit.io.out.ready    := io.out.ready
         lsExecUnit.io.in.bits.src1 := src1
-        lsExecUnit.io.in.bits.src2 := 0.U
+        lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.sd, LSUOpType.sw)
         lsExecUnit.io.wdata        := io.wdata
         io.in.ready                := lsExecUnit.io.out.fire()
@@ -309,6 +329,9 @@ class LSU extends NOOPModule {
       io.in.ready := true.B
     }
 
+  Debug(){
+    when(io.out.fire()){printf("[LSU-AGU] state %x inv %x inr %x\n", state, io.in.valid, io.in.ready)}
+  }
     // controled by FSM 
     // io.in.ready := lsExecUnit.io.in.ready
     // lsExecUnit.io.wdata := io.wdata
@@ -337,11 +360,10 @@ class LSU extends NOOPModule {
 class LSExecUnit extends NOOPModule {
   val io = IO(new LSUIO)
 
-  val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
-  def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt = {
+  val (valid, addr, func) = (io.in.valid, io.in.bits.src1, io.in.bits.func) // src1 is used as address
+  def access(valid: Bool, addr: UInt, func: UInt): UInt = {
     this.valid := valid
-    this.src1 := src1
-    this.src2 := src2
+    this.addr := addr
     this.func := func
     io.out.bits
   }
@@ -363,8 +385,22 @@ class LSExecUnit extends NOOPModule {
     ))
   }
 
+  def genWmask32(addr: UInt, sizeEncode: UInt): UInt = {
+    LookupTree(sizeEncode, List(
+      "b00".U -> 0x1.U, //0001 << addr(1:0)
+      "b01".U -> 0x3.U, //0011
+      "b10".U -> 0xf.U  //1111
+    )) << addr(1, 0)
+  }
+  def genWdata32(data: UInt, sizeEncode: UInt): UInt = {
+    LookupTree(sizeEncode, List(
+      "b00".U -> Fill(4, data(7, 0)),
+      "b01".U -> Fill(2, data(15, 0)),
+      "b10".U -> data
+    ))
+  }
+
   val dmem = io.dmem
-  val addr = src1 + src2
   val addrLatch = RegNext(addr)
   val isStore = valid && LSUOpType.isStore(func)
   val partialLoad = !isStore && (func =/= LSUOpType.ld)
@@ -375,9 +411,11 @@ class LSExecUnit extends NOOPModule {
   val dtlbFinish = WireInit(false.B)
   val dtlbPF = WireInit(false.B)
   val dtlbEnable = WireInit(false.B)
-  BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
-  BoringUtils.addSink(dtlbPF, "DTLBPF")
-  BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+  if (Settings.HasDTLB) {
+    BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
+    BoringUtils.addSink(dtlbPF, "DTLBPF")
+    BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+  }
 
   io.dtlbPF := dtlbPF
 
@@ -396,27 +434,38 @@ class LSExecUnit extends NOOPModule {
   }
 
   Debug(){
-    //when (dmem.req.fire()){
-      printf("[LSU] IN(%d, %d) OUT(%d, %d) addr %x, size %x, wdata_raw %x, isStore %x \n", io.in.valid, io.in.ready, io.out.valid, io.out.ready, addr, func(1,0), io.wdata, isStore)
-      printf("[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x \n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire(), dmem.resp.fire(), dmem.resp.bits.rdata)
-    //}
+    when (dmem.req.fire()){
+      printf("[LSU] %x, size %x, wdata_raw %x, isStore %x time %d\n", addr, func(1,0), io.wdata, isStore, GTimer())
+      printf("[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x time %d\n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire(), dmem.resp.fire(), dmem.resp.bits.rdata, GTimer())
+    }
     //when (dtlbFinish && dtlbEnable) {
-      printf("[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x \n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire(), dmem.resp.fire(), dmem.resp.bits.rdata)
+      // printf("[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x \n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire(), dmem.resp.fire(), dmem.resp.bits.rdata)
     //}
   }
 
   val size = func(1,0)
-  dmem.req.bits.apply(addr = addr(VAddrBits-1, 0), size = size, wdata = genWdata(io.wdata, size),
-    wmask = genWmask(addr, size), cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
+  val reqAddr  = if (XLEN == 32) SignExt(addr, VAddrBits) else addr(VAddrBits-1,0)
+  val reqWdata = if (XLEN == 32) genWdata32(io.wdata, size) else genWdata(io.wdata, size)
+  val reqWmask = if (XLEN == 32) genWmask32(addr, size) else genWmask(addr, size)
+  dmem.req.bits.apply(
+    addr = reqAddr, 
+    size = size, 
+    wdata = reqWdata,
+    wmask = reqWmask,
+    cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
   dmem.req.valid := valid && (state === s_idle) && !io.loadAddrMisaligned && !io.storeAddrMisaligned
   dmem.resp.ready := true.B
 
-  io.out.valid := Mux( dtlbPF || io.loadAddrMisaligned || io.storeAddrMisaligned, true.B, Mux(partialLoad, state === s_partialLoad, dmem.resp.fire() && (state === s_wait_resp)))
+  io.out.valid := Mux( dtlbPF && state =/= s_idle || io.loadAddrMisaligned || io.storeAddrMisaligned, true.B, Mux(partialLoad, state === s_partialLoad, dmem.resp.fire() && (state === s_wait_resp)))
   io.in.ready := (state === s_idle) || dtlbPF
+
+  Debug(){
+    when(io.out.fire()){printf("[LSU-EXECUNIT] state %x dresp %x dpf %x lm %x sm %x\n", state, dmem.resp.fire(), dtlbPF, io.loadAddrMisaligned, io.storeAddrMisaligned)}
+  }
 
   val rdata = dmem.resp.bits.rdata
   val rdataLatch = RegNext(rdata)
-  val rdataSel = LookupTree(addrLatch(2, 0), List(
+  val rdataSel64 = LookupTree(addrLatch(2, 0), List(
     "b000".U -> rdataLatch(63, 0),
     "b001".U -> rdataLatch(63, 8),
     "b010".U -> rdataLatch(63, 16),
@@ -426,6 +475,13 @@ class LSExecUnit extends NOOPModule {
     "b110".U -> rdataLatch(63, 48),
     "b111".U -> rdataLatch(63, 56)
   ))
+  val rdataSel32 = LookupTree(addrLatch(1, 0), List(
+    "b00".U -> rdataLatch(31, 0),
+    "b01".U -> rdataLatch(31, 8),
+    "b10".U -> rdataLatch(31, 16),
+    "b11".U -> rdataLatch(31, 24)
+  ))
+  val rdataSel = if (XLEN == 32) rdataSel32 else rdataSel64
   val rdataPartialLoad = LookupTree(func, List(
       LSUOpType.lb   -> SignExt(rdataSel(7, 0) , XLEN),
       LSUOpType.lh   -> SignExt(rdataSel(15, 0), XLEN),
@@ -441,7 +497,7 @@ class LSExecUnit extends NOOPModule {
     "b11".U   -> (addr(2,0) === 0.U)  //d
   ))
 
-  io.out.bits := Mux(partialLoad, rdataPartialLoad, rdata)
+  io.out.bits := Mux(partialLoad, rdataPartialLoad, rdata(XLEN-1,0))
 
   io.isMMIO := DontCare
 
@@ -460,9 +516,4 @@ class LSExecUnit extends NOOPModule {
   BoringUtils.addSource(BoolStopWatch(dmem.isRead(), dmem.resp.fire()), "perfCntCondMloadStall")
   BoringUtils.addSource(BoolStopWatch(dmem.isWrite(), dmem.resp.fire()), "perfCntCondMstoreStall")
   BoringUtils.addSource(io.isMMIO, "perfCntCondMmmioInstr")
-  Debug() {
-    when (dmem.req.fire() && (addr === "h80104708".U || genWdata(io.wdata, size)(31,0) === "h80000218".U)){
-      //printf("[LSUBP] time %d, addr %x, size %x, wdata_raw %x, wdata %x, isStore %x \n", GTimer(), addr, func(1,0), io.wdata, genWdata(io.wdata, size), isStore)
-    }
-  }
 }

@@ -48,7 +48,7 @@ object FuType {
 }
 
 object FuOpType {
-  def apply() = UInt(6.W)
+  def apply() = UInt(7.W)
 }
 
 object Instructions extends HasInstrType with HasNOOPParameter {

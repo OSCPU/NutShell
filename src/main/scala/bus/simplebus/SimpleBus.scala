@@ -6,6 +6,7 @@ import chisel3.util._
 import noop.HasNOOPParameter
 import utils._
 import bus.axi4._
+import bus.memport._
 
 sealed abstract class SimpleBusBundle extends Bundle with HasNOOPParameter
 
@@ -63,7 +64,7 @@ class SimpleBusReqBundle(val userBits: Int = 0, val addrBits: Int = 32) extends 
 
 class SimpleBusRespBundle(val userBits: Int = 0) extends SimpleBusBundle {
   val cmd = Output(SimpleBusCmd())
-  val rdata = Output(UInt(DataBits.W))
+  val rdata = Output(UInt(64.W))  // TODO: when frontend datapath support 32bit, set DataBits.W here
   val user = if (userBits > 0) Some(Output(UInt(userBits.W))) else None
 
   override def toPrintable: Printable = p"rdata = ${Hexadecimal(rdata)}, cmd = ${cmd}"
@@ -84,6 +85,7 @@ class SimpleBusUC(val userBits: Int = 0, val addrBits: Int = 32) extends SimpleB
   def isRead()  = req.valid && req.bits.isRead()
   def toAXI4Lite() = SimpleBus2AXI4Converter(this, new AXI4Lite)
   def toAXI4() = SimpleBus2AXI4Converter(this, new AXI4)
+  def toMemPort() = SimpleBus2MemPortConverter(this, new MemPortIo(32))
 
   def dump(name: String) = {
     when (req.fire()) { printf(p"${GTimer()},[${name}] ${req.bits}\n") }
@@ -97,4 +99,5 @@ class SimpleBusC(val userBits: Int = 0) extends SimpleBusBundle {
   val coh = Flipped(new SimpleBusUC(userBits))
 
   def memtoAXI4() = this.mem.toAXI4
+  def memtoMemPort() = this.mem.toMemPort
 }

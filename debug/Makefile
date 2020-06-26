@@ -1,6 +1,10 @@
 ARCH = ARCH=riscv64-noop
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
-SINGLETEST = ALL=min3
+SINGLETEST = ALL=recursion
+
+CPU_TEST_RESULT = $(shell cat cpu.log | grep different)
+MB_RESULT = $(shell cat microbench.log | grep IPC)
+MBT_RESULT = $(shell cat microbench-train.log | grep IPC)
 
 # ------------------------------------------------------------------
 # bulid CPU and run dummy test
@@ -10,16 +14,19 @@ cpu:
 	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) ALL=dummy run
 
 # ------------------------------------------------------------------
-# run different test sets
+# unit tests
 # ------------------------------------------------------------------
 
 cputest:
 	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) run 2>&1 | tee > cpu.log
-	cat cpu.log | grep different
+	# cat cpu.log | grep different
+ifeq ($(CPU_TEST_RESULT),)
+	@echo "simple CPU test passed"
+else
+	@echo $(CPU_TEST_RESULT)
+	@echo "simple CPU test falied"
+endif
 
-# bputest:
-# 	$(MAKE) -C $(AM_HOME)/tests/bputest $(ARCH) run 2>&1 | tee > bpu.log
-# 	cat bpu.log | grep different
 bputest:
 	$(MAKE) -C $(AM_HOME)/tests/bputest $(ARCH) ALL=forcall2 run 2>&1 | tee > bpu.log
 	cat bpu.log | grep Mbp
@@ -32,10 +39,15 @@ unittest:
 microbench:
 	$(MAKE) -C $(AM_HOME)/apps/microbench $(ARCH) mainargs=test run 2>&1 | tee > microbench.log
 	cat microbench.log | grep IPC
+	@date >> history.log
+	@git log --pretty=format:"%h %an %ad %s" -1 >> history.log
+	@echo -e "" >> history.log
+	@echo $(MB_RESULT) >> history.log
+	@echo -e "" >> history.log
 
-microbench_train:
-	$(MAKE) -C $(AM_HOME)/apps/microbench $(ARCH) mainargs=train run 2>&1 | tee > microbench.log
-	cat microbench.log | grep IPC
+microbench-train:
+	$(MAKE) -C $(AM_HOME)/apps/microbench $(ARCH) mainargs=train run 2>&1 | tee > microbench-train.log
+	cat microbench-train.log | grep IPC
 
 coremark:
 	$(MAKE) -C $(AM_HOME)/apps/coremark $(ARCH) mainargs=test run 2>&1 | tee > coremark.log
@@ -68,6 +80,20 @@ xv6-debug:
 
 linux:
 	$(MAKE) -C $(BBL_LINUX_HOME) noop
+
+# ------------------------------------------------------------------
+# test set
+# ------------------------------------------------------------------
+
+smoke-test: cpu cputest microbench
+	@echo "Smoke Test Passed"
+
+regression-test: smoke-test linux
+	@echo "Regression Test Passed"
+
+perf-test: smoke-test microbench-train coremark
+	@echo "Perf Test Finished"
+
 # ------------------------------------------------------------------
 # get disassembled test src
 # ------------------------------------------------------------------

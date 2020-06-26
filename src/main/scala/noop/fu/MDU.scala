@@ -86,7 +86,7 @@ class Divider(len: Int = 64) extends NOOPModule {
     //     = 64.U - (Log2(aVal, XLEN) + 1.U) + Log2(bVal, XLEN) + 1.U
     //     = 64.U + Log2(bVal, XLEN) - Log2(aVal, XLEN)
     //     = (64.U | Log2(bVal, XLEN)) - Log2(aVal, XLEN)  // since Log2(bVal, XLEN) < 64.U
-    val canSkipShift = (64.U | Log2(bReg)) - Log2(aValx2Reg)
+    val canSkipShift = (len.U | Log2(bReg)) - Log2(aValx2Reg)
     // When divide by 0, the quotient should be all 1's.
     // Therefore we can not shift in 0s here.
     // We do not skip any shift to avoid this.
@@ -133,7 +133,7 @@ class MDU extends NOOPModule {
   val isW = MDUOpType.isW(func)
 
   val mul = Module(new Multiplier(XLEN + 1))
-  val div = Module(new Divider(64))
+  val div = Module(new Divider(XLEN))
   List(mul.io, div.io).map { case x =>
     x.sign := isDivSign
     x.out.ready := io.out.ready
@@ -165,6 +165,8 @@ class MDU extends NOOPModule {
   val isDivReg = Mux(io.in.fire(), isDiv, RegNext(isDiv))
   io.in.ready := Mux(isDiv, div.io.in.ready, mul.io.in.ready)
   io.out.valid := Mux(isDivReg, div.io.out.valid, mul.io.out.valid)
+
+  Debug(){printf("[FU-MDU] irv-orv %d %d - %d %d\n", io.in.ready, io.in.valid, io.out.ready, io.out.valid)}
 
   BoringUtils.addSource(mul.io.out.fire(), "perfCntCondMmulInstr")
 }

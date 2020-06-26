@@ -116,10 +116,12 @@ class AXI4DummySD extends AXI4SlaveModule(new AXI4Lite) with HasSDConst {
   )
   def getOffset(addr: UInt) = addr(12,0)
 
-  val strb = Mux(waddr(2), in.w.bits.strb(7,4), in.w.bits.strb(3,0))
-  val rdata = Wire(UInt(64.W))
+  val strb = if (DataBits == 32) in.w.bits.strb(3,0) 
+             else Mux(waddr(2), in.w.bits.strb(7,4), in.w.bits.strb(3,0))
+  val rdata = Wire(UInt(DataBits.W))
   RegMap.generate(mapping, getOffset(raddr), rdata,
     getOffset(waddr), in.w.fire(), in.w.bits.data, MaskExpand(strb))
 
-  in.r.bits.data := RegEnable(RegNext(Fill(2, rdata(31,0))), ren)
+  in.r.bits.data := (if (DataBits == 32) RegEnable(RegNext(rdata(31,0)), ren)
+                     else RegEnable(RegNext(Fill(2, rdata(31,0))), ren))
 }

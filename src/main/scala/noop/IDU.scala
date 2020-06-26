@@ -6,15 +6,16 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-class IDU2(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
+class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
+    val isWFI = Output(Bool()) // require NOOPSim to advance mtime when wfi to reduce the idle time in Linux
     val flush = Input(Bool())
   })
 
   val hasIntr = Wire(Bool())
-  val instr = io.in.bits.instr(31, 0)
+  val instr = io.in.bits.instr
   val decodeList = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val instrType :: fuType :: fuOpType :: Nil = // insert Instructions.DecodeDefault when interrupt comes
     Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault), intr, dec)}
@@ -122,8 +123,29 @@ class IDU2(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   io.out.bits.ctrl.src1Type := Mux(instr(6,0) === "b0110111".U, SrcType.reg, src1Type)
   io.out.bits.ctrl.src2Type := src2Type
 
+  val PipeLineList = Seq(
+    FuType.alu,
+    FuType.csr,
+    FuType.mou
+    // FuType.lsu
+  )
+
+  val BlockList = Seq(
+    FuType.csr,
+    FuType.mou
+    // FuType.lsu
+  )
+
   // io.out.bits.ctrl.isInvOpcode := (instrType === InstrN) && io.in.valid
   io.out.bits.ctrl.isNoopTrap := (instr(31,0) === NOOPTrap.TRAP) && io.in.valid
+  io.out.bits.ctrl.isSpecExec := io.out.bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.out.bits.ctrl.fuOpType) //TODO
+  io.out.bits.ctrl.isPipeLined := PipeLineList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
+  io.out.bits.ctrl.isBlocked :=
+  (
+    // io.out.bits.ctrl.fuType === FuType.alu && ALUOpType.isBru(io.out.bits.ctrl.fuOpType) ||  // TODO: decouple LS
+    io.out.bits.ctrl.fuType === FuType.lsu && !LSUOpType.isLoad(io.out.bits.ctrl.fuOpType) ||  // TODO: decouple LS
+    BlockList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
+  )
 
   //output signals
 
@@ -145,13 +167,30 @@ class IDU2(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   io.out.bits.cf.exceptionVec(instrPageFault) := io.in.bits.exceptionVec(instrPageFault)
 
   io.out.bits.ctrl.isNoopTrap := (instr === NOOPTrap.TRAP) && io.in.valid
+  io.isWFI := (instr === Priviledged.WFI) && io.in.valid
 
-  if (!p.FPGAPlatform) {
-    val isWFI = (instr === Priviledged.WFI) && io.in.valid
-    BoringUtils.addSource(isWFI, "isWFI")
-  }
 }
 
-// Note  
-// C.LWSP is only valid when rd̸=x0; the code points with rd=x0 are reserved
-// C.LDSP is only valid when rd̸=x0; the code points with rd=x0 are reserved.
+class IDU(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
+  val io = IO(new Bundle {
+    val in = Vec(2, Flipped(Decoupled(new CtrlFlowIO)))
+    val out = Vec(2, Decoupled(new DecodeIO))
+    val flush = Input(Bool())
+  })
+  val decoder1  = Module(new Decoder)
+  val decoder2  = Module(new Decoder)
+  io.in(0) <> decoder1.io.in
+  io.in(1) <> decoder2.io.in
+  io.out(0) <> decoder1.io.out
+  io.out(1) <> decoder2.io.out
+  decoder1.io.flush := io.flush 
+  decoder2.io.flush := io.flush
+  if(!EnableMultiIssue){
+    io.in(1).ready := false.B
+    decoder2.io.in.valid := false.B
+  }
+
+  if (!p.FPGAPlatform) {
+    BoringUtils.addSource(decoder1.io.isWFI | decoder2.io.isWFI, "isWFI")
+  }
+}

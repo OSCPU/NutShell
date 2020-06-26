@@ -4,15 +4,16 @@ import noop._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import device.{AXI4Timer, AXI4PLIC}
+import top.Settings
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 trait HasSoCParameter {
-  val EnableILA = true
-  val HasL2cache = true
-  val HasPrefetch = true
+  val EnableILA = Settings.EnableILA
+  val HasL2cache = Settings.HasL2cache
+  val HasPrefetch = Settings.HasL2cache
 }
 
 class ILABundle extends NOOPBundle {
@@ -27,12 +28,16 @@ class ILABundle extends NOOPBundle {
 class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
-    val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
-    val slcr = (if (p.FPGAPlatform) { new AXI4 } else null)
+    val mmio = (if (p.FPGAPlatform) { if (Settings.FPGAmode == "pynq") new AXI4 else new AXI4Lite } else { new SimpleBusUC })
+    val slcr = (if (p.FPGAPlatform && Settings.FPGAmode == "pynq") new AXI4 else null)
     val frontend = Flipped(new AXI4)
     val meip = Input(Bool())
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
+
+  val needAddrMap = if (Settings.FPGAmode == "pynq") true else false
+  val hasSlcr = if (Settings.FPGAmode == "pynq") true else false
+  val hasPlic = if (Settings.FPGAmode == "pynq") true else false
 
   val noop = Module(new NOOP)
   val cohMg = Module(new CoherenceManager)
@@ -45,6 +50,11 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val axi2sb = Module(new AXI42SimpleBusConverter())
   axi2sb.io.in <> io.frontend
   noop.io.frontend <> axi2sb.io.out
+
+  val memport = xbar.io.out.toMemPort()
+  memport.resp.bits.data := DontCare
+  memport.resp.valid := DontCare
+  memport.req.ready := DontCare
 
   val mem = if (HasL2cache) {
     val l2cacheOut = Wire(new SimpleBusC)
@@ -67,7 +77,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     xbar.io.out
   }
 
-  val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L)))
+  val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L), enable=needAddrMap))
   memAddrMap.io.in <> mem
   io.mem <> memAddrMap.io.out.toAXI4()
   
@@ -79,20 +89,28 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     (0x40000000L, 0x08000000L), // external devices
     (0x48000000L, 0x00010000L), // CLINT
     (0x4c000000L, 0x04000000L), // PLIC
-    (0x49000000L, 0x00010000L)  // SLCR for pynq
+    (0x49000000L, 0x00001000L)  // SLCR for pynq
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> noop.io.mmio
 
   val extDev = mmioXbar.io.out(0)
   if (p.FPGAPlatform) {
-    val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L)))
+    val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L), enable=needAddrMap))
     mmioAddrMap.io.in <> extDev
-    io.mmio <> mmioAddrMap.io.out.toAXI4()
+    if (Settings.FPGAmode == "pynq") {
+      io.mmio <> mmioAddrMap.io.out.toAXI4()
+    } else {
+      io.mmio <> mmioAddrMap.io.out.toAXI4Lite()
+    }
 
-    val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L)))
-    slcrAddrMap.io.in <> mmioXbar.io.out(3)
-    io.slcr <> slcrAddrMap.io.out.toAXI4()
+    if (hasSlcr) {
+      val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L), enable=needAddrMap))
+      slcrAddrMap.io.in <> mmioXbar.io.out(3)
+      io.slcr <> slcrAddrMap.io.out.toAXI4()
+    } else {
+      mmioXbar.io.out(3) := DontCare
+    }
   }
   else {
     io.mmio <> extDev
@@ -104,11 +122,18 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val mtipSync = clint.io.extra.get.mtip
   BoringUtils.addSource(mtipSync, "mtip")
 
-  val plic = Module(new AXI4PLIC(nrIntr = 1, nrHart = 1))
-  plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
-  plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
-  val meipSync = plic.io.extra.get.meip(0)
-  BoringUtils.addSource(meipSync, "meip")
+  if (hasPlic) {
+    val plic = Module(new AXI4PLIC(nrIntr = 1, nrHart = 1))
+    plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
+    plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
+    val meipSync = plic.io.extra.get.meip(0)
+    BoringUtils.addSource(meipSync, "meip")
+  } else {
+    val meipSync = RegNext(RegNext(io.meip))
+    mmioXbar.io.out(2) := DontCare
+    BoringUtils.addSource(meipSync, "meip")
+  }
+  
 
   // ILA
   if (p.FPGAPlatform) {
