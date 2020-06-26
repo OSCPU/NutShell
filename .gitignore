@@ -339,5 +339,7 @@ project/plugins/project/
 hs_err_pid*
 
 # waveform dump file
-
 *.vcd
+
+# vscode temp file
+.vscode/
