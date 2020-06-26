@@ -63,7 +63,7 @@ void init_difftest(rtlreg_t *reg) {
   ref_difftest_init();
   void* get_img_start();
   long get_img_size();
-  ref_difftest_memcpy_from_dut(0x0, get_img_start(), get_img_size());
+  ref_difftest_memcpy_from_dut(0x80000000, get_img_start(), get_img_size());
   ref_difftest_setregs(reg);
 }
 

@@ -29,11 +29,13 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
-    val slcr = (if (p.FPGAPlatform) { new AXI4 } else null)
+    val slcr = (if (p.FPGAPlatform && Settings.FPGAmode == "pynq") { new AXI4 } else null)
     val frontend = Flipped(new AXI4)
     val meip = Input(Bool())
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
+
+  val needAddrMap = if (Settings.FPGAmode == "pynq") true else false
 
   val noop = Module(new NOOP)
   val cohMg = Module(new CoherenceManager)
@@ -73,7 +75,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     xbar.io.out
   }
 
-  val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L)))
+  val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L), enable=needAddrMap))
   memAddrMap.io.in <> mem
   io.mem <> memAddrMap.io.out.toAXI4()
   
@@ -92,11 +94,11 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
 
   val extDev = mmioXbar.io.out(0)
   if (p.FPGAPlatform) {
-    val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L)))
+    val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L), enable=needAddrMap))
     mmioAddrMap.io.in <> extDev
     io.mmio <> mmioAddrMap.io.out.toAXI4()
 
-    val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L)))
+    val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L), enable=needAddrMap))
     slcrAddrMap.io.in <> mmioXbar.io.out(3)
     io.slcr <> slcrAddrMap.io.out.toAXI4()
   }

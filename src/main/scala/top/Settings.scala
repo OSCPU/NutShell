@@ -5,6 +5,7 @@ trait Common {
   val VAddrBits = 39
   val EnableDebug = false
   val HasMMIO = true
+  val FPGAmode = "pynq"   // Can be set "pynq" or "axu3cg"
 }
 
 trait OoOCore {
@@ -22,8 +23,8 @@ trait OoOCore {
 }
 
 trait SeqCore {
-  val HasL2cache = false
-  val HasPrefetch = false
+  val HasL2cache = true
+  val HasPrefetch = true
   val EnableMultiIssue = false
   val EnableSuperScalarExec = false
   val EnableOutOfOrderExec = false
@@ -49,7 +50,7 @@ trait SmallCore {
   val IsRV32 = true
 }
 
-object Settings extends Common with OoOCore {}
+object Settings extends Common with SeqCore {}
 
 // To generate RV32 core
 // 1. Enble Settings.IsRV32
