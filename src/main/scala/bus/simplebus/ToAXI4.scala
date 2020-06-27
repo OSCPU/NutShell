@@ -30,8 +30,11 @@ class AXI42SimpleBusConverter() extends Module {
     inflight_type := axi_na
     inflight_id_reg := 0.U
   }
-  private def is_inflight() = {
-    inflight_type =/= axi_na
+  private def isState(state: UInt) = {
+    inflight_type === state
+  }
+  private def isInflight() = {
+    !isState(axi_na)
   }
 
   // Default
@@ -108,12 +111,12 @@ class AXI42SimpleBusConverter() extends Module {
   // Arbitration
   // Slave's ready maybe generated according to valid signal, so let valid signals go through.
   mem.req.valid := axi.ar.valid || axi.w.valid
-  mem.resp.ready := true.B || (inflight_type === axi_read && axi.r.ready) || (inflight_type === axi_write && axi.b.ready)
-  axi.ar.ready := !is_inflight && mem.req.ready
-  axi.r.valid := inflight_type === axi_read && mem.resp.valid
+  mem.resp.ready := true.B || (isState(axi_read) && axi.r.ready) || (isState(axi_write) && axi.b.ready)
+  axi.ar.ready := !isInflight() && mem.req.ready
+  axi.r.valid := isState(axi_read) && mem.resp.valid
   // AW should be buffered so no ready is considered.
-  axi.aw.ready := !is_inflight && !axi.ar.valid
-  axi.w.ready  := inflight_type === axi_write && mem.req.ready
+  axi.aw.ready := !isInflight() && !axi.ar.valid
+  axi.w.ready  := isState(axi_write) && mem.req.ready
   axi.b.valid := bresp_en && mem.resp.valid
   axi.b.bits.resp := AXI4Parameters.RESP_OKAY
 }
