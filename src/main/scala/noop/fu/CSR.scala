@@ -196,14 +196,12 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
    
   class MstatusStruct extends Bundle {
     val sd = Output(UInt(1.W))
-    if (Settings.IsRV32) {
-      val pad0 = Output(UInt(8.W))
-    } else {
-      val pad1 = Output(UInt(37.W))  // FIXIT: It should be 27 ?
-      val sxl = Output(UInt(2.W))
-      val uxl = Output(UInt(2.W))
-      val pad0 = Output(UInt(9.W))
-    }
+
+    val pad1 = if (XLEN == 64) Output(UInt(27.W)) else null
+    val sxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+    val uxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+    val pad0 = if (XLEN == 64) Output(UInt(9.W))  else Output(UInt(8.W))
+
     val tsr = Output(UInt(1.W))
     val tw = Output(UInt(1.W))
     val tvm = Output(UInt(1.W))
