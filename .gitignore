@@ -341,5 +341,9 @@ hs_err_pid*
 # waveform dump file
 *.vcd
 
+# chore
+*.nocompile
+fpga/.Xil/
+
 # vscode temp file
 .vscode/

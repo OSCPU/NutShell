@@ -43,7 +43,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   alu2.io.offset := io.in.bits(1).data.imm
   alu2.io.out.ready := true.B
 
-  val lsu = Module(new LSU)
+  val lsu = Module(new UnpipelinedLSU)
   val lsuTlbPF = WireInit(false.B)
   val lsuOut = lsu.access(valid = fuValids(FuType.lsu), src1 = src1, src2 = io.in.bits(0).data.imm, func = fuOpType, dtlbPF = lsuTlbPF)
   lsu.io.wdata := src2
@@ -56,7 +56,8 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   val mduOut = mdu.access(valid = fuValids(FuType.mdu), src1 = src1, src2 = src2, func = fuOpType)
   mdu.io.out.ready := true.B
 
-  val csr = if (Settings.MmodeOnly) Module(new CSR_M) else Module(new CSR)
+  // val csr = if (Settings.MmodeOnly) Module(new CSR_M) else Module(new CSR)
+  val csr = Module(new CSR)
   val csrOut = csr.access(valid = fuValids(FuType.csr), src1 = src1, src2 = src2, func = fuOpType)
   csr.io.cfIn := io.in.bits(0).cf
   csr.io.cfIn.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
@@ -64,6 +65,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   csr.io.instrValid := io.in.valid && !io.flush
   csr.io.isBackendException := false.B
   io.out.bits(0).intrNO := csr.io.intrNO
+  csr.io.isBackendException := false.B
   csr.io.out.ready := true.B
 
   csr.io.imemMMU <> io.memMMU.imem

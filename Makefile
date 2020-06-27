@@ -56,12 +56,12 @@ EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized -D__RV$(DATAWIDTH)__
 EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
 # dump vcd: --debug --trace
+# +define+RANDOMIZE_REG_INIT \
+# +define+RANDOMIZE_MEM_INIT
 VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   +define+RV$(DATAWIDTH)=1 \
   +define+VERILATOR=1 \
   +define+PRINTF_COND=1 \
-  +define+RANDOMIZE_REG_INIT \
-  +define+RANDOMIZE_MEM_INIT \
   --assert \
   --output-split 5000 \
   --output-split-cfuncs 5000 \

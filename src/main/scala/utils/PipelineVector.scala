@@ -37,12 +37,12 @@ object PipelineVector2Connect {
     //dequeue socket 1
     val deq1_StartIndex = ringBufferTail
     out1.bits := dataBuffer(deq1_StartIndex)
-    out1.valid := ringBufferHead =/= deq1_StartIndex && !flush
+    out1.valid := ringBufferHead =/= deq1_StartIndex
 
     //dequeue socket 2
     val deq2_StartIndex = ringBufferTail + 1.U
     out2.bits := dataBuffer(deq2_StartIndex)
-    out2.valid := ringBufferHead =/= deq2_StartIndex && !flush && out1.valid
+    out2.valid := ringBufferHead =/= deq2_StartIndex && out1.valid
 
     //dequeue control
     val dequeueSize = out1.fire().asUInt() +& out2.fire().asUInt

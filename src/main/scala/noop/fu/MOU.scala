@@ -32,9 +32,10 @@ class MOU extends NOOPModule {
 
   io.redirect.target := io.cfIn.pc + 4.U
   io.redirect.valid := valid
+  io.redirect.rtype := 0.U
   val flushICache = valid && (func === MOUOpType.fencei)
   BoringUtils.addSource(flushICache, "MOUFlushICache")
-  Debug(false){
+  Debug(){
     when(flushICache){
       printf("%d: [MOU] Flush I$ at %x\n", GTimer(), io.cfIn.pc)
     }
@@ -42,7 +43,7 @@ class MOU extends NOOPModule {
 
   val flushTLB = valid && (func === MOUOpType.sfence_vma)
   BoringUtils.addSource(flushTLB, "MOUFlushTLB")
-  Debug(false) {
+  Debug() {
     when (flushTLB) {
       printf("%d: [MOU] Flush TLB at %x\n", GTimer(), io.cfIn.pc)
     }

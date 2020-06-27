@@ -1,7 +1,7 @@
 #include "common.h"
 #include "difftest.h"
 
-#define RAMSIZE (256 * 1024 * 1024)
+#define RAMSIZE (128 * 1024 * 1024)
 
 static paddr_t ram[RAMSIZE / sizeof(paddr_t)];
 static long img_size = 0;
