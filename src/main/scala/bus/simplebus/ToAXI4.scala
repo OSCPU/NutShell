@@ -87,18 +87,17 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
-  val aw_bypass = Mux(axi.aw.valid, aw, aw_reg)
-  when (axi.w.valid) {
+  when (isState(axi_write) && axi.w.fire()) {
     mem.req.valid := true.B
-    req.cmd := Mux(aw_bypass.len === 0.U, SimpleBusCmd.write,
+    req.cmd := Mux(aw_reg.len === 0.U, SimpleBusCmd.write,
       Mux(w.last, SimpleBusCmd.writeLast, SimpleBusCmd.writeBurst))
-    req.addr := aw_bypass.addr
-    req.size := aw_bypass.size
+    req.addr := aw_reg.addr
+    req.size := aw_reg.size
     req.wmask := w.strb
     req.wdata := w.data
     req.user.foreach(_ := aw.user)
 
-    when (axi.w.fire && w.last) {
+    when (w.last) {
       bresp_en := true.B
     }
   }
@@ -110,7 +109,7 @@ class AXI42SimpleBusConverter() extends Module {
 
   // Arbitration
   // Slave's ready maybe generated according to valid signal, so let valid signals go through.
-  mem.req.valid := axi.ar.valid || axi.w.valid
+  mem.req.valid := axi.ar.valid || (isState(axi_write) && axi.w.valid)
   mem.resp.ready := true.B || (isState(axi_read) && axi.r.ready) || (isState(axi_write) && axi.b.ready)
   axi.ar.ready := !isInflight() && mem.req.ready
   axi.r.valid := isState(axi_read) && mem.resp.valid
