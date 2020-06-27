@@ -13,6 +13,7 @@ trait HasSoCParameter {
   val EnableILA = true
   val HasL2cache = true
   val HasPrefetch = true
+  val NRExtIntr = 3
 }
 
 class ILABundle extends NOOPBundle {
@@ -30,7 +31,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
     val slcr = (if (p.FPGAPlatform) { new AXI4 } else null)
     val frontend = Flipped(new AXI4)
-    val meip = Input(Bool())
+    val meip = Input(UInt(NRExtIntr.W))
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
@@ -104,7 +105,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val mtipSync = clint.io.extra.get.mtip
   BoringUtils.addSource(mtipSync, "mtip")
 
-  val plic = Module(new AXI4PLIC(nrIntr = 1, nrHart = 1))
+  val plic = Module(new AXI4PLIC(nrIntr = NRExtIntr, nrHart = 1))
   plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
   plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
   val meipSync = plic.io.extra.get.meip(0)

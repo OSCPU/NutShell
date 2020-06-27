@@ -132,6 +132,7 @@ set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
 xilinx.com:ip:processing_system7:5.5\
+xilinx.com:ip:xlconcat:2.1\
 xilinx.com:ip:axi_gpio:2.0\
 xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:proc_sys_reset:5.0\
@@ -240,7 +241,7 @@ proc create_hier_cell_rv_system { parentCell nameHier } {
   # Create pins
   create_bd_pin -dir I -type clk coreclk
   create_bd_pin -dir I -from 0 -to 0 -type data corerstn
-  create_bd_pin -dir I io_meip
+  create_bd_pin -dir I -from 2 -to 0 io_meip
 
   # Create instance: NOOPSoC_0, and set properties
   set block_name NOOPSoC
@@ -1020,7 +1021,7 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_P2F_DMAC6_INTR {0} \
    CONFIG.PCW_P2F_DMAC7_INTR {0} \
    CONFIG.PCW_P2F_DMAC_ABORT_INTR {0} \
-   CONFIG.PCW_P2F_ENET0_INTR {0} \
+   CONFIG.PCW_P2F_ENET0_INTR {1} \
    CONFIG.PCW_P2F_ENET1_INTR {0} \
    CONFIG.PCW_P2F_GPIO_INTR {0} \
    CONFIG.PCW_P2F_I2C0_INTR {0} \
@@ -1031,7 +1032,7 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_P2F_SMC_INTR {0} \
    CONFIG.PCW_P2F_SPI0_INTR {0} \
    CONFIG.PCW_P2F_SPI1_INTR {0} \
-   CONFIG.PCW_P2F_UART0_INTR {0} \
+   CONFIG.PCW_P2F_UART0_INTR {1} \
    CONFIG.PCW_P2F_UART1_INTR {0} \
    CONFIG.PCW_P2F_USB0_INTR {0} \
    CONFIG.PCW_P2F_USB1_INTR {0} \
@@ -1305,6 +1306,12 @@ proc create_root_design { parentCell } {
   # Create instance: rv_system
   create_hier_cell_rv_system [current_bd_instance .] rv_system
 
+  # Create instance: xlconcat_0, and set properties
+  set xlconcat_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 xlconcat_0 ]
+  set_property -dict [ list \
+   CONFIG.NUM_PORTS {3} \
+ ] $xlconcat_0
+
   # Create interface connections
   connect_bd_intf_net -intf_net NOOPSoC_0_io_mem [get_bd_intf_pins axi_interconnect_0/S00_AXI] [get_bd_intf_pins rv_system/io_mem]
   connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins processing_system7_0/M_AXI_GP0]
@@ -1324,8 +1331,11 @@ proc create_root_design { parentCell } {
   connect_bd_net -net clk_wiz_0_uncoreclk [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_2/ACLK] [get_bd_pins axi_interconnect_2/M00_ACLK] [get_bd_pins hier_clkrst/uncoreclk] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK]
   connect_bd_net -net proc_sys_reset_1_interconnect_aresetn [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_2/ARESETN] [get_bd_pins axi_interconnect_2/M00_ARESETN] [get_bd_pins hier_clkrst/interconnect_aresetn]
   connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins hier_clkrst/clk_in1] [get_bd_pins processing_system7_0/FCLK_CLK0]
-  connect_bd_net -net processing_system7_0_IRQ_P2F_SDIO0 [get_bd_pins processing_system7_0/IRQ_P2F_SDIO0] [get_bd_pins rv_system/io_meip]
+  connect_bd_net -net processing_system7_0_IRQ_P2F_ENET0 [get_bd_pins processing_system7_0/IRQ_P2F_ENET0] [get_bd_pins xlconcat_0/In2]
+  connect_bd_net -net processing_system7_0_IRQ_P2F_SDIO0 [get_bd_pins processing_system7_0/IRQ_P2F_SDIO0] [get_bd_pins xlconcat_0/In0]
+  connect_bd_net -net processing_system7_0_IRQ_P2F_UART0 [get_bd_pins processing_system7_0/IRQ_P2F_UART0] [get_bd_pins xlconcat_0/In1]
   connect_bd_net -net resetn_1 [get_bd_pins hier_clkrst/resetn] [get_bd_pins processing_system7_0/FCLK_RESET0_N]
+  connect_bd_net -net xlconcat_0_dout [get_bd_pins rv_system/io_meip] [get_bd_pins xlconcat_0/dout]
 
   # Create address segments
   create_bd_addr_seg -range 0x20000000 -offset 0x60000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs rv_system/NOOPSoC_0/io_frontend/reg0] SEG_NOOPSoC_0_reg0
