@@ -550,9 +550,11 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
   s2.io.dataWriteBus := s3.io.dataWriteBus
   s2.io.metaWriteBus := s3.io.metaWriteBus
 
-  BoringUtils.addSource(s3.io.out.fire() && s3.io.in.bits.hit, "perfCntCondM" + cacheName + "Hit")
-  BoringUtils.addSource(s3.io.in.valid && !s3.io.in.bits.hit, "perfCntCondM" + cacheName + "Loss")
-  BoringUtils.addSource(s1.io.in.fire(), "perfCntCondM" + cacheName + "Req")
+  if (EnableOutOfOrderExec) {
+    BoringUtils.addSource(s3.io.out.fire() && s3.io.in.bits.hit, "perfCntCondM" + cacheName + "Hit")
+    BoringUtils.addSource(s3.io.in.valid && !s3.io.in.bits.hit, "perfCntCondM" + cacheName + "Loss")
+    BoringUtils.addSource(s1.io.in.fire(), "perfCntCondM" + cacheName + "Req")
+  }
 
   Debug() {
     if (debug) {
