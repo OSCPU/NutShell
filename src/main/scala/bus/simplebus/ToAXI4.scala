@@ -44,9 +44,8 @@ class AXI42SimpleBusConverter() extends Module {
   r := default_axi.r.bits
   b := default_axi.b.bits
 
-
   // Read Path
-  when (axi.ar.valid) {
+  when (!isInflight() && axi.ar.valid) {
     mem.req.valid := true.B
     req.addr := ar.addr
     req.cmd := Mux(ar.len === 0.U, SimpleBusCmd.read, SimpleBusCmd.readBurst)
@@ -61,7 +60,7 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
-  when (mem.resp.valid) {
+  when (isState(axi_read) && mem.resp.valid) {
     axi.r.valid := true.B
     r.data := resp.rdata
     r.id := inflight_id_reg
@@ -79,7 +78,7 @@ class AXI42SimpleBusConverter() extends Module {
   val aw_reg = Reg(new AXI4BundleA(idBits))
   val bresp_en = RegInit(false.B)
 
-  when (axi.aw.valid && !axi.ar.valid) {
+  when (!isInflight() && axi.aw.valid && !axi.ar.valid) {
     aw_reg := aw
 
     when (axi.aw.fire) {
@@ -109,7 +108,7 @@ class AXI42SimpleBusConverter() extends Module {
 
   // Arbitration
   // Slave's ready maybe generated according to valid signal, so let valid signals go through.
-  mem.req.valid := axi.ar.valid || (isState(axi_write) && axi.w.valid)
+  mem.req.valid := (!isInflight() && axi.ar.valid) || (isState(axi_write) && axi.w.valid)
   mem.resp.ready := true.B || (isState(axi_read) && axi.r.ready) || (isState(axi_write) && axi.b.ready)
   axi.ar.ready := !isInflight() && mem.req.ready
   axi.r.valid := isState(axi_read) && mem.resp.valid
