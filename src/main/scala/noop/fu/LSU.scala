@@ -5,6 +5,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import top.Settings
 
 // Out Of Order Load/Store Unit
 
@@ -183,7 +184,7 @@ class AtomALU extends NOOPModule {
     LSUOpType.amomaxu -> Mux(sltu(0), src2, src1)
   ))
 
-  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res)
+  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res(XLEN-1,0))
 }
 
 // Out Of Order Load/Store Unit

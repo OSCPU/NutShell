@@ -32,7 +32,7 @@ class RedirectIO extends NOOPBundle {
 }
 
 class CtrlFlowIO extends NOOPBundle {
-  val instr = Output(UInt(64.W))
+  val instr = Output(UInt(32.W))
   val pc = Output(UInt(VAddrBits.W))
   val pnpc = Output(UInt(VAddrBits.W))
   val redirect = new RedirectIO

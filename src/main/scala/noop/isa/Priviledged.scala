@@ -3,6 +3,8 @@ package noop
 import chisel3._
 import chisel3.util._
 
+import top.Settings
+
 object Priviledged extends HasInstrType {
   def ECALL   = BitPat("b000000000000_00000_000_00000_1110011")
   def MRET    = BitPat("b001100000010_00000_000_00000_1110011")
@@ -11,14 +13,16 @@ object Priviledged extends HasInstrType {
   def FENCE   = BitPat("b????????????_?????_000_?????_0001111")
   def WFI     = BitPat("b0001000_00101_00000_000_00000_1110011") 
 
+  val table_s = Array(
+    SRET           -> List(InstrI, FuType.csr, CSROpType.jmp),
+    SFANCE_VMA     -> List(InstrR, FuType.mou, MOUOpType.sfence_vma)
+  )
+
   val table = Array(
     ECALL          -> List(InstrI, FuType.csr, CSROpType.jmp),
     MRET           -> List(InstrI, FuType.csr, CSROpType.jmp),
-    SRET           -> List(InstrI, FuType.csr, CSROpType.jmp),
-    SFANCE_VMA     -> List(InstrR, FuType.mou, MOUOpType.sfence_vma),
     FENCE          -> List(InstrS, FuType.alu, ALUOpType.add), // nop    InstrS -> !wen
     WFI            -> List(InstrI, FuType.alu, ALUOpType.add) // nop
     // FENCE          -> List(InstrB, FuType.mou, MOUOpType.fencei)
-
-  )
+  ) ++ (if (!Settings.MmodeOnly) table_s else Nil)
 }

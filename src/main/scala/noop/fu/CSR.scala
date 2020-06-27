@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import top.Settings
 
 object CSROpType {
   def jmp  = "b000".U
@@ -117,11 +118,11 @@ trait HasCSRConst {
   def IRQ_SSIP  = 9 
   def IRQ_MSIP  = 11 
 
- val IntPriority = Seq(
+  val IntPriority = Seq(
     IRQ_MEIP, IRQ_MSIP, IRQ_MTIP,
     IRQ_SEIP, IRQ_SSIP, IRQ_STIP,
     IRQ_UEIP, IRQ_USIP, IRQ_UTIP
- )
+  )
 }
 
 trait HasExceptionNO {
@@ -156,33 +157,8 @@ trait HasExceptionNO {
   )
 }
 
-
-class CSRIO extends FunctionUnitIO {
-  val cfIn = Flipped(new CtrlFlowIO)
-  val redirect = new RedirectIO
-  // for exception check
-  val instrValid = Input(Bool())
-  val isBackendException = Input(Bool())
-  // for differential testing
-  val intrNO = Output(UInt(XLEN.W))
-  val imemMMU = Flipped(new MMUIO)
-  val dmemMMU = Flipped(new MMUIO)
-  val wenFix = Output(Bool())
-}
-
-class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
-  val io = IO(new CSRIO)
-
-  val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
-  def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt = {
-    this.valid := valid
-    this.src1 := src1
-    this.src2 := src2
-    this.func := func
-    io.out.bits
-  }
-
-  // CSR define
+trait HasCSRCommon {
+  def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt
 
   class Priv extends Bundle {
     val m = Output(Bool())
@@ -190,15 +166,17 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     val s = Output(Bool())
     val u = Output(Bool())
   }
-
-  val csrNotImplemented = RegInit(UInt(XLEN.W), 0.U)
    
   class MstatusStruct extends Bundle {
     val sd = Output(UInt(1.W))
-    val pad1 = Output(UInt(37.W))
-    val sxl = Output(UInt(2.W))
-    val uxl = Output(UInt(2.W))
-    val pad0 = Output(UInt(9.W))
+    if (Settings.IsRV32) {
+      val pad0 = Output(UInt(8.W))
+    } else {
+      val pad1 = Output(UInt(37.W))  // FIXIT: It should be 27 ?
+      val sxl = Output(UInt(2.W))
+      val uxl = Output(UInt(2.W))
+      val pad0 = Output(UInt(9.W))
+    }
     val tsr = Output(UInt(1.W))
     val tw = Output(UInt(1.W))
     val tvm = Output(UInt(1.W))
@@ -218,6 +196,78 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     val e = new Priv
     val t = new Priv
     val s = new Priv
+  }
+
+  val perfCntList = Map(
+    "Mcycle"      -> (0xb00, "perfCntCondMcycle"     ),
+    "Minstret"    -> (0xb02, "perfCntCondMinstret"   ),
+    "MimemStall"  -> (0xb03, "perfCntCondMimemStall" ),
+    "MaluInstr"   -> (0xb04, "perfCntCondMaluInstr"  ),
+    "MbruInstr"   -> (0xb05, "perfCntCondMbruInstr"  ),
+    "MlsuInstr"   -> (0xb06, "perfCntCondMlsuInstr"  ),
+    "MmduInstr"   -> (0xb07, "perfCntCondMmduInstr"  ),
+    "McsrInstr"   -> (0xb08, "perfCntCondMcsrInstr"  ),
+    "MloadInstr"  -> (0xb09, "perfCntCondMloadInstr" ),
+    "MloadStall"  -> (0xb0a, "perfCntCondMloadStall" ),
+    "MstoreStall" -> (0xb0b, "perfCntCondMstoreStall"),
+    "MmmioInstr"  -> (0xb0c, "perfCntCondMmmioInstr" ),
+    "MicacheHit"  -> (0xb0d, "perfCntCondMicacheHit" ),
+    "MdcacheHit"  -> (0xb0e, "perfCntCondMdcacheHit" ),
+    "MmulInstr"   -> (0xb0f, "perfCntCondMmulInstr"  ),
+    "MifuFlush"   -> (0xb10, "perfCntCondMifuFlush"  ),
+    "MrawStall"   -> (0xb11, "perfCntCondMrawStall"  ),
+    "MexuBusy"    -> (0xb12, "perfCntCondMexuBusy"   ),
+    "MbpBRight"   -> (0xb13, "MbpBRight"             ),
+    "MbpBWrong"   -> (0xb14, "MbpBWrong"             ),
+    "MbpJRight"   -> (0xb15, "MbpJRight"             ),
+    "MbpJWrong"   -> (0xb16, "MbpJWrong"             ),
+    "MbpIRight"   -> (0xb17, "MbpIRight"             ),
+    "MbpIWrong"   -> (0xb18, "MbpIWrong"             ),
+    "MbpRRight"   -> (0xb19, "MbpRRight"             ),
+    "MbpRWrong"   -> (0xb1a, "MbpRWrong"             ),
+    "Custom1"     -> (0xb1b, "Custom1"             ),
+    "Custom2"     -> (0xb1c, "Custom2"             ),
+    "Custom3"     -> (0xb1d, "Custom3"             ),
+    "Custom4"     -> (0xb1e, "Custom4"             ),
+    "Custom5"     -> (0xb1f, "Custom5"             ),
+    "Custom6"     -> (0xb20, "Custom6"             ),
+    "Custom7"     -> (0xb21, "Custom7"             ),
+    "Custom8"     -> (0xb22, "Custom8"             ),
+    "Ml2cacheHit" -> (0xb23, "perfCntCondMl2cacheHit"),
+    "ISUIssue"    -> (0xb24, "perfCntCondISUIssue"),
+    "ISU1Issue"   -> (0xb25, "perfCntCondISU1Issue"),
+    "ISU2Issue"   -> (0xb26, "perfCntCondISU2Issue"),
+    "Src2NotReady"-> (0xb27, "perfCntCondSrc2NotReady"),
+    "Dst2Conflict"-> (0xb28, "perfCntCondDst2Conflict"),
+    "Inst2NotALU" -> (0xb29, "perfCntCondInst2NotALU"),
+    "Inst2NoReady"-> (0xb2a, "perfCntCondInst2NotReady"),
+    "MultiCommit" -> (0xb2b, "perfCntCondMultiCommit")
+  )
+}
+
+class CSRIO extends FunctionUnitIO {
+  val cfIn = Flipped(new CtrlFlowIO)
+  val redirect = new RedirectIO
+  // for exception check
+  val instrValid = Input(Bool())
+  val isBackendException = Input(Bool())
+  // for differential testing
+  val intrNO = Output(UInt(XLEN.W))
+  val imemMMU = Flipped(new MMUIO)
+  val dmemMMU = Flipped(new MMUIO)
+  val wenFix = Output(Bool())
+}
+
+class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst with HasCSRCommon{
+  val io = IO(new CSRIO)
+
+  val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
+  def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt = {
+    this.valid := valid
+    this.src1 := src1
+    this.src2 := src2
+    this.func := func
+    io.out.bits
   }
 
   // Machine-Level CSRs
@@ -312,7 +362,10 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val stval = Reg(UInt(XLEN.W))
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
-  BoringUtils.addSource(satp, "CSRSATP")
+
+  if (Settings.HasDTLB) {
+    BoringUtils.addSource(satp, "CSRSATP")
+  }
 
   // User-Level CSRs
   val uepc = Reg(UInt(XLEN.W))

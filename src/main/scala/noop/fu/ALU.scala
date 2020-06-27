@@ -73,11 +73,11 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
   val sltu = !adderRes(XLEN)
   val slt = xorRes(XLEN-1) ^ sltu
 
-  val shsrc1 = LookupTreeDefault(func, src1, List(
-    ALUOpType.srlw -> ZeroExt(src1(31,0), 64),
-    ALUOpType.sraw -> SignExt(src1(31,0), 64)
+  val shsrc1 = LookupTreeDefault(func, src1(XLEN-1,0), List(
+    ALUOpType.srlw -> ZeroExt(src1(31,0), XLEN),
+    ALUOpType.sraw -> SignExt(src1(31,0), XLEN)
   ))
-  val shamt = Mux(ALUOpType.isWordOp(func), src2(4, 0), src2(5, 0))
+  val shamt = Mux(ALUOpType.isWordOp(func), src2(4, 0), if (XLEN == 64) src2(5, 0) else src2(4, 0))
   val res = LookupTreeDefault(func(3, 0), adderRes, List(
     ALUOpType.sll  -> ((shsrc1  << shamt)(XLEN-1, 0)),
     ALUOpType.slt  -> ZeroExt(slt, XLEN),
@@ -100,7 +100,7 @@ class ALU(hasBru: Boolean = false) extends NOOPModule {
   val isBru = ALUOpType.isBru(func)
   // val pcPlus2 = ALUOpType.pcPlus2(func)
   val taken = LookupTree(ALUOpType.getBranchType(func), branchOpTable) ^ ALUOpType.isBranchInvert(func)
-  val target = Mux(isBranch, io.cfIn.pc + io.offset, adderRes)(VAddrBits-1,0)
+  val target = Mux(isBranch, io.cfIn.pc + io.offset, adderRes)(NVAddrBits-1,0)
   val predictWrong = Mux(!taken && isBranch, io.cfIn.brIdx, !io.cfIn.brIdx || (io.redirect.target =/= io.cfIn.pnpc))
   // val predictWrong = (io.redirect.target =/= io.cfIn.pnpc)
   val isRVC = io.cfIn.isRVC
