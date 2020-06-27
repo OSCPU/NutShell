@@ -9,6 +9,7 @@ import chisel3.util.experimental.BoringUtils
 
 import bus.axi4._
 import device.AXI4RAM
+import noop._
 
 class DiffTestIO extends Bundle {
   val r = Output(Vec(32, UInt(64.W)))
@@ -30,9 +31,15 @@ class DiffTestIO extends Bundle {
   val scause = Output(UInt(64.W))
 }
 
+class LogCtrlIO extends Bundle {
+  val log_begin, log_end = Input(UInt(64.W))
+  val log_level = Input(UInt(64.W)) // a cpp uint
+}
+
 class NOOPSimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
+    val logCtrl = new LogCtrlIO
   })
 
   lazy val config = NOOPConfig(FPGAPlatform = false)
@@ -71,6 +78,21 @@ class NOOPSimTop extends Module {
   BoringUtils.addSink(difftest.mcause, "difftestMcause")
   BoringUtils.addSink(difftest.scause, "difftestScause")
   io.difftest := difftest
+
+  val log_begin, log_end, log_level = WireInit(0.U(64.W))
+  log_begin := io.logCtrl.log_begin
+  log_end := io.logCtrl.log_end
+  log_level := io.logCtrl.log_level
+
+  BoringUtils.addSource(log_begin, "DISPLAY_LOG_START")
+  BoringUtils.addSource(log_end, "DISPLAY_LOG_END")
+  BoringUtils.addSource(log_level, "DISPLAY_LOG_LEVEL")
+
+  // make firrtl happy :)
+  val log_begin_sink, log_end_sink, log_level_sink = WireInit(0.U(64.W))
+  BoringUtils.addSink(log_begin_sink, "DISPLAY_LOG_START")
+  BoringUtils.addSink(log_end_sink, "DISPLAY_LOG_END")
+  BoringUtils.addSink(log_level_sink, "DISPLAY_LOG_LEVEL")
 }
 
 object TestMain extends App {

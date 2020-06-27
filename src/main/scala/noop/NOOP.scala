@@ -41,7 +41,7 @@ abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst
 
 case class NOOPConfig (
   FPGAPlatform: Boolean = true,
-  EnableDebug: Boolean = false
+  EnableDebug: Boolean = true
 )
 
 object AddressSpace {
