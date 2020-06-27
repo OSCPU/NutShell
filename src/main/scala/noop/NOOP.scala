@@ -129,6 +129,8 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     expender.io.in <> io.frontend
     dmemXbar.io.in(0) <> expender.io.out
 
+    io.mmio <> mmioXbar.io.out
+
     Debug(){
       printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
     }
@@ -140,12 +142,12 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
     val mmioXbar = Module(new SimpleBusCrossbarNto1(2))
     val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
 
-    val itlb = TLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem, enable = HasITLB)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
+    val itlb = EmbeddedTLB(in = ifu.io.imem, mem = dmemXbar.io.in(1), flush = ifu.io.flushVec(0) | ifu.io.bpFlush, csrMMU = backend.io.memMMU.imem, enable = HasITLB)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     ifu.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, ifu.io.flushVec(0) | ifu.io.bpFlush), empty = itlb.io.cacheEmpty, enable = HasIcache)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
     
     // dtlb
-    val dtlb = TLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", totalEntry = 64))
+    val dtlb = EmbeddedTLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
     io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
 
@@ -155,11 +157,11 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
 
     // Make DMA access through L1 DCache to keep coherence
     dmemXbar.io.in(3) <> io.frontend
-  }  
 
-  io.mmio <> mmioXbar.io.out
-  
-  Debug() {
-    printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
-  }
+    io.mmio <> mmioXbar.io.out
+
+    Debug() {
+      printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
+    }
+  } 
 }

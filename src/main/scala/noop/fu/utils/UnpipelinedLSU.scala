@@ -338,7 +338,7 @@ class LSExecUnit extends NOOPModule {
   }
 
   val size = func(1,0)
-  dmem.req.bits.apply(addr = addr(VAddrBits-1, 0), size = size, wdata = genWdata(io.wdata, size),
+  dmem.req.bits.apply(addr = addr(NVAddrBits-1, 0), size = size, wdata = genWdata(io.wdata, size),
     wmask = genWmask(addr, size), cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
   dmem.req.valid := valid && (state === s_idle) && !io.loadAddrMisaligned && !io.storeAddrMisaligned
   dmem.resp.ready := true.B

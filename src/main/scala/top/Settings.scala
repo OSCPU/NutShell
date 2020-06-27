@@ -50,7 +50,7 @@ trait SmallCore {
   val IsRV32 = true
 }
 
-object Settings extends Common with SeqCore {}
+object Settings extends Common with OoOCore {}
 
 //****************************************
 // Generate RV32 core

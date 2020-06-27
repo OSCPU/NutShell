@@ -145,7 +145,7 @@ class Emulator {
         rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
 
-        extern int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
+        extern int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
           int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, int isMultiCommit);
         if (dut_ptr->io_difftestCtrl_enable) {
           if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
