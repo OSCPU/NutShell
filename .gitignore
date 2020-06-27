@@ -343,7 +343,7 @@ hs_err_pid*
 
 # chore
 *.nocompile
-fpga/.Xil/*
+fpga/.Xil/
 
 # vscode temp file
 .vscode/

@@ -527,7 +527,7 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
     val cohReq = io.out.coh.req.bits
     // coh does not have user signal, any better code?
     val coh = Wire(new SimpleBusReqBundle(userBits = userBits, idBits = idBits))
-    coh.apply(addr = cohReq.addr, cmd = cohReq.cmd, size = cohReq.cmd, wdata = cohReq.wdata, wmask = cohReq.wmask)
+    coh.apply(addr = cohReq.addr, cmd = cohReq.cmd, size = cohReq.size, wdata = cohReq.wdata, wmask = cohReq.wmask)
     arb.io.in(0).bits := coh
     arb.io.in(0).valid := io.out.coh.req.valid
     io.out.coh.req.ready := arb.io.in(0).ready
