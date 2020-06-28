@@ -9,8 +9,7 @@ import bus.simplebus._
 import top.Settings
 
 trait HasResetVector{
-  val resetFromSpiFlash = false
-  val resetVector = if(resetFromSpiFlash){0x40000000L}else{0x80000000L}
+  val resetVector = Settings.ResetVector
 }
 
 class IFU extends NOOPModule with HasResetVector {

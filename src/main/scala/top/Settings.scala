@@ -1,11 +1,18 @@
 package top
 
 trait Common {
+  
+  // Functional switch
   val EnableILA = true
-  val VAddrBits = 39
   val EnableDebug = false
   val HasMMIO = true
   val FPGAmode = "pynq"   // Can be set "pynq" or "axu3cg"
+
+  // Address space
+  val VAddrBits = 39
+  val DRAMBase = 0x0000000080000000L
+  val MMIOBase = 0x0000000040000000L
+  val ResetVector = 0x80000000L
 }
 
 trait OoOCore {
