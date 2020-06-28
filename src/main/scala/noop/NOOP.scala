@@ -78,7 +78,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   val idu  = Module(new IDU)
 
   pipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
-  PipelineVector2Connect(new CtrlFlowIO, ibf.io.out(0), ibf.io.out(1), idu.io.in(0), idu.io.in(1), ifu.io.flushVec(1), 8)
+  PipelineVector2Connect(new CtrlFlowIO, ibf.io.out(0), ibf.io.out(1), idu.io.in(0), idu.io.in(1), ifu.io.flushVec(1), if (EnableOutOfOrderExec) 8 else 4)
   ibf.io.flush := ifu.io.flushVec(1)
   idu.io.flush := ifu.io.flushVec(1)
   
@@ -137,7 +137,7 @@ class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
   }else{
     val backend = Module(new Backend_seq)
 
-    PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 16)
+    PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 4)
 
     val mmioXbar = Module(new SimpleBusCrossbarNto1(2))
     val dmemXbar = Module(new SimpleBusCrossbarNto1(4))

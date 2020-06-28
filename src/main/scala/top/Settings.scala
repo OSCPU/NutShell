@@ -6,6 +6,9 @@ trait Common {
   val EnableDebug = false
   val HasMMIO = true
   val FPGAmode = "pynq"   // Can be set "pynq" or "axu3cg"
+
+  // simulation perf
+  val DisablePerfCnt = true
 }
 
 trait OoOCore {
@@ -50,7 +53,7 @@ trait SmallCore {
   val IsRV32 = true
 }
 
-object Settings extends Common with OoOCore {}
+object Settings extends Common with SeqCore {}
 
 //****************************************
 // Generate RV32 core
