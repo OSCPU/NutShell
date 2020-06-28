@@ -51,8 +51,8 @@ case class NOOPConfig (
 
 object AddressSpace {
   // (start, size)
-  def mmio = List((Settings.MMIOBase, 0x0000000010000000L))
-  def dram = (Settings.DRAMBase, 0x0000000010000000L)
+  def mmio = List((Settings.MMIOBase, Settings.MMIOSize))
+  def dram = (Settings.DRAMBase, Settings.DRAMSize)
 
   //def isMMIO(addr: UInt) = mmio.map(range => ((addr & ~((range._2 - 1).U(32.W))) === range._1.U)).reduce(_ || _)
   def isMMIO(addr: UInt) = addr(31,28) === "h4".U

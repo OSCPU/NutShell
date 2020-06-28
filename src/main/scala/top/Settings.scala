@@ -11,8 +11,13 @@ trait Common {
   // Address space
   val VAddrBits = 39
   val DRAMBase = 0x0000000080000000L
+  val DRAMSize = 0x0000000010000000L
   val MMIOBase = 0x0000000040000000L
+  val MMIOSize = 0x0000000010000000L
   val ResetVector = 0x80000000L
+
+  // Others
+  val NrExtIntr = 1
 }
 
 trait OoOCore {
