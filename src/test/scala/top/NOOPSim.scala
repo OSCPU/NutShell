@@ -75,5 +75,26 @@ class NOOPSimTop extends Module {
 }
 
 object TestMain extends App {
+  def parseArgs(info: String, args: Array[String]): String = {
+    var target = ""
+    for (arg <- args) { if (arg.startsWith(info + "=") == true) { target = arg } }
+    require(target != "")
+    target.substring(info.length()+1)
+  }
+  val board = parseArgs("BOARD", args)
+  val core = parseArgs("CORE", args)
+  
+  val (bootmap, valuemap) = (board, core) match {
+    case ("sim", "seq")    => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.seqCoreBoolMap, BoardRelatedSetting.pynqValueMap)
+    case ("sim", "ooo")    => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.oooCoreBoolMap, BoardRelatedSetting.pynqValueMap)
+    case ("pynq", "seq")   => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.seqCoreBoolMap, BoardRelatedSetting.pynqValueMap)
+    case ("pynq", "ooo")   => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.oooCoreBoolMap, BoardRelatedSetting.pynqValueMap)
+    case ("axu3cg", "seq") => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.seqCoreBoolMap, BoardRelatedSetting.axu3cgValueMap)
+    case ("axu3cg", "ooo") => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.oooCoreBoolMap, BoardRelatedSetting.axu3cgValueMap)
+  }
+
+  Settings.boolMap  = bootmap
+  Settings.valueMap = valuemap
+
   chisel3.Driver.execute(args, () => new NOOPSimTop)
 }

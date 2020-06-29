@@ -38,7 +38,7 @@ class UnpipelinedLSU extends NOOPModule with HasLSUConst {
     val amoReq   = valid & LSUOpType.isAMO(func)
     val lrReq   = valid & LSUOpType.isLR(func)
     val scReq   = valid & LSUOpType.isSC(func)
-    if (Settings.HasDTLB) {
+    if (Settings.get("HasDTLB")) {
       BoringUtils.addSource(amoReq, "ISAMO")
     }
     BoringUtils.addSource(amoReq, "ISAMO2")
@@ -326,7 +326,7 @@ class LSExecUnit extends NOOPModule {
   val dtlbFinish = WireInit(false.B)
   val dtlbPF = WireInit(false.B)
   val dtlbEnable = WireInit(false.B)
-  if (Settings.HasDTLB) {
+  if (Settings.get("HasDTLB")) {
     BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
     BoringUtils.addSink(dtlbPF, "DTLBPF")
     BoringUtils.addSink(dtlbEnable, "DTLBENABLE")

@@ -9,7 +9,7 @@ import bus.simplebus._
 import top.Settings
 
 trait HasResetVector{
-  val resetVector = Settings.ResetVector
+  val resetVector = Settings.getint("ResetVector")
 }
 
 class IFU extends NOOPModule with HasResetVector {
@@ -55,9 +55,9 @@ class IFU extends NOOPModule with HasResetVector {
     nlptarget_latch := 0.U
   }
 
-  val bpuValid = if (Settings.HasIcache) nlp.io.out.valid else nlpvalid_latch
-  val bpuTarget = if (Settings.HasIcache) nlp.io.out.target else nlptarget_latch
-  val bpuBrIdx = if (Settings.HasIcache) nlp.io.brIdx.asUInt else nlpbridx_latch
+  val bpuValid = if (Settings.get("HasIcache")) nlp.io.out.valid else nlpvalid_latch
+  val bpuTarget = if (Settings.get("HasIcache")) nlp.io.out.target else nlptarget_latch
+  val bpuBrIdx = if (Settings.get("HasIcache")) nlp.io.brIdx.asUInt else nlpbridx_latch
 
   // cross instline inst branch predict logic "lateJump"
   // 

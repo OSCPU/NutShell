@@ -316,7 +316,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
 
-  if (Settings.HasDTLB) {
+  if (Settings.get("HasDTLB")) {
     BoringUtils.addSource(satp, "CSRSATP")
   }
 

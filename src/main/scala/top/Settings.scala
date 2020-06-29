@@ -1,68 +1,90 @@
 package top
 
-trait Common {
-  
-  // Functional switch
-  val EnableILA = true
-  val EnableDebug = false
-  val HasMMIO = true
-  val FPGAmode = "pynq"   // Can be set "pynq" or "axu3cg"
-
-  // Address space
-  val VAddrBits = 39
-  val DRAMBase = 0x0000000080000000L
-  val DRAMSize = 0x0000000010000000L
-  val MMIOBase = 0x0000000040000000L
-  val MMIOSize = 0x0000000010000000L
-  val ResetVector = 0x80000000L
-
-  // Others
-  val NrExtIntr = 1
+object CommonSetting {
+  var commonBoolMap = Map(
+    "HasMMIO" -> true,
+    "EnableILA" -> true,
+    "EnableDebug" -> false
+  )
 }
 
-trait OoOCore {
-  val HasL2cache = true
-  val HasPrefetch = true
-  val EnableMultiIssue = true
-  val EnableSuperScalarExec = true
-  val EnableOutOfOrderExec = true
-  val HasDTLB = true
-  val HasITLB = true
-  val HasDcache = true
-  val HasIcache = true
-  val MmodeOnly = false
-  val IsRV32 = false
+object BoardRelatedSetting {
+  var pynqValueMap = Map(
+    "VAddrBits" -> 39L,
+    "FPGAmode" -> 2L,    // axu3cg: 1, pynq: 2
+    "VAddrBits" -> 39L,
+    "DRAMBase" -> 0x0000000080000000L,
+    "DRAMSize" -> 0x0000000010000000L,
+    "MMIOBase" -> 0x0000000040000000L,
+    "MMIOSize" -> 0x0000000010000000L,
+    "ResetVector" -> 0x80000000L,
+    "NrExtIntr" -> 1L
+  )
+  var axu3cgValueMap = Map(
+    "VAddrBits" -> 39L,
+    "FPGAmode" -> 1L,    // axu3cg: 1, pynq: 2
+    "VAddrBits" -> 39L,
+    "DRAMBase" -> 0x0000000080000000L,
+    "DRAMSize" -> 0x0000000010000000L,
+    "MMIOBase" -> 0x0000000040000000L,
+    "MMIOSize" -> 0x0000000010000000L,
+    "ResetVector" -> 0x80000000L,
+    "NrExtIntr" -> 1L
+  )
 }
 
-trait SeqCore {
-  val HasL2cache = true
-  val HasPrefetch = true
-  val EnableMultiIssue = false
-  val EnableSuperScalarExec = false
-  val EnableOutOfOrderExec = false
-  val HasDTLB = true
-  val HasITLB = true
-  val HasDcache = true
-  val HasIcache = true
-  val MmodeOnly = false
-  val IsRV32 = false
+object CoreRelatedSetting {
+  var oooCoreBoolMap = Map(
+    "HasL2cache" -> true,
+    "HasPrefetch" -> true,
+    "EnableMultiIssue" -> true,
+    "EnableSuperScalarExec" -> true,
+    "EnableOutOfOrderExec" -> true,
+    "HasDTLB" -> true,
+    "HasITLB" -> true,
+    "HasDcache" -> true,
+    "HasIcache" -> true,
+    "MmodeOnly" -> false,
+    "IsRV32" -> false
+  )
+  var seqCoreBoolMap = Map(
+    "HasL2cache" -> true,
+    "HasPrefetch" -> true,
+    "EnableMultiIssue" -> false,
+    "EnableSuperScalarExec" -> false,
+    "EnableOutOfOrderExec" -> false,
+    "HasDTLB" -> true,
+    "HasITLB" -> true,
+    "HasDcache" -> true,
+    "HasIcache" -> true,
+    "MmodeOnly" -> false,
+    "IsRV32" -> false
+  )
+  var smallCoreBoolMap = Map(
+    "HasL2cache" -> false,
+    "HasPrefetch" -> false,
+    "EnableMultiIssue" -> false,
+    "EnableSuperScalarExec" -> false,
+    "EnableOutOfOrderExec" -> false,
+    "HasDTLB" -> false,
+    "HasITLB" -> false,
+    "HasDcache" -> false,
+    "HasIcache" -> false,
+    "MmodeOnly" -> true,
+    "IsRV32" -> true
+  )
 }
 
-trait SmallCore {
-  val HasL2cache = false
-  val HasPrefetch = false
-  val EnableMultiIssue = false
-  val EnableSuperScalarExec = false
-  val EnableOutOfOrderExec = false
-  val HasDTLB = false
-  val HasITLB = false
-  val HasDcache = false
-  val HasIcache = false
-  val MmodeOnly = true
-  val IsRV32 = true
+object Settings {
+  var boolMap: Map[String, Boolean] = Map()
+  var valueMap: Map[String, Long] = Map()
+  def get(field: String): Boolean = {
+    boolMap(field)
+  }
+  def getint(field: String) = {
+    valueMap(field)
+  }
 }
-
-object Settings extends Common with OoOCore {}
 
 //****************************************
 // Generate RV32 core

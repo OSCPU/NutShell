@@ -11,9 +11,9 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 trait HasSoCParameter {
-  val EnableILA = Settings.EnableILA
-  val HasL2cache = Settings.HasL2cache
-  val HasPrefetch = Settings.HasL2cache
+  val EnableILA = Settings.get("EnableILA")
+  val HasL2cache = Settings.get("HasL2cache")
+  val HasPrefetch = Settings.get("HasL2cache")
 }
 
 class ILABundle extends NOOPBundle {
@@ -29,14 +29,15 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
-    val slcr = (if (p.FPGAPlatform && Settings.FPGAmode == "pynq") new AXI4 else null)
+    val slcr = (if (p.FPGAPlatform && Settings.getint("FPGAmode") == 2) new AXI4 else null)
     val frontend = Flipped(new AXI4)
-    val meip = Input(UInt(Settings.NrExtIntr.W))
+    val meip = Input(UInt(Settings.getint("NrExtIntr").asInstanceOf[Int].W))
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
-  val needAddrMap = if (Settings.FPGAmode == "pynq") true else false
-  val hasSlcr = if (Settings.FPGAmode == "pynq") true else false
+  val isPynq = Settings.getint("FPGAmode") == 2
+  val needAddrMap = if (isPynq) true else false
+  val hasSlcr     = if (isPynq) true else false
 
   val noop = Module(new NOOP)
   val cohMg = Module(new CoherenceManager)
@@ -76,7 +77,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     xbar.io.out
   }
 
-  if (Settings.FPGAmode == "pynq") {
+  if (isPynq) {
     val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L), enable=needAddrMap))
     memAddrMap.io.in <> mem
     io.mem <> memAddrMap.io.out.toAXI4()
@@ -99,7 +100,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
 
   val extDev = mmioXbar.io.out(0)
   if (p.FPGAPlatform) {
-    if (Settings.FPGAmode == "pynq") {
+    if (isPynq) {
       val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L), enable=needAddrMap))
         mmioAddrMap.io.in <> extDev
       io.mmio <> mmioAddrMap.io.out.toAXI4()
@@ -125,7 +126,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val mtipSync = clint.io.extra.get.mtip
   BoringUtils.addSource(mtipSync, "mtip")
 
-  val plic = Module(new AXI4PLIC(nrIntr = Settings.NrExtIntr, nrHart = 1))
+  val plic = Module(new AXI4PLIC(nrIntr = Settings.getint("NrExtIntr").asInstanceOf[Int], nrHart = 1))
   plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
   plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
   val meipSync = plic.io.extra.get.meip(0)

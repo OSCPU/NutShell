@@ -24,5 +24,5 @@ object Priviledged extends HasInstrType {
     FENCE          -> List(InstrS, FuType.alu, ALUOpType.add), // nop    InstrS -> !wen
     WFI            -> List(InstrI, FuType.alu, ALUOpType.add) // nop
     // FENCE          -> List(InstrB, FuType.mou, MOUOpType.fencei)
-  ) ++ (if (!Settings.MmodeOnly) table_s else Nil)
+  ) ++ (if (!Settings.get("MmodeOnly")) table_s else Nil)
 }
