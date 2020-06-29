@@ -6,7 +6,7 @@ SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 MEM_GEN = ./scripts/vlsi_mem_gen
 
-SIMTOP = top.TestMain
+SIMTOP = top.TopMain
 IMAGE ?= temp
 
 DATAWIDTH ?= 64

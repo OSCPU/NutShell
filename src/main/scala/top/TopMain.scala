@@ -32,7 +32,7 @@ object TopMain extends App {
     var target = ""
     for (arg <- args) { if (arg.startsWith(info + "=") == true) { target = arg } }
     require(target != "")
-    target.substring(6)
+    target.substring(info.length()+1)
   }
   val board = parseArgs("BOARD", args)
   val core = parseArgs("CORE", args)
@@ -49,5 +49,9 @@ object TopMain extends App {
   Settings.boolMap  = bootmap
   Settings.valueMap = valuemap
   
-  Driver.execute(args, () => new Top)
+  if (board == "sim") {
+    Driver.execute(args, () => new NOOPSimTop)
+  } else {
+    Driver.execute(args, () => new Top)
+  }
 }
