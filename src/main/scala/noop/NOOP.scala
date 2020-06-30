@@ -28,6 +28,7 @@ trait HasNOOPParameter {
   val DataBits = XLEN
   val DataBytes = DataBits / 8
   val EnableMultiCyclePredictor = false
+  val EnableOutOfOrderMemAccess = false
   val EnableMultiIssue = Settings.EnableMultiIssue
   val EnableSuperScalarExec = Settings.EnableSuperScalarExec
   val EnableOutOfOrderExec = Settings.EnableOutOfOrderExec

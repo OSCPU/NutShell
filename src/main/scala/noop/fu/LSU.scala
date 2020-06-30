@@ -500,6 +500,11 @@ class LSU extends NOOPModule with HasLSUConst {
     storeQueue(storeQueueEnqPtr).valid := true.B && !(moq(storeQueueEnqSrcPick).brMask(branchIndex) && bruFlush)
   }
 
+  // detect unfinished uncache store
+  // When EnableOutOfOrderMemAccess, ignore uncached mem access seq,
+  // as current oo-mem-arch does not support maintain program order and idempotency for uncached mem access.
+  val haveUnfinishedUCStore = if(EnableOutOfOrderMemAccess){ false.B } else { VecInit(storeQueue.map(i => i.isMMIO && i.valid)).asUInt.orR }
+
   // For debug
   val storeTBCV = io.dmem.req.fire() && io.dmem.req.bits.cmd === SimpleBusCmd.write
   val storeTBC = WireInit(storeQueue(0.U).pc)
@@ -658,7 +663,7 @@ class LSU extends NOOPModule with HasLSUConst {
   loadDMemReq.addr := Mux(havePendingDmemReq, moq(moqDmemPtr).paddr, io.dtlb.resp.bits.rdata)
   loadDMemReq.size := moq(loadDMemReqSrcPick).size
   loadDMemReq.wdata := moq(loadDMemReqSrcPick).data
-  loadDMemReq.valid := havePendingDmemReq || loadDTlbRespReqValid
+  loadDMemReq.valid := (havePendingDmemReq || loadDTlbRespReqValid) && !haveUnfinishedUCStore //FIXME: only work for seq mem asscess
   loadDMemReq.wmask := genWmask(loadDMemReq.addr, loadDMemReq.size)
   loadDMemReq.cmd := SimpleBusCmd.read
   loadDMemReq.user := loadSideUserBundle

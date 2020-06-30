@@ -238,17 +238,24 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     // val stMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(robSize)(false.B)))))
     val needStore = Reg(Vec(rsSize, Bool()))
     val stMaskReg = RegInit(VecInit(Seq.fill(robSize)(false.B)))
-    val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
-      valid(i) &&
-      Mux(
-        needStore(i), 
-        !(priorityMask(i).asUInt.orR), // there is no other inst ahead
-        true.B
-      ) &&
-      !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
-    }))
-    dequeueSelect := OHToUInt(dequeueSelectVec)
-    io.out.valid := instRdy(dequeueSelect) && dequeueSelectVec(dequeueSelect)
+    if(EnableOutOfOrderMemAccess){
+      val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
+        valid(i) &&
+        Mux(
+          needStore(i), 
+          !(priorityMask(i).asUInt.orR), // there is no other inst ahead
+          true.B
+        ) &&
+        !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
+      }))
+      dequeueSelect := OHToUInt(dequeueSelectVec)
+      io.out.valid := instRdy(dequeueSelect) && dequeueSelectVec(dequeueSelect)
+    }else{
+      dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
+        !priorityMask(i).asUInt.orR && valid(i)
+      }))
+      io.out.valid := instRdy(dequeueSelect) && !priorityMask(dequeueSelect).asUInt.orR && valid(dequeueSelect)
+    }
     // update priorityMask
     List.tabulate(rsSize)(i => 
       when(needMispredictionRecovery(brMask(i))){ 
