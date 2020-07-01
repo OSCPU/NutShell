@@ -77,8 +77,11 @@ object Settings {
   def get(field: String): Boolean = {
     boolMap(field)
   }
-  def getint(field: String) = {
+  def getLong(field: String) = {
     valueMap(field)
+  }
+  def getInt(field: String) = {
+    getLong(field).toInt
   }
 }
 

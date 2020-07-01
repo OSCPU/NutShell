@@ -21,7 +21,7 @@ trait HasNOOPParameter {
   val HasDTLB = Settings.get("HasDTLB")
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
-  val VAddrBits = Settings.getint("VAddrBits").asInstanceOf[Int] // VAddrBits is Virtual Memory addr bits
+  val VAddrBits = Settings.getInt("VAddrBits") // VAddrBits is Virtual Memory addr bits
   val NVAddrBits = if (Settings.get("IsRV32")) 32 else VAddrBits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
@@ -36,7 +36,7 @@ trait HasNOOPParameter {
 
 trait HasNOOPConst {
   val CacheReadWidth = 8
-  val ICacheUserBundleWidth = Settings.getint("VAddrBits").asInstanceOf[Int]*2 + 9 // TODO: this const depends on VAddrBits
+  val ICacheUserBundleWidth = Settings.getInt("VAddrBits")*2 + 9 // TODO: this const depends on VAddrBits
   val DCacheUserBundleWidth = 16
   val IndependentBru = if (Settings.get("EnableOutOfOrderExec")) true else false
 }
@@ -52,7 +52,7 @@ case class NOOPConfig (
 object AddressSpace {
   // (start, size)
   // address out of MMIO will be considered as DRAM
-  def mmio = List((Settings.getint("MMIOBase"), Settings.getint("MMIOSize")))
+  def mmio = List((Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")))
 
   def isMMIO(addr: UInt) = mmio.map(range => ((addr & ~((range._2 - 1).U(32.W))) === range._1.U)).reduce(_ || _)
 }

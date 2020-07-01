@@ -31,11 +31,11 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
     val slcr = (if (p.FPGAPlatform && Settings.getint("FPGAmode") == 2) new AXI4 else null)
     val frontend = Flipped(new AXI4)
-    val meip = Input(UInt(Settings.getint("NrExtIntr").asInstanceOf[Int].W))
+    val meip = Input(UInt(Settings.getInt("NrExtIntr").W))
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
-  val isPynq = Settings.getint("FPGAmode") == 2
+  val isPynq = Settings.getInt("FPGAmode") == 2
   val needAddrMap = if (isPynq) true else false
   val hasSlcr     = if (isPynq) true else false
 
@@ -126,7 +126,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val mtipSync = clint.io.extra.get.mtip
   BoringUtils.addSource(mtipSync, "mtip")
 
-  val plic = Module(new AXI4PLIC(nrIntr = Settings.getint("NrExtIntr").asInstanceOf[Int], nrHart = 1))
+  val plic = Module(new AXI4PLIC(nrIntr = Settings.getInt("NrExtIntr"), nrHart = 1))
   plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
   plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
   val meipSync = plic.io.extra.get.meip(0)

@@ -9,7 +9,7 @@ import bus.simplebus._
 import top.Settings
 
 trait HasResetVector{
-  val resetVector = Settings.getint("ResetVector")
+  val resetVector = Settings.getLong("ResetVector")
 }
 
 class IFU extends NOOPModule with HasResetVector {
