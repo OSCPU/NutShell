@@ -11,8 +11,9 @@ object CommonSetting {
 object BoardRelatedSetting {
   var pynqValueMap = Map(
     "VAddrBits" -> 39L,
-    "FPGAmode" -> 2L,    // axu3cg: 1, pynq: 2
     "VAddrBits" -> 39L,
+    "MemMapBase" -> 0x0000000010000000L,
+    "MemMapRegionBits" -> 28L,
     "MMIOBase" -> 0x0000000040000000L,
     "MMIOSize" -> 0x0000000010000000L,
     "ResetVector" -> 0x80000000L,
@@ -20,10 +21,11 @@ object BoardRelatedSetting {
   )
   var axu3cgValueMap = Map(
     "VAddrBits" -> 39L,
-    "FPGAmode" -> 1L,    // axu3cg: 1, pynq: 2
     "VAddrBits" -> 39L,
-    "MMIOBase" -> 0x0000000040000000L,
-    "MMIOSize" -> 0x0000000010000000L,
+    "MemMapBase" -> 0x0000000000000000L,
+    "MemMapRegionBits" -> 0L,
+    "MMIOBase" -> 0x00000000e0000000L,
+    "MMIOSize" -> 0x0000000020000000L,
     "ResetVector" -> 0x80000000L,
     "NrExtIntr" -> 1L
   )

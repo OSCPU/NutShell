@@ -29,15 +29,10 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
-    val slcr = (if (p.FPGAPlatform && Settings.getint("FPGAmode") == 2) new AXI4 else null)
     val frontend = Flipped(new AXI4)
     val meip = Input(UInt(Settings.getInt("NrExtIntr").W))
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
-
-  val isPynq = Settings.getInt("FPGAmode") == 2
-  val needAddrMap = if (isPynq) true else false
-  val hasSlcr     = if (isPynq) true else false
 
   val noop = Module(new NOOP)
   val cohMg = Module(new CoherenceManager)
@@ -77,13 +72,11 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     xbar.io.out
   }
 
-  if (isPynq) {
-    val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L), enable=needAddrMap))
-    memAddrMap.io.in <> mem
-    io.mem <> memAddrMap.io.out.toAXI4()
-  } else {
-    io.mem <> mem.toAXI4()
-  }
+  val memMapRegionBits = Settings.getInt("MemMapRegionBits")
+  val memMapBase = Settings.getInt("MemMapBase")
+  val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))
+  memAddrMap.io.in <> mem
+  io.mem <> memAddrMap.io.out.toAXI4()
   
   noop.io.imem.coh.resp.ready := true.B
   noop.io.imem.coh.req.valid := false.B
@@ -92,34 +85,14 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val addrSpace = List(
     (0x40000000L, 0x08000000L), // external devices
     (0x48000000L, 0x00010000L), // CLINT
-    (0x4c000000L, 0x04000000L), // PLIC
-    (0x49000000L, 0x00001000L)  // SLCR for pynq
+    (0x4c000000L, 0x04000000L)  // PLIC
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> noop.io.mmio
 
   val extDev = mmioXbar.io.out(0)
-  if (p.FPGAPlatform) {
-    if (isPynq) {
-      val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L), enable=needAddrMap))
-        mmioAddrMap.io.in <> extDev
-      io.mmio <> mmioAddrMap.io.out.toAXI4()
-    } else {
-      io.mmio <> extDev.toAXI4()
-    }
-
-    if (hasSlcr) {
-      val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L), enable=needAddrMap))
-      slcrAddrMap.io.in <> mmioXbar.io.out(3)
-      io.slcr <> slcrAddrMap.io.out.toAXI4()
-    } else {
-      mmioXbar.io.out(3) := DontCare
-    }
-  }
-  else {
-    io.mmio <> extDev
-    mmioXbar.io.out(3) := DontCare
-  }
+  if (p.FPGAPlatform) { io.mmio <> extDev.toAXI4() }
+  else { io.mmio <> extDev }
 
   val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
