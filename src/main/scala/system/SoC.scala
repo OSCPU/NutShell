@@ -83,9 +83,9 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   noop.io.imem.coh.req.bits := DontCare
 
   val addrSpace = List(
-    (0x40000000L, 0x08000000L), // external devices
-    (0x48000000L, 0x00010000L), // CLINT
-    (0x4c000000L, 0x04000000L)  // PLIC
+    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices
+    (0x38000000L, 0x00010000L), // CLINT
+    (0x3c000000L, 0x04000000L)  // PLIC
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> noop.io.mmio

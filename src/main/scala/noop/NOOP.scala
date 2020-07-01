@@ -49,12 +49,19 @@ case class NOOPConfig (
   EnableDebug: Boolean = Settings.get("EnableDebug")
 )
 
-object AddressSpace {
+object AddressSpace extends HasNOOPParameter {
   // (start, size)
   // address out of MMIO will be considered as DRAM
-  def mmio = List((Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")))
+  def mmio = List(
+    (0x30000000L, 0x10000000L),  // internal devices, such as CLINT and PLIC
+    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")) // external devices
+  )
 
-  def isMMIO(addr: UInt) = mmio.map(range => ((addr & ~((range._2 - 1).U(32.W))) === range._1.U)).reduce(_ || _)
+  def isMMIO(addr: UInt) = mmio.map(range => {
+    require(isPow2(range._2))
+    val bits = log2Up(range._2)
+    (addr ^ range._1.U)(PAddrBits-1, bits) === 0.U
+  }).reduce(_ || _)
 }
 
 class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
