@@ -13,8 +13,6 @@ object BoardRelatedSetting {
     "VAddrBits" -> 39L,
     "FPGAmode" -> 2L,    // axu3cg: 1, pynq: 2
     "VAddrBits" -> 39L,
-    "DRAMBase" -> 0x0000000080000000L,
-    "DRAMSize" -> 0x0000000010000000L,
     "MMIOBase" -> 0x0000000040000000L,
     "MMIOSize" -> 0x0000000010000000L,
     "ResetVector" -> 0x80000000L,
@@ -24,8 +22,6 @@ object BoardRelatedSetting {
     "VAddrBits" -> 39L,
     "FPGAmode" -> 1L,    // axu3cg: 1, pynq: 2
     "VAddrBits" -> 39L,
-    "DRAMBase" -> 0x0000000080000000L,
-    "DRAMSize" -> 0x0000000010000000L,
     "MMIOBase" -> 0x0000000040000000L,
     "MMIOSize" -> 0x0000000010000000L,
     "ResetVector" -> 0x80000000L,
