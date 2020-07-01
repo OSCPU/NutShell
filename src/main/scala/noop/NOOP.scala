@@ -10,7 +10,6 @@ import utils._
 import top.Settings
 
 trait HasNOOPParameter {
-  //val XLEN = 64
   val XLEN = if (Settings.get("IsRV32")) 32 else 64
   val HasMExtension = true
   val HasCExtension = true
@@ -21,8 +20,7 @@ trait HasNOOPParameter {
   val HasDTLB = Settings.get("HasDTLB")
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
-  val VAddrBits = Settings.getInt("VAddrBits") // VAddrBits is Virtual Memory addr bits
-  val NVAddrBits = if (Settings.get("IsRV32")) 32 else VAddrBits
+  val VAddrBits = if (Settings.get("IsRV32") 32 else Settings.getInt("VAddrBits") // VAddrBits is Virtual Memory addr bits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN

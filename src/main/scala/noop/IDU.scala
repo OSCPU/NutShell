@@ -160,7 +160,11 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   io.out.bits.cf.exceptionVec.map(_ := false.B)
   io.out.bits.cf.exceptionVec(illegalInstr) := (instrType === InstrN && !hasIntr) && io.in.valid
   io.out.bits.cf.exceptionVec(instrPageFault) := io.in.bits.exceptionVec(instrPageFault)
-  io.out.bits.cf.exceptionVec(instrAccessFault) := io.in.bits.pc(VAddrBits - 1, PAddrBits).orR && !vmEnable
+  if (VAddrBits > PAddrBits) {
+    io.out.bits.cf.exceptionVec(instrAccessFault) := io.in.bits.pc(VAddrBits - 1, PAddrBits).orR && !vmEnable
+  } else {
+    io.out.bits.cf.exceptionVec(instrAccessFault) := false.B
+  }
 
   io.out.bits.ctrl.isNoopTrap := (instr === NOOPTrap.TRAP) && io.in.valid
   io.isWFI := (instr === Priviledged.WFI) && io.in.valid
