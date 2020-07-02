@@ -235,8 +235,6 @@ proc create_hier_cell_rv_system { parentCell nameHier } {
 
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 io_mmio
 
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 io_slcr
-
 
   # Create pins
   create_bd_pin -dir I -type clk coreclk
@@ -307,7 +305,6 @@ proc create_hier_cell_rv_system { parentCell nameHier } {
  ] $util_vector_logic_0
 
   # Create interface connections
-  connect_bd_intf_net -intf_net Conn1 [get_bd_intf_pins io_slcr] [get_bd_intf_pins NOOPSoC_0/io_slcr]
   connect_bd_intf_net -intf_net Conn2 [get_bd_intf_pins io_frontend] [get_bd_intf_pins axi_protocol_convert_1/S_AXI]
   connect_bd_intf_net -intf_net NOOPSoC_0_io_mem [get_bd_intf_pins io_mem] [get_bd_intf_pins NOOPSoC_0/io_mem]
   connect_bd_intf_net -intf_net NOOPSoC_0_io_mmio [get_bd_intf_pins io_mmio] [get_bd_intf_pins NOOPSoC_0/io_mmio]
@@ -505,7 +502,7 @@ proc create_root_design { parentCell } {
   set axi_interconnect_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_2 ]
   set_property -dict [ list \
    CONFIG.NUM_MI {1} \
-   CONFIG.NUM_SI {2} \
+   CONFIG.NUM_SI {1} \
  ] $axi_interconnect_2
 
   # Create instance: hier_clkrst
@@ -1316,7 +1313,6 @@ proc create_root_design { parentCell } {
   connect_bd_intf_net -intf_net NOOPSoC_0_io_mem [get_bd_intf_pins axi_interconnect_0/S00_AXI] [get_bd_intf_pins rv_system/io_mem]
   connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins processing_system7_0/M_AXI_GP0]
   connect_bd_intf_net -intf_net S00_AXI_2 [get_bd_intf_pins axi_interconnect_2/S00_AXI] [get_bd_intf_pins rv_system/io_mmio]
-  connect_bd_intf_net -intf_net S01_AXI_1 [get_bd_intf_pins axi_interconnect_2/S01_AXI] [get_bd_intf_pins rv_system/io_slcr]
   connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins axi_interconnect_0/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP0]
   connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_pins axi_interconnect_1/M00_AXI] [get_bd_intf_pins hier_clkrst/S_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_1_M01_AXI [get_bd_intf_pins axi_interconnect_1/M01_AXI] [get_bd_intf_pins rv_system/io_frontend]
@@ -1326,8 +1322,8 @@ proc create_root_design { parentCell } {
   connect_bd_intf_net -intf_net processing_system7_0_FIXED_IO [get_bd_intf_ports FIXED_IO] [get_bd_intf_pins processing_system7_0/FIXED_IO]
 
   # Create port connections
-  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_1/M01_ARESETN] [get_bd_pins axi_interconnect_2/S00_ARESETN] [get_bd_pins axi_interconnect_2/S01_ARESETN] [get_bd_pins hier_clkrst/corerstn] [get_bd_pins rv_system/corerstn]
-  connect_bd_net -net clk_wiz_0_coreclk [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_1/M01_ACLK] [get_bd_pins axi_interconnect_2/S00_ACLK] [get_bd_pins axi_interconnect_2/S01_ACLK] [get_bd_pins hier_clkrst/coreclk] [get_bd_pins rv_system/coreclk]
+  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_1/M01_ARESETN] [get_bd_pins axi_interconnect_2/S00_ARESETN] [get_bd_pins hier_clkrst/corerstn] [get_bd_pins rv_system/corerstn]
+  connect_bd_net -net clk_wiz_0_coreclk [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_1/M01_ACLK] [get_bd_pins axi_interconnect_2/S00_ACLK] [get_bd_pins hier_clkrst/coreclk] [get_bd_pins rv_system/coreclk]
   connect_bd_net -net clk_wiz_0_uncoreclk [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_2/ACLK] [get_bd_pins axi_interconnect_2/M00_ACLK] [get_bd_pins hier_clkrst/uncoreclk] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK]
   connect_bd_net -net proc_sys_reset_1_interconnect_aresetn [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_2/ARESETN] [get_bd_pins axi_interconnect_2/M00_ARESETN] [get_bd_pins hier_clkrst/interconnect_aresetn]
   connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins hier_clkrst/clk_in1] [get_bd_pins processing_system7_0/FCLK_CLK0]
@@ -1341,7 +1337,7 @@ proc create_root_design { parentCell } {
   create_bd_addr_seg -range 0x20000000 -offset 0x60000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs rv_system/NOOPSoC_0/io_frontend/reg0] SEG_NOOPSoC_0_reg0
   create_bd_addr_seg -range 0x00001000 -offset 0x40000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs hier_clkrst/axi_gpio_0/S_AXI/Reg] SEG_axi_gpio_0_Reg
   create_bd_addr_seg -range 0x00001000 -offset 0xE000B000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_ENET0] SEG_processing_system7_0_GP0_ENET0
-  create_bd_addr_seg -range 0x00010000 -offset 0xF8000000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_slcr] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_PS_SLCR_REGS] SEG_processing_system7_0_GP0_PS_SLCR_REGS
+  create_bd_addr_seg -range 0x00010000 -offset 0xF8000000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_PS_SLCR_REGS] SEG_processing_system7_0_GP0_PS_SLCR_REGS
   create_bd_addr_seg -range 0x00001000 -offset 0xE0100000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_SDIO0] SEG_processing_system7_0_GP0_SDIO0
   create_bd_addr_seg -range 0x00001000 -offset 0xE0000000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_UART0] SEG_processing_system7_0_GP0_UART0
   create_bd_addr_seg -range 0x10000000 -offset 0x10000000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mem] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_DDR_LOWOCM] SEG_processing_system7_0_HP0_DDR_LOWOCM
