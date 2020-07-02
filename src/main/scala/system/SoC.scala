@@ -73,7 +73,7 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   }
 
   val memMapRegionBits = Settings.getInt("MemMapRegionBits")
-  val memMapBase = Settings.getInt("MemMapBase")
+  val memMapBase = Settings.getLong("MemMapBase")
   val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))
   memAddrMap.io.in <> mem
   io.mem <> memAddrMap.io.out.toAXI4()
