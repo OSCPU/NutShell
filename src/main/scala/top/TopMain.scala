@@ -45,6 +45,7 @@ object TopMain extends App {
   } ) ++ ( core match {
     case "seq"  => InOrderSettings()
     case "ooo"  => OOOSettings()
+    case "small"=> EmbededSettings()
   } )
   s.map{Settings.settings += _} // add and overwrite DefaultSettings
   println("====== Settings = (" + board + ", " +  core + ") ======")
