@@ -3,7 +3,7 @@
 #include "runtime.h"
 
 #define MEIP_BASE 0x40001000
-#define PLIC_BASE 0x4c000000
+#define PLIC_BASE 0x3c000000
 #define PLIC_ENABLE (PLIC_BASE + 0x2000)
 #define PLIC_CLAIM  (PLIC_BASE + 0x200004)
 
