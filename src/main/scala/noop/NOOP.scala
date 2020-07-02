@@ -20,7 +20,7 @@ trait HasNOOPParameter {
   val HasDTLB = Settings.get("HasDTLB")
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
-  val VAddrBits = if (Settings.get("IsRV32") 32 else Settings.getInt("VAddrBits") // VAddrBits is Virtual Memory addr bits
+  val VAddrBits = if (Settings.get("IsRV32")) 32 else 39 // VAddrBits is Virtual Memory addr bits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN
@@ -32,9 +32,9 @@ trait HasNOOPParameter {
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
 }
 
-trait HasNOOPConst {
+trait HasNOOPConst extends HasNOOPParameter {
   val CacheReadWidth = 8
-  val ICacheUserBundleWidth = Settings.getInt("VAddrBits")*2 + 9 // TODO: this const depends on VAddrBits
+  val ICacheUserBundleWidth = VAddrBits*2 + 9 // TODO: this const depends on VAddrBits
   val DCacheUserBundleWidth = 16
   val IndependentBru = if (Settings.get("EnableOutOfOrderExec")) true else false
 }

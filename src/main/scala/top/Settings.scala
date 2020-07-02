@@ -10,8 +10,6 @@ object CommonSetting {
 
 object BoardRelatedSetting {
   var pynqValueMap = Map(
-    "VAddrBits" -> 39L,
-    "VAddrBits" -> 39L,
     "MemMapBase" -> 0x0000000010000000L,
     "MemMapRegionBits" -> 28L,
     "MMIOBase" -> 0x0000000040000000L,
@@ -20,8 +18,6 @@ object BoardRelatedSetting {
     "NrExtIntr" -> 1L
   )
   var axu3cgValueMap = Map(
-    "VAddrBits" -> 39L,
-    "VAddrBits" -> 39L,
     "MemMapBase" -> 0x0000000000000000L,
     "MemMapRegionBits" -> 0L,
     "MMIOBase" -> 0x00000000e0000000L,
