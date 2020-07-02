@@ -8,7 +8,7 @@ import utils._
 import bus.simplebus._
 import top.Settings
 
-trait HasResetVector{
+trait HasResetVector {
   val resetVector = Settings.getLong("ResetVector")
 }
 

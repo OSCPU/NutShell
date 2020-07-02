@@ -30,8 +30,11 @@ class AXI42SimpleBusConverter() extends Module {
     inflight_type := axi_na
     inflight_id_reg := 0.U
   }
-  private def is_inflight() = {
-    inflight_type =/= axi_na
+  private def isState(state: UInt) = {
+    inflight_type === state
+  }
+  private def isInflight() = {
+    !isState(axi_na)
   }
 
   // Default
@@ -41,9 +44,8 @@ class AXI42SimpleBusConverter() extends Module {
   r := default_axi.r.bits
   b := default_axi.b.bits
 
-
   // Read Path
-  when (axi.ar.valid) {
+  when (!isInflight() && axi.ar.valid) {
     mem.req.valid := true.B
     req.addr := ar.addr
     req.cmd := Mux(ar.len === 0.U, SimpleBusCmd.read, SimpleBusCmd.readBurst)
@@ -58,7 +60,7 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
-  when (mem.resp.valid) {
+  when (isState(axi_read) && mem.resp.valid) {
     axi.r.valid := true.B
     r.data := resp.rdata
     r.id := inflight_id_reg
@@ -76,7 +78,7 @@ class AXI42SimpleBusConverter() extends Module {
   val aw_reg = Reg(new AXI4BundleA(idBits))
   val bresp_en = RegInit(false.B)
 
-  when (axi.aw.valid && !axi.ar.valid) {
+  when (!isInflight() && axi.aw.valid && !axi.ar.valid) {
     aw_reg := aw
 
     when (axi.aw.fire) {
@@ -84,18 +86,17 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
-  val aw_bypass = Mux(axi.aw.valid, aw, aw_reg)
-  when (axi.w.valid) {
+  when (isState(axi_write) && axi.w.fire()) {
     mem.req.valid := true.B
-    req.cmd := Mux(aw_bypass.len === 0.U, SimpleBusCmd.write,
+    req.cmd := Mux(aw_reg.len === 0.U, SimpleBusCmd.write,
       Mux(w.last, SimpleBusCmd.writeLast, SimpleBusCmd.writeBurst))
-    req.addr := aw_bypass.addr
-    req.size := aw_bypass.size
+    req.addr := aw_reg.addr
+    req.size := aw_reg.size
     req.wmask := w.strb
     req.wdata := w.data
     req.user.foreach(_ := aw.user)
 
-    when (axi.w.fire && w.last) {
+    when (w.last) {
       bresp_en := true.B
     }
   }
@@ -107,15 +108,21 @@ class AXI42SimpleBusConverter() extends Module {
 
   // Arbitration
   // Slave's ready maybe generated according to valid signal, so let valid signals go through.
-  mem.req.valid := axi.ar.valid || axi.w.valid
-  mem.resp.ready := true.B || (inflight_type === axi_read && axi.r.ready) || (inflight_type === axi_write && axi.b.ready)
-  axi.ar.ready := !is_inflight && mem.req.ready
-  axi.r.valid := inflight_type === axi_read && mem.resp.valid
+  mem.req.valid := (!isInflight() && axi.ar.valid) || (isState(axi_write) && axi.w.valid)
+  mem.resp.ready := true.B || (isState(axi_read) && axi.r.ready) || (isState(axi_write) && axi.b.ready)
+  axi.ar.ready := !isInflight() && mem.req.ready
+  axi.r.valid := isState(axi_read) && mem.resp.valid
   // AW should be buffered so no ready is considered.
-  axi.aw.ready := !is_inflight && !axi.ar.valid
-  axi.w.ready  := inflight_type === axi_write && mem.req.ready
+  axi.aw.ready := !isInflight() && !axi.ar.valid
+  axi.w.ready  := isState(axi_write) && mem.req.ready
   axi.b.valid := bresp_en && mem.resp.valid
   axi.b.bits.resp := AXI4Parameters.RESP_OKAY
+
+  when (axi.ar.fire()) { assert(mem.req.fire() && !isInflight()); }
+  when (axi.aw.fire()) { assert(!isInflight()); }
+  when (axi.w.fire()) { assert(mem.req .fire() && isState(axi_write)); }
+  when (axi.b.fire()) { assert(mem.resp.fire() && isState(axi_write)); }
+  when (axi.r.fire()) { assert(mem.resp.fire() && isState(axi_read)); }
 }
 
 
