@@ -1,7 +1,7 @@
 package top
 
 object CommonSetting {
-  var commonBoolMap = Map(
+  var common = Map(
     "HasMMIO" -> true,
     "EnableILA" -> true,
     "EnableDebug" -> false
@@ -9,26 +9,26 @@ object CommonSetting {
 }
 
 object BoardRelatedSetting {
-  var pynqValueMap = Map(
+  var pynq = Map(
     "MemMapBase" -> 0x0000000010000000L,
-    "MemMapRegionBits" -> 28L,
+    "MemMapRegionBits" -> 28,
     "MMIOBase" -> 0x0000000040000000L,
     "MMIOSize" -> 0x0000000010000000L,
     "ResetVector" -> 0x80000000L,
-    "NrExtIntr" -> 1L
+    "NrExtIntr" -> 1
   )
-  var axu3cgValueMap = Map(
+  var axu3cg = Map(
     "MemMapBase" -> 0x0000000000000000L,
-    "MemMapRegionBits" -> 0L,
+    "MemMapRegionBits" -> 0,
     "MMIOBase" -> 0x00000000e0000000L,
     "MMIOSize" -> 0x0000000020000000L,
     "ResetVector" -> 0x80000000L,
-    "NrExtIntr" -> 1L
+    "NrExtIntr" -> 1
   )
 }
 
 object CoreRelatedSetting {
-  var oooCoreBoolMap = Map(
+  var oooCore = Map(
     "HasL2cache" -> true,
     "HasPrefetch" -> true,
     "EnableMultiIssue" -> true,
@@ -41,7 +41,7 @@ object CoreRelatedSetting {
     "MmodeOnly" -> false,
     "IsRV32" -> false
   )
-  var seqCoreBoolMap = Map(
+  var seqCore = Map(
     "HasL2cache" -> true,
     "HasPrefetch" -> true,
     "EnableMultiIssue" -> false,
@@ -54,7 +54,7 @@ object CoreRelatedSetting {
     "MmodeOnly" -> false,
     "IsRV32" -> false
   )
-  var smallCoreBoolMap = Map(
+  var smallCore = Map(
     "HasL2cache" -> false,
     "HasPrefetch" -> false,
     "EnableMultiIssue" -> false,
@@ -70,16 +70,15 @@ object CoreRelatedSetting {
 }
 
 object Settings {
-  var boolMap: Map[String, Boolean] = Map()
-  var valueMap: Map[String, Long] = Map()
-  def get(field: String): Boolean = {
-    boolMap(field)
+  var settings: Map[String, AnyVal] = Map()
+  def get(field: String) = {
+    settings(field).asInstanceOf[Boolean]
   }
   def getLong(field: String) = {
-    valueMap(field)
+    settings(field).asInstanceOf[Long]
   }
   def getInt(field: String) = {
-    getLong(field).toInt
+    settings(field).asInstanceOf[Int]
   }
 }
 

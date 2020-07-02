@@ -37,18 +37,15 @@ object TopMain extends App {
   val board = parseArgs("BOARD", args)
   val core = parseArgs("CORE", args)
   
-  val (bootmap, valuemap) = (board, core) match {
-    case ("sim", "seq")    => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.seqCoreBoolMap, BoardRelatedSetting.pynqValueMap)
-    case ("sim", "ooo")    => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.oooCoreBoolMap, BoardRelatedSetting.pynqValueMap)
-    case ("pynq", "seq")   => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.seqCoreBoolMap, BoardRelatedSetting.pynqValueMap)
-    case ("pynq", "ooo")   => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.oooCoreBoolMap, BoardRelatedSetting.pynqValueMap)
-    case ("axu3cg", "seq") => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.seqCoreBoolMap, BoardRelatedSetting.axu3cgValueMap)
-    case ("axu3cg", "ooo") => (CommonSetting.commonBoolMap ++ CoreRelatedSetting.oooCoreBoolMap, BoardRelatedSetting.axu3cgValueMap)
+  Settings.settings = (board, core) match {
+    case ("sim", "seq")    => (CommonSetting.common ++ CoreRelatedSetting.seqCore ++ BoardRelatedSetting.pynq)
+    case ("sim", "ooo")    => (CommonSetting.common ++ CoreRelatedSetting.oooCore ++ BoardRelatedSetting.pynq)
+    case ("pynq", "seq")   => (CommonSetting.common ++ CoreRelatedSetting.seqCore ++ BoardRelatedSetting.pynq)
+    case ("pynq", "ooo")   => (CommonSetting.common ++ CoreRelatedSetting.oooCore ++ BoardRelatedSetting.pynq)
+    case ("axu3cg", "seq") => (CommonSetting.common ++ CoreRelatedSetting.seqCore ++ BoardRelatedSetting.axu3cg)
+    case ("axu3cg", "ooo") => (CommonSetting.common ++ CoreRelatedSetting.oooCore ++ BoardRelatedSetting.axu3cg)
   }
 
-  Settings.boolMap  = bootmap
-  Settings.valueMap = valuemap
-  
   if (board == "sim") {
     Driver.execute(args, () => new NOOPSimTop)
   } else {
