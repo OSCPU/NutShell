@@ -41,6 +41,14 @@ object Axu3cgSettings {
   def apply() = Map()
 }
 
+object PXIeSettings {
+  def apply() = Map(
+    "NrExtIntr" -> 5,
+    "MMIOBase" -> 0x0000000040000000L,
+    "MMIOSize" -> 0x0000000040000000L
+  )
+}
+
 object OOOSettings {
   def apply() = Map(
     "EnableMultiIssue" -> true,
