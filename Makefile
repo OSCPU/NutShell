@@ -16,7 +16,7 @@ CORE  ?= seq  # seq  ooo  small
 .DEFAULT_GOAL = verilog
 
 help:
-	mill chiselModule.test.runMain top.$(TOP) --help
+	mill chiselModule.runMain top.$(TOP) --help BOARD=$(BOARD) CORE=$(CORE)
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
