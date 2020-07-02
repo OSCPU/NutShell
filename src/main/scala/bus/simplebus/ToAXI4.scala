@@ -126,7 +126,7 @@ class AXI42SimpleBusConverter() extends Module {
 }
 
 
-class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT) extends Module {
+class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC)
     val out = Flipped(Flipped(outType))
@@ -152,7 +152,8 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT) extends Module {
     axi4.ar.bits.id    := 0.U
     axi4.ar.bits.len   := Mux(mem.req.bits.isBurst(), (LineBeats - 1).U, 0.U)
     axi4.ar.bits.size  := mem.req.bits.size
-    axi4.ar.bits.burst := AXI4Parameters.BURST_WRAP
+    axi4.ar.bits.burst := (if (isFromCache) AXI4Parameters.BURST_WRAP
+                           else AXI4Parameters.BURST_INCR)
     axi4.ar.bits.lock  := false.B
     axi4.ar.bits.cache := 0.U
     axi4.ar.bits.qos   := 0.U
@@ -183,8 +184,8 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT) extends Module {
 }
 
 object SimpleBus2AXI4Converter {
-  def apply[OT <: AXI4Lite](in: SimpleBusUC, outType: OT): OT = {
-    val bridge = Module(new SimpleBus2AXI4Converter(outType))
+  def apply[OT <: AXI4Lite](in: SimpleBusUC, outType: OT, isFromCache: Boolean = false): OT = {
+    val bridge = Module(new SimpleBus2AXI4Converter(outType, isFromCache))
     bridge.io.in <> in
     bridge.io.out
   }
