@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import top.Settings
 
 object CSROpType {
   def jmp  = "b000".U
@@ -117,11 +118,11 @@ trait HasCSRConst {
   def IRQ_SSIP  = 9 
   def IRQ_MSIP  = 11 
 
- val IntPriority = Seq(
+  val IntPriority = Seq(
     IRQ_MEIP, IRQ_MSIP, IRQ_MTIP,
     IRQ_SEIP, IRQ_SSIP, IRQ_STIP,
     IRQ_UEIP, IRQ_USIP, IRQ_UTIP
- )
+  )
 }
 
 trait HasExceptionNO {
@@ -162,6 +163,7 @@ class CSRIO extends FunctionUnitIO {
   val redirect = new RedirectIO
   // for exception check
   val instrValid = Input(Bool())
+  val isBackendException = Input(Bool())
   // for differential testing
   val intrNO = Output(UInt(XLEN.W))
   val imemMMU = Flipped(new MMUIO)
@@ -194,10 +196,12 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
    
   class MstatusStruct extends Bundle {
     val sd = Output(UInt(1.W))
-    val pad1 = Output(UInt(37.W))
-    val sxl = Output(UInt(2.W))
-    val uxl = Output(UInt(2.W))
-    val pad0 = Output(UInt(9.W))
+
+    val pad1 = if (XLEN == 64) Output(UInt(27.W)) else null
+    val sxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+    val uxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+    val pad0 = if (XLEN == 64) Output(UInt(9.W))  else Output(UInt(8.W))
+
     val tsr = Output(UInt(1.W))
     val tw = Output(UInt(1.W))
     val tvm = Output(UInt(1.W))
@@ -230,7 +234,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val mie = RegInit(0.U(XLEN.W))
   val mipWire = WireInit(0.U.asTypeOf(new Interrupt))
   val mipReg  = RegInit(0.U.asTypeOf(new Interrupt).asUInt)
-  val mipFixMask = "h777".U
+  val mipFixMask = "h77f".U
   val mip = (mipWire.asUInt | mipReg).asTypeOf(new Interrupt)
 
   def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
@@ -304,14 +308,17 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   // val sie = RegInit(0.U(XLEN.W))
   val sieMask = "h222".U & mideleg
   val sipMask  = "h222".U & mideleg
-  //val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
+  // val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
   val satp = RegInit(UInt(XLEN.W), 0.U)
   val sepc = RegInit(UInt(XLEN.W), 0.U)
   val scause = RegInit(UInt(XLEN.W), 0.U)
   val stval = Reg(UInt(XLEN.W))
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
-  BoringUtils.addSource(satp, "CSRSATP")
+
+  if (Settings.get("HasDTLB")) {
+    BoringUtils.addSource(satp, "CSRSATP")
+  }
 
   // User-Level CSRs
   val uepc = Reg(UInt(XLEN.W))
@@ -339,7 +346,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   // perfcnt
   val hasPerfCnt = !p.FPGAPlatform
   val nrPerfCnts = if (hasPerfCnt) 0x80 else 0x3
-  val perfCnts = List.fill(nrPerfCnts)(RegInit(0.U(XLEN.W)))
+  val perfCnts = List.fill(nrPerfCnts)(RegInit(0.U(64.W)))
   val perfCntsLoMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb00 + i, perfCnts(i)) }
   val perfCntsHiMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb80 + i, perfCnts(i)(63, 32)) }
 
@@ -420,7 +427,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     MaskedRegMap(PmpaddrBase + 2, pmpaddr2),
     MaskedRegMap(PmpaddrBase + 3, pmpaddr3)
 
-  ) ++ perfCntsLoMapping ++ (if (XLEN == 32) perfCntsHiMapping else Nil)
+  ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
   val addr = src2(11, 0)
   val rdata = Wire(UInt(XLEN.W))
@@ -434,7 +441,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     CSROpType.clri -> (rdata & ~csri)
   ))
 
-  val wen = (valid && func =/= CSROpType.jmp)
+  val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException
   // Debug(){when(wen){printf("[CSR] addr %x wdata %x func %x rdata %x\n", addr, wdata, func, rdata)}}
   MaskedRegMap.generate(mapping, addr, rdata, wen, wdata)
   val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
@@ -451,10 +458,10 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
 
   // CSR inst decode
   val ret = Wire(Bool())
-  val isEcall = addr === privEcall && func === CSROpType.jmp
-  val isMret = addr === privMret   && func === CSROpType.jmp
-  val isSret = addr === privSret   && func === CSROpType.jmp
-  val isUret = addr === privUret   && func === CSROpType.jmp
+  val isEcall = addr === privEcall && func === CSROpType.jmp && !io.isBackendException
+  val isMret = addr === privMret   && func === CSROpType.jmp && !io.isBackendException
+  val isSret = addr === privSret   && func === CSROpType.jmp && !io.isBackendException
+  val isUret = addr === privUret   && func === CSROpType.jmp && !io.isBackendException
 
   Debug(false){
     when(wen){
@@ -496,26 +503,52 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   io.imemMMU.status_mxr := DontCare
   io.dmemMMU.status_mxr := mstatusStruct.mxr.asBool
 
-  val hasInstrPageFault = io.cfIn.exceptionVec(instrPageFault) && valid
-  val hasLoadPageFault = io.dmemMMU.loadPF   
-  val hasStorePageFault = io.dmemMMU.storePF 
-  val hasStoreAddrMisaligned = io.cfIn.exceptionVec(storeAddrMisaligned)
-  val hasLoadAddrMisaligned = io.cfIn.exceptionVec(loadAddrMisaligned)
+  val hasInstrPageFault = Wire(Bool())
+  val hasLoadPageFault = Wire(Bool())
+  val hasStorePageFault = Wire(Bool())
+  val hasStoreAddrMisaligned = Wire(Bool())
+  val hasLoadAddrMisaligned = Wire(Bool())
+
+  val dmemPagefaultAddr = Wire(UInt(VAddrBits.W))
+  val dmemAddrMisalignedAddr = Wire(UInt(VAddrBits.W))
+  val lsuAddr = WireInit(0.U(64.W))
+  BoringUtils.addSink(lsuAddr, "LSUADDR")
+  if(EnableOutOfOrderExec){
+    hasInstrPageFault      := valid && io.cfIn.exceptionVec(instrPageFault)
+    hasLoadPageFault       := valid && io.cfIn.exceptionVec(loadPageFault)
+    hasStorePageFault      := valid && io.cfIn.exceptionVec(storePageFault)
+    hasStoreAddrMisaligned := valid && io.cfIn.exceptionVec(storeAddrMisaligned)
+    hasLoadAddrMisaligned  := valid && io.cfIn.exceptionVec(loadAddrMisaligned)
+    dmemPagefaultAddr := src1 // LSU -> wbresult -> prf -> beUop.data.src1
+    dmemAddrMisalignedAddr := src1
+  }else{
+    hasInstrPageFault := io.cfIn.exceptionVec(instrPageFault) && valid
+    hasLoadPageFault := io.dmemMMU.loadPF
+    hasStorePageFault := io.dmemMMU.storePF
+    hasStoreAddrMisaligned := io.cfIn.exceptionVec(storeAddrMisaligned)
+    hasLoadAddrMisaligned := io.cfIn.exceptionVec(loadAddrMisaligned)
+    dmemPagefaultAddr := io.dmemMMU.addr
+    dmemAddrMisalignedAddr := lsuAddr
+  }
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
-    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt(io.cfIn.pc + 2.U, XLEN), SignExt(io.cfIn.pc, XLEN)), SignExt(io.dmemMMU.addr, XLEN))
+    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(VAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(VAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
     when(priviledgeMode === ModeM){
       mtval := tval
     }.otherwise{
       stval := tval
     }
+    Debug(){
+      printf("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    }
   }
 
-  val lsuAddr = WireInit(0.U(64.W))
-  BoringUtils.addSink(lsuAddr, "LSUADDR")
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
-      mtval := SignExt(lsuAddr, XLEN)
+    mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
+    Debug(){
+      printf("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    }
   }
 
   // Exception and Intr
@@ -557,8 +590,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
-  // csrExceptionVec(instrPageFault) := hasInstrPageFault
-  csrExceptionVec(illegalInstr) := isIllegalAddr && wen // Trigger an illegal instr exception when unimplemented csr is being read/written
+  csrExceptionVec(illegalInstr) := isIllegalAddr && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
@@ -574,15 +606,20 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val retTarget = Wire(UInt(VAddrBits.W))
   val trapTarget = Wire(UInt(VAddrBits.W))
   io.redirect.valid := (valid && func === CSROpType.jmp) || raiseExceptionIntr || resetSatp
-  io.redirect.target := Mux(resetSatp, io.cfIn.pnpc, Mux(raiseExceptionIntr, trapTarget, retTarget))
+  io.redirect.rtype := 0.U
+  io.redirect.target := Mux(resetSatp, io.cfIn.pc + 4.U, Mux(raiseExceptionIntr, trapTarget, retTarget))
 
   Debug(){
     when(raiseExceptionIntr){
+      printf("[CSR] excin %b excgen %b", csrExceptionVec.asUInt(), iduExceptionVec.asUInt())
       printf("[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
       printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
     }
     when(io.redirect.valid){
       printf("[CSR] redirect to %x\n", io.redirect.target)
+    }
+    when(resetSatp){
+      printf("[CSR] satp reset at %x\n", GTimer())
     }
   }
 
@@ -704,45 +741,127 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
 
   // perfcnt
 
-  val perfCntList = Map(
+  val generalPerfCntList = Map(
     "Mcycle"      -> (0xb00, "perfCntCondMcycle"     ),
     "Minstret"    -> (0xb02, "perfCntCondMinstret"   ),
-    "MimemStall"  -> (0xb03, "perfCntCondMimemStall" ),
-    "MaluInstr"   -> (0xb04, "perfCntCondMaluInstr"  ),
-    "MbruInstr"   -> (0xb05, "perfCntCondMbruInstr"  ),
-    "MlsuInstr"   -> (0xb06, "perfCntCondMlsuInstr"  ),
-    "MmduInstr"   -> (0xb07, "perfCntCondMmduInstr"  ),
-    "McsrInstr"   -> (0xb08, "perfCntCondMcsrInstr"  ),
-    "MloadInstr"  -> (0xb09, "perfCntCondMloadInstr" ),
-    "MloadStall"  -> (0xb0a, "perfCntCondMloadStall" ),
-    "MstoreStall" -> (0xb0b, "perfCntCondMstoreStall"),
-    "MmmioInstr"  -> (0xb0c, "perfCntCondMmmioInstr" ),
-    "MicacheHit"  -> (0xb0d, "perfCntCondMicacheHit" ),
-    "MdcacheHit"  -> (0xb0e, "perfCntCondMdcacheHit" ),
-    "MmulInstr"   -> (0xb0f, "perfCntCondMmulInstr"  ),
-    "MifuFlush"   -> (0xb10, "perfCntCondMifuFlush"  ),
-    "MrawStall"   -> (0xb11, "perfCntCondMrawStall"  ),
-    "MexuBusy"    -> (0xb12, "perfCntCondMexuBusy"   ),
-    "MbpBRight"   -> (0xb13, "MbpBRight"             ),
-    "MbpBWrong"   -> (0xb14, "MbpBWrong"             ),
-    "MbpJRight"   -> (0xb15, "MbpJRight"             ),
-    "MbpJWrong"   -> (0xb16, "MbpJWrong"             ),
-    "MbpIRight"   -> (0xb17, "MbpIRight"             ),
-    "MbpIWrong"   -> (0xb18, "MbpIWrong"             ),
-    "MbpRRight"   -> (0xb19, "MbpRRight"             ),
-    "MbpRWrong"   -> (0xb1a, "MbpRWrong"             ),
-    "Custom1"     -> (0xb1b, "Custom1"             ),
-    "Custom2"     -> (0xb1c, "Custom2"             ),
-    "Custom3"     -> (0xb1d, "Custom3"             ),
-    "Custom4"     -> (0xb1e, "Custom4"             ),
-    "Custom5"     -> (0xb1f, "Custom5"             ),
-    "Custom6"     -> (0xb20, "Custom6"             ),
-    "Custom7"     -> (0xb21, "Custom7"             ),
-    "Custom8"     -> (0xb22, "Custom8"             ),
-    "Ml2cacheHit" -> (0xb23, "perfCntCondMl2cacheHit")
+    "MultiCommit" -> (0xb03, "perfCntCondMultiCommit"),
+    "MimemStall"  -> (0xb04, "perfCntCondMimemStall" ),
+    "MaluInstr"   -> (0xb05, "perfCntCondMaluInstr"  ),
+    "MbruInstr"   -> (0xb06, "perfCntCondMbruInstr"  ),
+    "MlsuInstr"   -> (0xb07, "perfCntCondMlsuInstr"  ),
+    "MmduInstr"   -> (0xb08, "perfCntCondMmduInstr"  ),
+    "McsrInstr"   -> (0xb09, "perfCntCondMcsrInstr"  ),
+    "MloadInstr"  -> (0xb0a, "perfCntCondMloadInstr" ),
+    "MmmioInstr"  -> (0xb0b, "perfCntCondMmmioInstr" ),
+    "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit" ),
+    "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit" ),
+    "MmulInstr"   -> (0xb0e, "perfCntCondMmulInstr"  ),
+    "MifuFlush"   -> (0xb0f, "perfCntCondMifuFlush"  ),
+    "MbpBRight"   -> (0xb10, "MbpBRight"             ),
+    "MbpBWrong"   -> (0xb11, "MbpBWrong"             ),
+    "MbpJRight"   -> (0xb12, "MbpJRight"             ),
+    "MbpJWrong"   -> (0xb13, "MbpJWrong"             ),
+    "MbpIRight"   -> (0xb14, "MbpIRight"             ),
+    "MbpIWrong"   -> (0xb15, "MbpIWrong"             ),
+    "MbpRRight"   -> (0xb16, "MbpRRight"             ),
+    "MbpRWrong"   -> (0xb17, "MbpRWrong"             ),
+    "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"),
+    "Custom1"     -> (0xb19, "Custom1"               ),
+    "Custom2"     -> (0xb1a, "Custom2"               ),
+    "Custom3"     -> (0xb1b, "Custom3"               ),
+    "Custom4"     -> (0xb1c, "Custom4"               ),
+    "Custom5"     -> (0xb1d, "Custom5"               ),
+    "Custom6"     -> (0xb1e, "Custom6"               ),
+    "Custom7"     -> (0xb1f, "Custom7"               ),
+    "Custom8"     -> (0xb20, "Custom8"               )
   )
+
+  val sequentialPerfCntList = Map(
+    "MrawStall"   -> (0xb31, "perfCntCondMrawStall"    ),
+    "MexuBusy"    -> (0xb32, "perfCntCondMexuBusy"     ),
+    "MloadStall"  -> (0xb33, "perfCntCondMloadStall"   ),
+    "MstoreStall" -> (0xb34, "perfCntCondMstoreStall"  ),
+    "ISUIssue"    -> (0xb35, "perfCntCondISUIssue"     ),
+    "ISU1Issue"   -> (0xb36, "perfCntCondISU1Issue"    ),
+    "ISU2Issue"   -> (0xb37, "perfCntCondISU2Issue"    ),
+    "Src2NotReady"-> (0xb38, "perfCntCondSrc2NotReady" ),
+    "Dst2Conflict"-> (0xb39, "perfCntCondDst2Conflict" ),
+    "Inst2NotALU" -> (0xb40, "perfCntCondInst2NotALU"  ),
+    "Inst2NoReady"-> (0xb41, "perfCntCondInst2NotReady")
+  )
+
+  val outOfOrderPerfCntList = Map(
+    "MrobFull"    -> (0xb31, "perfCntCondMrobFull"     ),
+    "Malu1rsFull" -> (0xb32, "perfCntCondMalu1rsFull"  ),
+    "Malu2rsFull" -> (0xb33, "perfCntCondMalu2rsFull"  ),
+    "MbrursFull"  -> (0xb34, "perfCntCondMbrursFull"   ),
+    "MlsursFull"  -> (0xb35, "perfCntCondMlsursFull"   ),
+    "MmdursFull"  -> (0xb36, "perfCntCondMmdursFull"   ),
+    "MmemqFull"   -> (0xb37, "perfCntCondMmemqFull"    ),
+    "MrobEmpty"   -> (0xb38, "perfCntCondMrobEmpty"    ),
+    "MstqFull"    -> (0xb39, "perfCntCondMstqFull"     ),
+    "McmtCnt0"    -> (0xb40, "perfCntCondMcmtCnt0"     ),
+    "McmtCnt1"    -> (0xb41, "perfCntCondMcmtCnt1"     ),
+    "McmtCnt2"    -> (0xb42, "perfCntCondMcmtCnt2"     ),
+    "McmtStrHaz1" -> (0xb43, "perfCntCondMcmtStrHaz1"  ),
+    "McmtStrHaz2" -> (0xb44, "perfCntCondMcmtStrHaz2"  ),
+    "MaluInstr2"  -> (0xb45, "perfCntCondMaluInstr2"   ),
+    "Mdispatch0"  -> (0xb46, "perfCntCondMdispatch0"   ),
+    "Mdispatch1"  -> (0xb47, "perfCntCondMdispatch1"   ),
+    "Mdispatch2"  -> (0xb48, "perfCntCondMdispatch2"   ),
+    "MlsuIssue"   -> (0xb49, "perfCntCondMlsuIssue"    ),
+    "MmduIssue"   -> (0xb4a, "perfCntCondMmduIssue"    ),
+    "MbruCmt"     -> (0xb4b, "perfCntCondMbruCmt"       ),
+    "MbruCmtWrong"-> (0xb4c, "perfCntCondMbruCmtWrong"  ),
+    "MicacheLoss" -> (0xb4d, "perfCntCondMicacheLoss"   ),
+    "MdcacheLoss" -> (0xb4e, "perfCntCondMdcacheLoss"   ),
+    "Ml2cacheLoss"-> (0xb4f, "perfCntCondMl2cacheLoss"  ),
+    "MbrInROB_0"  -> (0xb50, "perfCntCondMbrInROB_0"   ),
+    "MbrInROB_1"  -> (0xb51, "perfCntCondMbrInROB_1"   ),
+    "MbrInROB_2"  -> (0xb52, "perfCntCondMbrInROB_2"   ),
+    "MbrInROB_3"  -> (0xb53, "perfCntCondMbrInROB_3"   ),
+    "MbrInROB_4"  -> (0xb54, "perfCntCondMbrInROB_4"   ),
+    "Mdp1StBlk"   -> (0xb55, "perfCntCondMdp1StBlk"   ),
+    "Mdp1StRSf"   -> (0xb56, "perfCntCondMdp1StRSf"   ),
+    "Mdp1StROBf"  -> (0xb57, "perfCntCondMdp1StROBf"   ),
+    "Mdp1StConf"  -> (0xb58, "perfCntCondMdp1StConf"   ),
+    "Mdp1StCnt"   -> (0xb59, "perfCntCondMdp1StCnt"   ),
+    "Mdp2StBlk"   -> (0xb5a, "perfCntCondMdp2StBlk"   ),
+    "Mdp2StRSf"   -> (0xb5b, "perfCntCondMdp2StRSf"   ),
+    "Mdp2StROBf"  -> (0xb5c, "perfCntCondMdp2StROBf"   ),
+    "Mdp2StConf"  -> (0xb5d, "perfCntCondMdp2StConf"   ),
+    "Mdp2StSeq"   -> (0xb5e, "perfCntCondMdp2StSeq"   ),
+    "Mdp2StCnt"   -> (0xb5f, "perfCntCondMdp2StCnt"   ),
+    "MloadCnt"    -> (0xb60, "perfCntCondMloadCnt"   ),
+    "MstoreCnt"   -> (0xb61, "perfCntCondMstoreCnt"   ),
+    "MmemSBL"     -> (0xb62, "perfCntCondMmemSBL"   ),
+    "MpendingLS  "-> (0xb63, "perfCntCondMpendingLS"   ),     //Maunally updated
+    "MpendingSCmt"-> (0xb64, "perfCntCondMpendingSCmt"   ), //Maunally updated
+    "MpendingSReq"-> (0xb65, "perfCntCondMpendingSReq"   ), //Maunally updated
+    "MicacheReq"  -> (0xb66, "perfCntCondMicacheReq"   ),
+    "MdcacheReq"  -> (0xb67, "perfCntCondMdcacheReq"   ),
+    "Ml2cacheReq" -> (0xb68, "perfCntCondMl2cacheReq"   ),
+    "MdpNoInst"   -> (0xb69, "perfCntCondMdpNoInst"   )
+    // "MmemLBS"  -> (0xb6a, "perfCntCondMmemLBS"   ),//TODO
+  )
+
+  val perfCntList = generalPerfCntList ++  (if (EnableOutOfOrderExec) outOfOrderPerfCntList else sequentialPerfCntList) 
+
 	val perfCntCond = List.fill(0x80)(WireInit(false.B))
   (perfCnts zip perfCntCond).map { case (c, e) => { when (e) { c := c + 1.U } } }
+  // Manually update perf counter
+  val pendingLS = WireInit(0.U(5.W))
+  val pendingSCmt = WireInit(0.U(5.W))
+  val pendingSReq = WireInit(0.U(5.W))
+  BoringUtils.addSink(pendingLS, "perfCntSrcMpendingLS")
+  BoringUtils.addSink(pendingSCmt, "perfCntSrcMpendingSCmt")
+  BoringUtils.addSink(pendingSReq, "perfCntSrcMpendingSReq")
+  when(perfCntCond(0xb03 & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
+  if (!p.FPGAPlatform) {
+    when(true.B) { perfCnts(0xb63 & 0x7f) := perfCnts(0xb63 & 0x7f) + pendingLS } 
+    when(true.B) { perfCnts(0xb64 & 0x7f) := perfCnts(0xb64 & 0x7f) + pendingSCmt } 
+    when(true.B) { perfCnts(0xb65 & 0x7f) := perfCnts(0xb66 & 0x7f) + pendingSReq } 
+  }
 
   BoringUtils.addSource(WireInit(true.B), "perfCntCondMcycle")
   perfCntList.map { case (name, (addr, boringId)) => {
@@ -765,10 +884,20 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
 
     // display all perfcnt when nooptrap is executed
+    val PrintPerfCntToCSV = true
     when (nooptrap) {
       printf("======== PerfCnt =========\n")
       perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
         printf("%d <- " + name + "\n", readWithScala(addr)) }
+      if(PrintPerfCntToCSV){
+      printf("======== PerfCntCSV =========\n\n")
+      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+        printf(name + ", ")}
+      printf("\n\n\n")
+      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+        printf("%d, ", readWithScala(addr)) }
+      printf("\n\n\n")
+      }
     }
 
     // for differential testing

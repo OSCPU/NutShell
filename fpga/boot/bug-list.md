@@ -19,6 +19,7 @@ To make the SD card work, do the followings
 
 * should use u-boot.elf from petalinux
   * it seems that the default zcu102 config in u-boot can not adapt to this board
+* add "no-1-8-v;" property to the node of "sdhci@ff170000" in device tree
 * modify gem3.phyc.reg to <0x1>
 * remove `pinctrl-names` and `pinctrl-0` property from node `uart1`
   * this will fix the issue of unable to input in linux

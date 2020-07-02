@@ -52,5 +52,5 @@ class AXI4UART extends AXI4SlaveModule(new AXI4Lite) {
   )
 
   RegMap.generate(mapping, raddr(3,0), in.r.bits.data,
-    waddr(3,0), in.w.fire(), in.w.bits.data, MaskExpand(in.w.bits.strb >> waddr(2,0)))
+    waddr(3,0), in.w.fire(), in.w.bits.data, MaskExpand(in.w.bits.strb >> waddr(log2Ceil(DataBytes)-1,0)))
 }

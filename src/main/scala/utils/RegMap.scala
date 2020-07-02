@@ -3,6 +3,8 @@ package utils
 import chisel3._
 import chisel3.util._
 
+import top.Settings
+
 object RegMap {
   def Unwritable = null
   def apply(addr: Int, reg: UInt, wfn: UInt => UInt = (x => x)) = (addr, (reg, wfn))
@@ -18,11 +20,11 @@ object RegMap {
     wen: Bool, wdata: UInt, wmask: UInt):Unit = generate(mapping, addr, rdata, addr, wen, wdata, wmask)
 }
 
-object MaskedRegMap { // TODO: add read mask
+object MaskedRegMap {
   def Unwritable = null
   def NoSideEffect: UInt => UInt = (x=>x)
-  def WritableMask = Fill(64, true.B)
-  def UnwritableMask = 0.U(64.W)
+  def WritableMask = Fill(if (Settings.get("IsRV32")) 32 else 64, true.B)
+  def UnwritableMask = 0.U(if (Settings.get("IsRV32")) 32.W else 64.W)
   def apply(addr: Int, reg: UInt, wmask: UInt = WritableMask, wfn: UInt => UInt = (x => x), rmask: UInt = WritableMask) = (addr, (reg, wmask, wfn, rmask))
   def generate(mapping: Map[Int, (UInt, UInt, UInt => UInt, UInt)], raddr: UInt, rdata: UInt,
     waddr: UInt, wen: Bool, wdata: UInt):Unit = {

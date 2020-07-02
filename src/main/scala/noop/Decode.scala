@@ -37,18 +37,20 @@ object SrcType {
   def apply() = UInt(1.W)
 }
 
-object FuType {
+object FuType extends HasNOOPConst {
   def num = 5
   def alu = "b000".U
   def lsu = "b001".U
   def mdu = "b010".U
   def csr = "b011".U
   def mou = "b100".U
+  def bru = if(IndependentBru) "b101".U
+            else               alu
   def apply() = UInt(log2Up(num).W)
 }
 
 object FuOpType {
-  def apply() = UInt(6.W)
+  def apply() = UInt(7.W)
 }
 
 object Instructions extends HasInstrType with HasNOOPParameter {

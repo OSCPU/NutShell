@@ -6,17 +6,21 @@ SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 MEM_GEN = ./scripts/vlsi_mem_gen
 
-SIMTOP = top.TestMain
+SIMTOP = top.TopMain
 IMAGE ?= temp
+
+DATAWIDTH ?= 64
+BOARD ?= sim  # sim  pynq  axu4cg
+CORE  ?= seq  # seq  ooo  small
 
 .DEFAULT_GOAL = verilog
 
 help:
-	mill chiselModule.test.runMain top.$(TOP) --help
+	mill chiselModule.runMain top.$(TOP) --help BOARD=$(BOARD) CORE=$(CORE)
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-	mill chiselModule.runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf
+	mill chiselModule.runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE)
 	$(MEM_GEN) $(@D)/$(@F).conf >> $@
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
@@ -41,7 +45,7 @@ SIM_TOP = NOOPSimTop
 SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F)
+	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
 
 
 EMU_CSRC_DIR = $(abspath ./src/test/csrc)
@@ -50,15 +54,16 @@ EMU_CXXFILES = $(shell find $(EMU_CSRC_DIR) -name "*.cpp")
 EMU_VFILES = $(shell find $(EMU_VSRC_DIR) -name "*.v" -or -name "*.sv")
 
 EMU_CXXFLAGS  = -O3 -std=c++11 -static -g -Wall -I$(EMU_CSRC_DIR)
-EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized
+EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized -D__RV$(DATAWIDTH)__
 EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
 # dump vcd: --debug --trace
+# +define+RANDOMIZE_REG_INIT \
+# +define+RANDOMIZE_MEM_INIT
 VERILATOR_FLAGS = --top-module $(SIM_TOP) \
+  +define+RV$(DATAWIDTH)=1 \
   +define+VERILATOR=1 \
   +define+PRINTF_COND=1 \
-  +define+RANDOMIZE_REG_INIT \
-  +define+RANDOMIZE_MEM_INIT \
   --assert \
   --output-split 5000 \
   --output-split-cfuncs 5000 \
@@ -76,9 +81,9 @@ $(EMU_MK): $(SIM_TOP_V) | $(EMU_DEPS)
 	verilator --cc --exe $(VERILATOR_FLAGS) \
 		-o $(abspath $(EMU)) -Mdir $(@D) $^ $(EMU_DEPS)
 
-REF_SO := $(NEMU_HOME)/build/riscv64-nemu-interpreter-so
+REF_SO := $(NEMU_HOME)/build/riscv$(DATAWIDTH)-nemu-interpreter-so
 $(REF_SO):
-	$(MAKE) -C $(NEMU_HOME) ISA=riscv64 SHARE=1
+	$(MAKE) -C $(NEMU_HOME) ISA=riscv$(DATAWIDTH) SHARE=1
 
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS) $(REF_SO)
 	CPPFLAGS=-DREF_SO=\\\"$(REF_SO)\\\" $(MAKE) -C $(dir $(EMU_MK)) -f $(abspath $(EMU_MK))

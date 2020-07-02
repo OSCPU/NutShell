@@ -1,4 +1,4 @@
-package top
+package sim
 
 import system._
 import noop.NOOPConfig
@@ -13,10 +13,12 @@ import device.AXI4RAM
 class DiffTestIO extends Bundle {
   val r = Output(Vec(32, UInt(64.W)))
   val commit = Output(Bool())
+  val isMultiCommit = Output(Bool())
   val thisPC = Output(UInt(64.W))
   val thisINST = Output(UInt(32.W))
   val isMMIO = Output(Bool())
   val isRVC = Output(Bool())
+  val isRVC2 = Output(Bool())
   val intrNO = Output(UInt(64.W))
   
   val priviledgeMode = Output(UInt(2.W))
@@ -36,7 +38,7 @@ class NOOPSimTop extends Module {
 
   lazy val config = NOOPConfig(FPGAPlatform = false)
   val soc = Module(new NOOPSoC()(config))
-  val mem = Module(new AXI4RAM(memByte = 256 * 1024 * 1024, useBlackBox = true))
+  val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
   // Be careful with the commit checking of emu.
   // A large delay will make emu incorrectly report getting stuck.
   val memdelay = Module(new AXI4Delayer(0))
@@ -53,10 +55,12 @@ class NOOPSimTop extends Module {
 
   val difftest = WireInit(0.U.asTypeOf(new DiffTestIO))
   BoringUtils.addSink(difftest.commit, "difftestCommit")
+  BoringUtils.addSink(difftest.isMultiCommit, "difftestMultiCommit")
   BoringUtils.addSink(difftest.thisPC, "difftestThisPC")
   BoringUtils.addSink(difftest.thisINST, "difftestThisINST")
   BoringUtils.addSink(difftest.isMMIO, "difftestIsMMIO")
   BoringUtils.addSink(difftest.isRVC, "difftestIsRVC")
+  BoringUtils.addSink(difftest.isRVC2, "difftestIsRVC2")
   BoringUtils.addSink(difftest.intrNO, "difftestIntrNO")
   BoringUtils.addSink(difftest.r, "difftestRegs")
   BoringUtils.addSink(difftest.priviledgeMode, "difftestMode")
@@ -68,8 +72,4 @@ class NOOPSimTop extends Module {
   BoringUtils.addSink(difftest.scause, "difftestScause")
   io.difftest := difftest
   io.difftestCtrl <> mmio.io.difftestCtrl
-}
-
-object TestMain extends App {
-  chisel3.Driver.execute(args, () => new NOOPSimTop)
 }

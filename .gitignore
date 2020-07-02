@@ -338,3 +338,12 @@ project/plugins/project/
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 
+# waveform dump file
+*.vcd
+
+# chore
+*.nocompile
+fpga/.Xil/
+
+# vscode temp file
+.vscode/

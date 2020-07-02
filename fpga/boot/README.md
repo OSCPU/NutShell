@@ -154,6 +154,7 @@ $(NOOP_HOME)/fpga/boot/build/myproject-your-target-board/dts $ cat top.dts
 	};
 };
 ```
+* fix misc bug according to ./bug-list.md
 * compile the dts to dtb
 ```
 cpp -nostdinc -I include -undef -x assembler-with-cpp top.dts top.dts.preprocessed

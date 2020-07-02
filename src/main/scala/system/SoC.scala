@@ -4,16 +4,16 @@ import noop._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import device.{AXI4Timer, AXI4PLIC}
+import top.Settings
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 trait HasSoCParameter {
-  val EnableILA = true
-  val HasL2cache = true
-  val HasPrefetch = true
-  val NRExtIntr = 3
+  val EnableILA = Settings.get("EnableILA")
+  val HasL2cache = Settings.get("HasL2cache")
+  val HasPrefetch = Settings.get("HasL2cache")
 }
 
 class ILABundle extends NOOPBundle {
@@ -29,9 +29,8 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
-    val slcr = (if (p.FPGAPlatform) { new AXI4 } else null)
     val frontend = Flipped(new AXI4)
-    val meip = Input(UInt(NRExtIntr.W))
+    val meip = Input(UInt(Settings.getInt("NrExtIntr").W))
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
@@ -46,6 +45,11 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val axi2sb = Module(new AXI42SimpleBusConverter())
   axi2sb.io.in <> io.frontend
   noop.io.frontend <> axi2sb.io.out
+
+  val memport = xbar.io.out.toMemPort()
+  memport.resp.bits.data := DontCare
+  memport.resp.valid := DontCare
+  memport.req.ready := DontCare
 
   val mem = if (HasL2cache) {
     val l2cacheOut = Wire(new SimpleBusC)
@@ -68,7 +72,9 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
     xbar.io.out
   }
 
-  val memAddrMap = Module(new SimpleBusAddressMapper((28, 0x10000000L)))
+  val memMapRegionBits = Settings.getInt("MemMapRegionBits")
+  val memMapBase = Settings.getLong("MemMapBase")
+  val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))
   memAddrMap.io.in <> mem
   io.mem <> memAddrMap.io.out.toAXI4()
   
@@ -77,39 +83,28 @@ class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   noop.io.imem.coh.req.bits := DontCare
 
   val addrSpace = List(
-    (0x40000000L, 0x08000000L), // external devices
-    (0x48000000L, 0x00010000L), // CLINT
-    (0x4c000000L, 0x04000000L), // PLIC
-    (0x49000000L, 0x00001000L)  // SLCR for pynq
+    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices
+    (0x38000000L, 0x00010000L), // CLINT
+    (0x3c000000L, 0x04000000L)  // PLIC
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> noop.io.mmio
 
   val extDev = mmioXbar.io.out(0)
-  if (p.FPGAPlatform) {
-    val mmioAddrMap = Module(new SimpleBusAddressMapper((24, 0xe0000000L)))
-    mmioAddrMap.io.in <> extDev
-    io.mmio <> mmioAddrMap.io.out.toAXI4()
-
-    val slcrAddrMap = Module(new SimpleBusAddressMapper((16, 0xf8000000L)))
-    slcrAddrMap.io.in <> mmioXbar.io.out(3)
-    io.slcr <> slcrAddrMap.io.out.toAXI4()
-  }
-  else {
-    io.mmio <> extDev
-    mmioXbar.io.out(3) := DontCare
-  }
+  if (p.FPGAPlatform) { io.mmio <> extDev.toAXI4() }
+  else { io.mmio <> extDev }
 
   val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
   val mtipSync = clint.io.extra.get.mtip
   BoringUtils.addSource(mtipSync, "mtip")
 
-  val plic = Module(new AXI4PLIC(nrIntr = NRExtIntr, nrHart = 1))
+  val plic = Module(new AXI4PLIC(nrIntr = Settings.getInt("NrExtIntr"), nrHart = 1))
   plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()
   plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
   val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
+  
 
   // ILA
   if (p.FPGAPlatform) {

@@ -30,19 +30,21 @@ class Emulator {
   static const struct option long_options[];
   static void print_help(const char *file);
 
-  void read_emu_regs(uint64_t *r) {
+  void read_emu_regs(rtlreg_t *r) {
 #define macro(x) r[x] = dut_ptr->io_difftest_r_##x
     macro(0); macro(1); macro(2); macro(3); macro(4); macro(5); macro(6); macro(7);
     macro(8); macro(9); macro(10); macro(11); macro(12); macro(13); macro(14); macro(15);
     macro(16); macro(17); macro(18); macro(19); macro(20); macro(21); macro(22); macro(23);
     macro(24); macro(25); macro(26); macro(27); macro(28); macro(29); macro(30); macro(31);
     r[DIFFTEST_THIS_PC] = dut_ptr->io_difftest_thisPC;
+#ifndef __RV32__
     r[DIFFTEST_MSTATUS] = dut_ptr->io_difftest_mstatus;
     r[DIFFTEST_SSTATUS] = dut_ptr->io_difftest_sstatus;
     r[DIFFTEST_MEPC   ] = dut_ptr->io_difftest_mepc;
     r[DIFFTEST_SEPC   ] = dut_ptr->io_difftest_sepc;
     r[DIFFTEST_MCAUSE ] = dut_ptr->io_difftest_mcause;
     r[DIFFTEST_SCAUSE ] = dut_ptr->io_difftest_scause;
+#endif
   }
 
   public:
@@ -132,23 +134,24 @@ class Emulator {
 
       if (!hascommit && dut_ptr->io_difftest_thisPC == 0x80000000u) {
         hascommit = 1;
-        extern void init_difftest(uint64_t *reg);
-        uint64_t reg[DIFFTEST_NR_REG];
+        extern void init_difftest(rtlreg_t *reg);
+        rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
         init_difftest(reg);
       }
 
       // difftest
       if (dut_ptr->io_difftest_commit && hascommit) {
-        uint64_t reg[DIFFTEST_NR_REG];
+        rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
 
-        extern int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
-          int isMMIO, int isRVC, uint64_t intrNO, int priviledgeMode);
+        extern int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
+          int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, int isMultiCommit);
         if (dut_ptr->io_difftestCtrl_enable) {
           if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
-                dut_ptr->io_difftest_isMMIO, dut_ptr->io_difftest_isRVC,
-                dut_ptr->io_difftest_intrNO, dut_ptr->io_difftest_priviledgeMode)) {
+              dut_ptr->io_difftest_isMMIO, dut_ptr->io_difftest_isRVC, dut_ptr->io_difftest_isRVC2,
+              dut_ptr->io_difftest_intrNO, dut_ptr->io_difftest_priviledgeMode, 
+              dut_ptr->io_difftest_isMultiCommit)) {
 #if VM_TRACE
             tfp->close();
 #endif
