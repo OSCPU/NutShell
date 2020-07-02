@@ -4,6 +4,7 @@ import noop.NOOPConfig
 import system.NOOPSoC
 import device.{AXI4Timer, AXI4VGA, AXI4Flash}
 import gpu._
+import sim.NOOPSimTop
 
 import chisel3._
 
