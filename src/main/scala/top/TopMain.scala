@@ -39,11 +39,11 @@ object TopMain extends App {
   
   val s = (board match {
     case "sim"    => Nil
-    case "pynq"   => BoardRelatedSettings.pynq
-    case "axu3cg" => BoardRelatedSettings.axu3cg
+    case "pynq"   => PynqSettings()
+    case "axu3cg" => Axu3cgSettings()
   } ) ++ ( core match {
-    case "seq"  => CoreRelatedSettings.seqCore
-    case "ooo"  => CoreRelatedSettings.oooCore
+    case "seq"  => InOrderSettings()
+    case "ooo"  => OOOSettings()
   } )
   s.map{Settings.settings += _} // add and overwrite DefaultSettings
   println("====== Settings = (" + board + ", " +  core + ") ======")

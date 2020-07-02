@@ -1,7 +1,7 @@
 package top
 
 object DefaultSettings {
-  val default = Map(
+  def apply() = Map(
     "MemMapBase" -> 0x0000000000000000L,
     "MemMapRegionBits" -> 0,
     "MMIOBase" -> 0x0000000040000000L,
@@ -26,24 +26,33 @@ object DefaultSettings {
   )
 }
 
-object BoardRelatedSettings {
-  val pynq = Map(
+object PynqSettings {
+  def apply() = Map(
     "MemMapBase" -> 0x0000000010000000L,
     "MemMapRegionBits" -> 28,
     "MMIOBase" -> 0x00000000e0000000L,
     "MMIOSize" -> 0x0000000020000000L
   )
-  val axu3cg = Map()
 }
 
-object CoreRelatedSettings {
-  val oooCore = Map(
+object Axu3cgSettings {
+  def apply() = Map()
+}
+
+object OOOSettings {
+  def apply() = Map(
     "EnableMultiIssue" -> true,
     "EnableSuperScalarExec" -> true,
     "EnableOutOfOrderExec" -> true
   )
-  val seqCore = Map()
-  val smallCore = Map(
+}
+
+object InOrderSettings {
+  def apply() = Map()
+}
+
+object EmbededSettings {
+  def apply() = Map(
     "HasL2cache" -> false,
     "HasPrefetch" -> false,
     "HasDTLB" -> false,
@@ -56,7 +65,7 @@ object CoreRelatedSettings {
 }
 
 object Settings {
-  var settings: Map[String, AnyVal] = DefaultSettings.default
+  var settings: Map[String, AnyVal] = DefaultSettings()
   def get(field: String) = {
     settings(field).asInstanceOf[Boolean]
   }
