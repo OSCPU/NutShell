@@ -316,7 +316,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
 
-  if (Settings.HasDTLB) {
+  if (Settings.get("HasDTLB")) {
     BoringUtils.addSource(satp, "CSRSATP")
   }
 
@@ -532,7 +532,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   }
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
-    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(NVAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(NVAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
+    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(VAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(VAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
     when(priviledgeMode === ModeM){
       mtval := tval
     }.otherwise{
@@ -649,7 +649,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in noop-riscv64, no exception will come together with PF
 
   ret := isMret || isSret || isUret
-  trapTarget := Mux(delegS, stvec, mtvec)(NVAddrBits-1, 0)
+  trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
   retTarget := DontCare
   // TODO redirect target
   // val illegalEret = TODO
@@ -664,7 +664,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     mstatusNew.mpp := ModeU
     mstatus := mstatusNew.asUInt
     lr := false.B
-    retTarget := mepc(NVAddrBits-1, 0)
+    retTarget := mepc(VAddrBits-1, 0)
   }
 
   when (valid && isSret) {
@@ -677,7 +677,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     mstatusNew.spp := ModeU
     mstatus := mstatusNew.asUInt
     lr := false.B
-    retTarget := sepc(NVAddrBits-1, 0)
+    retTarget := sepc(VAddrBits-1, 0)
   }
 
   when (valid && isUret) {
@@ -688,7 +688,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     priviledgeMode := ModeU
     mstatusNew.pie.u := true.B
     mstatus := mstatusNew.asUInt
-    retTarget := uepc(NVAddrBits-1, 0)
+    retTarget := uepc(VAddrBits-1, 0)
   }
 
   when (raiseExceptionIntr) {

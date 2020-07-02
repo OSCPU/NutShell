@@ -1,4 +1,4 @@
-package top
+package sim
 
 import system._
 import noop.NOOPConfig
@@ -72,8 +72,4 @@ class NOOPSimTop extends Module {
   BoringUtils.addSink(difftest.scause, "difftestScause")
   io.difftest := difftest
   io.difftestCtrl <> mmio.io.difftestCtrl
-}
-
-object TestMain extends App {
-  chisel3.Driver.execute(args, () => new NOOPSimTop)
 }

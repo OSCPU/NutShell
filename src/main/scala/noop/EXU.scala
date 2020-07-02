@@ -56,7 +56,7 @@ class EXU(implicit val p: NOOPConfig) extends NOOPModule {
   val mduOut = mdu.access(valid = fuValids(FuType.mdu), src1 = src1, src2 = src2, func = fuOpType)
   mdu.io.out.ready := true.B
 
-  // val csr = if (Settings.MmodeOnly) Module(new CSR_M) else Module(new CSR)
+  // val csr = if (Settings.get("MmodeOnly")) Module(new CSR_M) else Module(new CSR)
   val csr = Module(new CSR)
   val csrOut = csr.access(valid = fuValids(FuType.csr), src1 = src1, src2 = src2, func = fuOpType)
   csr.io.cfIn := io.in.bits(0).cf

@@ -10,35 +10,33 @@ import utils._
 import top.Settings
 
 trait HasNOOPParameter {
-  //val XLEN = 64
-  val XLEN = if (Settings.IsRV32) 32 else 64
+  val XLEN = if (Settings.get("IsRV32")) 32 else 64
   val HasMExtension = true
   val HasCExtension = true
   val HasDiv = true
-  val HasIcache = Settings.HasIcache
-  val HasDcache = Settings.HasDcache
-  val HasITLB = Settings.HasITLB
-  val HasDTLB = Settings.HasDTLB
+  val HasIcache = Settings.get("HasIcache")
+  val HasDcache = Settings.get("HasDcache")
+  val HasITLB = Settings.get("HasITLB")
+  val HasDTLB = Settings.get("HasDTLB")
   val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
-  val VAddrBits = Settings.VAddrBits // VAddrBits is Virtual Memory addr bits
-  val NVAddrBits = if (Settings.IsRV32) 32 else Settings.VAddrBits
+  val VAddrBits = if (Settings.get("IsRV32")) 32 else 39 // VAddrBits is Virtual Memory addr bits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN
   val DataBytes = DataBits / 8
   val EnableMultiCyclePredictor = false
-  val EnableMultiIssue = Settings.EnableMultiIssue
-  val EnableSuperScalarExec = Settings.EnableSuperScalarExec
-  val EnableOutOfOrderExec = Settings.EnableOutOfOrderExec
-  val EnableVirtualMemory = if (Settings.HasDTLB && Settings.HasITLB) true else false
+  val EnableMultiIssue = Settings.get("EnableMultiIssue")
+  val EnableSuperScalarExec = Settings.get("EnableSuperScalarExec")
+  val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
+  val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
 }
 
-trait HasNOOPConst {
+trait HasNOOPConst extends HasNOOPParameter {
   val CacheReadWidth = 8
-  val ICacheUserBundleWidth = Settings.VAddrBits*2 + 9 // TODO: this const depends on VAddrBits
+  val ICacheUserBundleWidth = VAddrBits*2 + 9 // TODO: this const depends on VAddrBits
   val DCacheUserBundleWidth = 16
-  val IndependentBru = if (Settings.EnableOutOfOrderExec) true else false
+  val IndependentBru = if (Settings.get("EnableOutOfOrderExec")) true else false
 }
 
 abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO with HasBackendConst
@@ -46,16 +44,22 @@ abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst
 
 case class NOOPConfig (
   FPGAPlatform: Boolean = true,
-  EnableDebug: Boolean = Settings.EnableDebug
+  EnableDebug: Boolean = Settings.get("EnableDebug")
 )
 
-object AddressSpace {
+object AddressSpace extends HasNOOPParameter {
   // (start, size)
-  def mmio = List((0x0000000040000000L, 0x0000000010000000L))
-  def dram = (0x0000000080000000L, 0x0000000010000000L)
+  // address out of MMIO will be considered as DRAM
+  def mmio = List(
+    (0x30000000L, 0x10000000L),  // internal devices, such as CLINT and PLIC
+    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")) // external devices
+  )
 
-  //def isMMIO(addr: UInt) = mmio.map(range => ((addr & ~((range._2 - 1).U(32.W))) === range._1.U)).reduce(_ || _)
-  def isMMIO(addr: UInt) = addr(31,28) === "h4".U
+  def isMMIO(addr: UInt) = mmio.map(range => {
+    require(isPow2(range._2))
+    val bits = log2Up(range._2)
+    (addr ^ range._1.U)(PAddrBits-1, bits) === 0.U
+  }).reduce(_ || _)
 }
 
 class NOOP(implicit val p: NOOPConfig) extends NOOPModule {

@@ -4,6 +4,7 @@ import noop.NOOPConfig
 import system.NOOPSoC
 import device.{AXI4Timer, AXI4VGA, AXI4Flash}
 import gpu._
+import sim.NOOPSimTop
 
 import chisel3._
 
@@ -28,5 +29,31 @@ class Top extends Module {
 }
 
 object TopMain extends App {
-  Driver.execute(args, () => new Top)
+  def parseArgs(info: String, args: Array[String]): String = {
+    var target = ""
+    for (arg <- args) { if (arg.startsWith(info + "=") == true) { target = arg } }
+    require(target != "")
+    target.substring(info.length()+1)
+  }
+  val board = parseArgs("BOARD", args)
+  val core = parseArgs("CORE", args)
+  
+  val s = (board match {
+    case "sim"    => Nil
+    case "pynq"   => PynqSettings()
+    case "axu3cg" => Axu3cgSettings()
+  } ) ++ ( core match {
+    case "seq"  => InOrderSettings()
+    case "ooo"  => OOOSettings()
+    case "small"=> EmbededSettings()
+  } )
+  s.map{Settings.settings += _} // add and overwrite DefaultSettings
+  println("====== Settings = (" + board + ", " +  core + ") ======")
+  Settings.settings.toList.sortBy(_._1)(Ordering.String).map(s => println(s._1 + " = " + s._2))
+
+  if (board == "sim") {
+    Driver.execute(args, () => new NOOPSimTop)
+  } else {
+    Driver.execute(args, () => new Top)
+  }
 }

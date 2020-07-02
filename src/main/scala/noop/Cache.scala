@@ -584,9 +584,9 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val s_idle :: s_memReq :: s_memResp :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(6)
   val state = RegInit(s_idle)
 
-  val ismmio = if (Settings.HasMMIO) AddressSpace.isMMIO(io.in.req.bits.addr) else false.B
+  val ismmio = AddressSpace.isMMIO(io.in.req.bits.addr)
   val ismmioRec = RegEnable(ismmio, io.in.req.fire())
-  if (cacheConfig.name == "dcache" && Settings.HasMMIO) {
+  if (cacheConfig.name == "dcache") {
     BoringUtils.addSource(ismmio, "lsuMMIO")
   }
 
@@ -681,9 +681,9 @@ class Cache_fake_joint(implicit val cacheConfig: CacheConfig) extends CacheModul
   val s_idle :: s_memReq :: s_memResp :: s_memReq2 :: s_memResp2 :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(8)
   val state = RegInit(s_idle)
 
-  val ismmio = if (Settings.HasMMIO) AddressSpace.isMMIO(io.in.req.bits.addr) else false.B
+  val ismmio = AddressSpace.isMMIO(io.in.req.bits.addr)
   val ismmioRec = RegEnable(ismmio, io.in.req.fire())
-  if (cacheConfig.name == "dcache" && Settings.HasMMIO) {
+  if (cacheConfig.name == "dcache") {
     BoringUtils.addSource(ismmio, "lsuMMIO")
   }
 
@@ -794,7 +794,7 @@ class Cache_fake_joint(implicit val cacheConfig: CacheConfig) extends CacheModul
 object Cache {
   def apply(in: SimpleBusUC, mmio: Seq[SimpleBusUC], flush: UInt, empty: Bool, enable: Boolean = true)(implicit cacheConfig: CacheConfig) = {
     val cache = if (enable) Module(new Cache) 
-                else (if (Settings.IsRV32) 
+                else (if (Settings.get("IsRV32")) 
                         (if (cacheConfig.name == "dcache") Module(new Cache_fake) else Module(new Cache_fake_joint)) 
                       else 
                         (Module(new Cache_fake)))
