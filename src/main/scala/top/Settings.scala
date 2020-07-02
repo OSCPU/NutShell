@@ -1,65 +1,52 @@
 package top
 
-object CommonSetting {
-  var common = Map(
+object DefaultSettings {
+  val default = Map(
+    "MemMapBase" -> 0x0000000000000000L,
+    "MemMapRegionBits" -> 0,
+    "MMIOBase" -> 0x0000000040000000L,
+    "MMIOSize" -> 0x0000000020000000L,
+    "ResetVector" -> 0x80000000L,
+    "NrExtIntr" -> 1,
+
+    "HasL2cache" -> true,
+    "HasPrefetch" -> true,
+    "EnableMultiIssue" -> false,
+    "EnableSuperScalarExec" -> false,
+    "EnableOutOfOrderExec" -> false,
+    "HasDTLB" -> true,
+    "HasITLB" -> true,
+    "HasDcache" -> true,
+    "HasIcache" -> true,
+    "MmodeOnly" -> false,
+    "IsRV32" -> false,
+
     "HasMMIO" -> true,
     "EnableILA" -> true,
     "EnableDebug" -> false
   )
 }
 
-object BoardRelatedSetting {
-  var pynq = Map(
+object BoardRelatedSettings {
+  val pynq = Map(
     "MemMapBase" -> 0x0000000010000000L,
     "MemMapRegionBits" -> 28,
-    "MMIOBase" -> 0x0000000040000000L,
-    "MMIOSize" -> 0x0000000010000000L,
-    "ResetVector" -> 0x80000000L,
-    "NrExtIntr" -> 1
-  )
-  var axu3cg = Map(
-    "MemMapBase" -> 0x0000000000000000L,
-    "MemMapRegionBits" -> 0,
     "MMIOBase" -> 0x00000000e0000000L,
-    "MMIOSize" -> 0x0000000020000000L,
-    "ResetVector" -> 0x80000000L,
-    "NrExtIntr" -> 1
+    "MMIOSize" -> 0x0000000020000000L
   )
+  val axu3cg = Map()
 }
 
-object CoreRelatedSetting {
-  var oooCore = Map(
-    "HasL2cache" -> true,
-    "HasPrefetch" -> true,
+object CoreRelatedSettings {
+  val oooCore = Map(
     "EnableMultiIssue" -> true,
     "EnableSuperScalarExec" -> true,
-    "EnableOutOfOrderExec" -> true,
-    "HasDTLB" -> true,
-    "HasITLB" -> true,
-    "HasDcache" -> true,
-    "HasIcache" -> true,
-    "MmodeOnly" -> false,
-    "IsRV32" -> false
+    "EnableOutOfOrderExec" -> true
   )
-  var seqCore = Map(
-    "HasL2cache" -> true,
-    "HasPrefetch" -> true,
-    "EnableMultiIssue" -> false,
-    "EnableSuperScalarExec" -> false,
-    "EnableOutOfOrderExec" -> false,
-    "HasDTLB" -> true,
-    "HasITLB" -> true,
-    "HasDcache" -> true,
-    "HasIcache" -> true,
-    "MmodeOnly" -> false,
-    "IsRV32" -> false
-  )
-  var smallCore = Map(
+  val seqCore = Map()
+  val smallCore = Map(
     "HasL2cache" -> false,
     "HasPrefetch" -> false,
-    "EnableMultiIssue" -> false,
-    "EnableSuperScalarExec" -> false,
-    "EnableOutOfOrderExec" -> false,
     "HasDTLB" -> false,
     "HasITLB" -> false,
     "HasDcache" -> false,
@@ -70,7 +57,7 @@ object CoreRelatedSetting {
 }
 
 object Settings {
-  var settings: Map[String, AnyVal] = Map()
+  var settings: Map[String, AnyVal] = DefaultSettings.default
   def get(field: String) = {
     settings(field).asInstanceOf[Boolean]
   }

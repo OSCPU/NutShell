@@ -37,14 +37,17 @@ object TopMain extends App {
   val board = parseArgs("BOARD", args)
   val core = parseArgs("CORE", args)
   
-  Settings.settings = (board, core) match {
-    case ("sim", "seq")    => (CommonSetting.common ++ CoreRelatedSetting.seqCore ++ BoardRelatedSetting.pynq)
-    case ("sim", "ooo")    => (CommonSetting.common ++ CoreRelatedSetting.oooCore ++ BoardRelatedSetting.pynq)
-    case ("pynq", "seq")   => (CommonSetting.common ++ CoreRelatedSetting.seqCore ++ BoardRelatedSetting.pynq)
-    case ("pynq", "ooo")   => (CommonSetting.common ++ CoreRelatedSetting.oooCore ++ BoardRelatedSetting.pynq)
-    case ("axu3cg", "seq") => (CommonSetting.common ++ CoreRelatedSetting.seqCore ++ BoardRelatedSetting.axu3cg)
-    case ("axu3cg", "ooo") => (CommonSetting.common ++ CoreRelatedSetting.oooCore ++ BoardRelatedSetting.axu3cg)
-  }
+  val s = (board match {
+    case "sim"    => Nil
+    case "pynq"   => BoardRelatedSettings.pynq
+    case "axu3cg" => BoardRelatedSettings.axu3cg
+  } ) ++ ( core match {
+    case "seq"  => CoreRelatedSettings.seqCore
+    case "ooo"  => CoreRelatedSettings.oooCore
+  } )
+  s.map{Settings.settings += _} // add and overwrite DefaultSettings
+  println("====== Settings = (" + board + ", " +  core + ") ======")
+  Settings.settings.toList.sortBy(_._1)(Ordering.String).map(s => println(s._1 + " = " + s._2))
 
   if (board == "sim") {
     Driver.execute(args, () => new NOOPSimTop)
