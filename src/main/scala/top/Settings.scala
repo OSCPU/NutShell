@@ -21,7 +21,6 @@ object DefaultSettings {
     "MmodeOnly" -> false,
     "IsRV32" -> false,
 
-    "HasMMIO" -> true,
     "EnableILA" -> true,
     "EnableDebug" -> false
   )
