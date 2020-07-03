@@ -59,7 +59,7 @@ if {${standalone} == "true"} {
   set topmodule system_top_wrapper
 } else {
   add_bd ${fpga_dir}/nutshell.tcl
-  add_bd ${bd_dir}/prm.tcl
+  add_bd ${bd_dir}/arm.tcl
   set topmodule system_top
 }
 
