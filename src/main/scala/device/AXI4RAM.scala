@@ -4,11 +4,11 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.loadMemoryFromFile
 
-import noop.HasNOOPParameter
+import nutshell.HasNutShellParameter
 import bus.axi4._
 import utils._
 
-class RAMHelper(memByte: Int) extends BlackBox with HasNOOPParameter {
+class RAMHelper(memByte: Int) extends BlackBox with HasNutShellParameter {
   val io = IO(new Bundle {
     val clk = Input(Clock())
     val rIdx = Input(UInt(DataBits.W))
@@ -21,7 +21,7 @@ class RAMHelper(memByte: Int) extends BlackBox with HasNOOPParameter {
 }
 
 class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Int,
-  useBlackBox: Boolean = false) extends AXI4SlaveModule(_type) with HasNOOPParameter {
+  useBlackBox: Boolean = false) extends AXI4SlaveModule(_type) with HasNutShellParameter {
 
   val offsetBits = log2Up(memByte)
   val offsetMask = (1 << offsetBits) - 1

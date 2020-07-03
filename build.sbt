@@ -26,7 +26,7 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
   }
 }
 
-name := "noop"
+name := "nutshell"
 
 version := "3.1.1"
 

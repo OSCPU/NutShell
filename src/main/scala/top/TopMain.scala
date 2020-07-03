@@ -1,27 +1,27 @@
 package top
 
-import noop.NOOPConfig
-import system.NOOPSoC
+import nutshell.NutShellConfig
+import system.NutShellSoC
 import device.{AXI4Timer, AXI4VGA, AXI4Flash}
 import gpu._
-import sim.NOOPSimTop
+import sim.NutShellSimTop
 
 import chisel3._
 
 class Top extends Module {
   val io = IO(new Bundle{})
-  val noop = Module(new NOOPSoC()(NOOPConfig()))
+  val nutshell = Module(new NutShellSoC()(NutShellConfig()))
   val timer = Module(new AXI4Timer)
   val vga = Module(new AXI4VGA)
   val flash = Module(new AXI4Flash)
 //  val gpu = Module(new AXI4GPU)
 
-  noop.io := DontCare
+  nutshell.io := DontCare
   timer.io := DontCare
   vga.io := DontCare
   flash.io := DontCare
 //  gpu.io := DontCare
-  dontTouch(noop.io)
+  dontTouch(nutshell.io)
   dontTouch(timer.io)
   dontTouch(vga.io)
   dontTouch(flash.io)
@@ -53,7 +53,7 @@ object TopMain extends App {
   Settings.settings.toList.sortBy(_._1)(Ordering.String).map(s => println(s._1 + " = " + s._2))
 
   if (board == "sim") {
-    Driver.execute(args, () => new NOOPSimTop)
+    Driver.execute(args, () => new NutShellSimTop)
   } else {
     Driver.execute(args, () => new Top)
   }
