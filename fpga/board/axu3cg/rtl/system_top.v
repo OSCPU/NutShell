@@ -1,6 +1,6 @@
 `include "axi.vh"
 
-//`define HAS_HDMI
+`define HAS_HDMI
 
 module system_top (
 `ifdef HAS_HDMI
@@ -23,9 +23,8 @@ module system_top (
 
   wire coreclk;
   wire corerstn;
-  wire clk50;
+  wire clk40;
   wire clk27;
-  wire rstn50;
   wire uncoreclk;
   wire uncorerstn;
 
@@ -39,6 +38,15 @@ module system_top (
     `axi_connect_if(AXI_DMA, AXI_DMA),
 
     .intrs(intrs),
+
+`ifdef HAS_HDMI
+    .vga_rgb(hdmi_rgb),
+    .vga_hsync(hdmi_hsync),
+    .vga_vsync(hdmi_vsync),
+    .vga_valid(hdmi_videovalid),
+    .clk27(clk27),
+    .clk40(clk40),
+`endif
 
     .coreclk(coreclk),
     .corerstn(corerstn),
@@ -69,13 +77,6 @@ module system_top (
 
     .intrs(intrs),
 
-`ifdef HAS_HDMI
-    .VGA_rgb(hdmi_rgb),
-    .VGA_hsync(hdmi_hsync),
-    .VGA_vsync(hdmi_vsync),
-    .VGA_videovalid(hdmi_videovalid),
-`endif
-
     .coreclk(coreclk),
     .corerstn(corerstn_sync[1]),
     .uncoreclk(uncoreclk),
@@ -91,7 +92,7 @@ module system_top (
   );
 
   assign hdmi_nreset = uncorerstn;
-  assign hdmi_clk = clk50;
+  assign hdmi_clk = clk40;
 `endif
 
 endmodule

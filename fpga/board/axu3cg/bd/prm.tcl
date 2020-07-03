@@ -37,6 +37,13 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 # To test this script, run the following commands from Vivado Tcl console:
 # source zynq_soc_script.tcl
 
+
+# The design that will be created by this Tcl script contains the following 
+# module references:
+# AXI4VGA
+
+# Please add the sources of those modules before sourcing this Tcl script.
+
 # If there is no project opened, this script will create a
 # project, but make sure you do not have an existing project
 # <./myproj/project_1.xpr> in the current working folder.
@@ -125,8 +132,8 @@ if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
 xilinx.com:ip:xlconcat:2.1\
 xilinx.com:ip:zynq_ultra_ps_e:3.3\
-xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:proc_sys_reset:5.0\
+xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:axi_dma:7.1\
 xilinx.com:ip:axi_uartlite:2.0\
 xilinx.com:ip:axi_gpio:2.0\
@@ -147,6 +154,31 @@ xilinx.com:ip:axi_gpio:2.0\
       set bCheckIPsPassed 0
    }
 
+}
+
+##################################################################
+# CHECK Modules
+##################################################################
+set bCheckModules 1
+if { $bCheckModules == 1 } {
+   set list_check_mods "\ 
+AXI4VGA\
+"
+
+   set list_mods_missing ""
+   common::send_msg_id "BD_TCL-006" "INFO" "Checking if the following modules exist in the project's sources: $list_check_mods ."
+
+   foreach mod_vlnv $list_check_mods {
+      if { [can_resolve_reference $mod_vlnv] == 0 } {
+         lappend list_mods_missing $mod_vlnv
+      }
+   }
+
+   if { $list_mods_missing ne "" } {
+      catch {common::send_msg_id "BD_TCL-115" "ERROR" "The following module(s) are not found in the project: $list_mods_missing" }
+      common::send_msg_id "BD_TCL-008" "INFO" "Please add source files for the missing module(s) above."
+      set bCheckIPsPassed 0
+   }
 }
 
 if { $bCheckIPsPassed != 1 } {
@@ -326,12 +358,30 @@ proc create_hier_cell_hier_pardcore_peripheral { parentCell nameHier } {
 
   # Create pins
   create_bd_pin -dir I -type rst ARESETN
+  create_bd_pin -dir I -from 0 -to 0 -type rst M03_ARESETN
+  create_bd_pin -dir I -type clk clock
   create_bd_pin -dir O -from 4 -to 0 intrs
+  create_bd_pin -dir O io_vga_vsync
+  create_bd_pin -dir I -from 0 -to 0 -type rst reset
   create_bd_pin -dir I rx
   create_bd_pin -dir O tx
   create_bd_pin -dir I -type clk uncoreclk
   create_bd_pin -dir I -type rst uncorerstn
+  create_bd_pin -dir O vga_hsync
+  create_bd_pin -dir O -from 23 -to 0 vga_rgb
+  create_bd_pin -dir O vga_valid
 
+  # Create instance: AXI4VGA_0, and set properties
+  set block_name AXI4VGA
+  set block_cell_name AXI4VGA_0
+  if { [catch {set AXI4VGA_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_msg_id "BD_TCL-105" "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $AXI4VGA_0 eq "" } {
+     catch {common::send_msg_id "BD_TCL-106" "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
   # Create instance: axi_dma_pardcore, and set properties
   set axi_dma_pardcore [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_dma:7.1 axi_dma_pardcore ]
   set_property -dict [ list \
@@ -352,7 +402,7 @@ proc create_hier_cell_hier_pardcore_peripheral { parentCell nameHier } {
   # Create instance: axi_interconnect_pardcore_mmio, and set properties
   set axi_interconnect_pardcore_mmio [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_pardcore_mmio ]
   set_property -dict [ list \
-   CONFIG.NUM_MI {2} \
+   CONFIG.NUM_MI {4} \
  ] $axi_interconnect_pardcore_mmio
 
   # Create instance: axi_uartlite_0, and set properties
@@ -377,14 +427,23 @@ proc create_hier_cell_hier_pardcore_peripheral { parentCell nameHier } {
   connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_pins M_AXI_DMA] [get_bd_intf_pins axi_interconnect_pardcore_dma/M00_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M00_AXI [get_bd_intf_pins axi_interconnect_pardcore_mmio/M00_AXI] [get_bd_intf_pins axi_uartlite_0/S_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M01_AXI [get_bd_intf_pins axi_dma_pardcore/S_AXI_LITE] [get_bd_intf_pins axi_interconnect_pardcore_mmio/M01_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M02_AXI [get_bd_intf_pins AXI4VGA_0/io_in_ctrl] [get_bd_intf_pins axi_interconnect_pardcore_mmio/M02_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M03_AXI [get_bd_intf_pins AXI4VGA_0/io_in_fb] [get_bd_intf_pins axi_interconnect_pardcore_mmio/M03_AXI]
 
   # Create port connections
+  connect_bd_net -net AXI4VGA_0_io_vga_hsync [get_bd_pins vga_hsync] [get_bd_pins AXI4VGA_0/io_vga_hsync]
+  connect_bd_net -net AXI4VGA_0_io_vga_rgb [get_bd_pins vga_rgb] [get_bd_pins AXI4VGA_0/io_vga_rgb]
+  connect_bd_net -net AXI4VGA_0_io_vga_valid [get_bd_pins vga_valid] [get_bd_pins AXI4VGA_0/io_vga_valid]
+  connect_bd_net -net AXI4VGA_0_io_vga_vsync [get_bd_pins io_vga_vsync] [get_bd_pins AXI4VGA_0/io_vga_vsync]
+  connect_bd_net -net M03_ARESETN_1 [get_bd_pins M03_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M02_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M03_ARESETN]
   connect_bd_net -net axi_dma_pardcore_mm2s_introut [get_bd_pins axi_dma_pardcore/mm2s_introut] [get_bd_pins xlconcat_0/In0]
   connect_bd_net -net axi_dma_pardcore_s2mm_introut [get_bd_pins axi_dma_pardcore/s2mm_introut] [get_bd_pins xlconcat_0/In1]
   connect_bd_net -net axi_resetn_1 [get_bd_pins uncorerstn] [get_bd_pins axi_dma_pardcore/axi_resetn] [get_bd_pins axi_uartlite_0/s_axi_aresetn]
   connect_bd_net -net axi_uartlite_0_tx [get_bd_pins tx] [get_bd_pins axi_uartlite_0/tx]
   connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins uncoreclk] [get_bd_pins axi_dma_pardcore/m_axi_mm2s_aclk] [get_bd_pins axi_dma_pardcore/m_axi_s2mm_aclk] [get_bd_pins axi_dma_pardcore/m_axi_sg_aclk] [get_bd_pins axi_dma_pardcore/s_axi_lite_aclk] [get_bd_pins axi_interconnect_pardcore_dma/ACLK] [get_bd_pins axi_interconnect_pardcore_dma/M00_ACLK] [get_bd_pins axi_interconnect_pardcore_dma/S00_ACLK] [get_bd_pins axi_interconnect_pardcore_dma/S01_ACLK] [get_bd_pins axi_interconnect_pardcore_dma/S02_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/M00_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/M01_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/S00_ACLK] [get_bd_pins axi_uartlite_0/s_axi_aclk]
+  connect_bd_net -net clock_1 [get_bd_pins clock] [get_bd_pins AXI4VGA_0/clock] [get_bd_pins axi_interconnect_pardcore_mmio/M02_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/M03_ACLK]
   connect_bd_net -net pardcore_uncorerst_interconnect_aresetn [get_bd_pins ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/M00_ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/S00_ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/S01_ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/S02_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M00_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M01_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/S00_ARESETN]
+  connect_bd_net -net reset_1 [get_bd_pins reset] [get_bd_pins AXI4VGA_0/reset]
   connect_bd_net -net rx_1 [get_bd_pins rx] [get_bd_pins axi_uartlite_0/rx]
   connect_bd_net -net xlconcat_0_dout [get_bd_pins intrs] [get_bd_pins xlconcat_0/dout]
 
@@ -429,39 +488,54 @@ proc create_hier_cell_hier_clkrst { parentCell nameHier } {
   # Create interface pins
 
   # Create pins
+  create_bd_pin -dir O -type clk clk27
+  create_bd_pin -dir O -type clk clk40
   create_bd_pin -dir I -type clk clk_in1
   create_bd_pin -dir O -type clk coreclk
   create_bd_pin -dir O -from 0 -to 0 -type rst interconnect_aresetn
+  create_bd_pin -dir O -from 0 -to 0 -type rst interconnect_aresetn1
   create_bd_pin -dir O locked
+  create_bd_pin -dir O -from 0 -to 0 -type rst peripheral_aresetn
+  create_bd_pin -dir O -from 0 -to 0 -type rst peripheral_reset
   create_bd_pin -dir I -type rst resetn
   create_bd_pin -dir O -type clk uncoreclk
   create_bd_pin -dir O -from 0 -to 0 -type rst uncorerstn
+
+  # Create instance: clk50rst, and set properties
+  set clk50rst [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 clk50rst ]
 
   # Create instance: clk_wiz_0, and set properties
   set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
   set_property -dict [ list \
    CONFIG.CLKIN1_JITTER_PS {100.0} \
-   CONFIG.CLKOUT1_JITTER {127.297} \
-   CONFIG.CLKOUT1_PHASE_ERROR {231.840} \
+   CONFIG.CLKOUT1_JITTER {107.569} \
+   CONFIG.CLKOUT1_PHASE_ERROR {87.181} \
    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {150.000} \
-   CONFIG.CLKOUT2_JITTER {133.815} \
-   CONFIG.CLKOUT2_PHASE_ERROR {231.840} \
+   CONFIG.CLKOUT2_JITTER {115.833} \
+   CONFIG.CLKOUT2_PHASE_ERROR {87.181} \
    CONFIG.CLKOUT2_REQUESTED_OUT_FREQ {100.000} \
    CONFIG.CLKOUT2_USED {true} \
-   CONFIG.CLKOUT3_JITTER {107.579} \
-   CONFIG.CLKOUT3_PHASE_ERROR {87.187} \
-   CONFIG.CLKOUT3_REQUESTED_OUT_FREQ {100.000} \
-   CONFIG.CLKOUT3_USED {false} \
+   CONFIG.CLKOUT3_JITTER {139.035} \
+   CONFIG.CLKOUT3_PHASE_ERROR {87.181} \
+   CONFIG.CLKOUT3_REQUESTED_OUT_FREQ {40.000} \
+   CONFIG.CLKOUT3_USED {true} \
+   CONFIG.CLKOUT4_JITTER {151.083} \
+   CONFIG.CLKOUT4_PHASE_ERROR {87.181} \
+   CONFIG.CLKOUT4_REQUESTED_OUT_FREQ {27.000} \
+   CONFIG.CLKOUT4_USED {true} \
    CONFIG.CLK_OUT1_PORT {coreclk} \
    CONFIG.CLK_OUT2_PORT {uncoreclk} \
-   CONFIG.MMCM_CLKFBOUT_MULT_F {111.625} \
+   CONFIG.CLK_OUT3_PORT {clk40} \
+   CONFIG.CLK_OUT4_PORT {clk27} \
+   CONFIG.MMCM_CLKFBOUT_MULT_F {12.000} \
    CONFIG.MMCM_CLKIN1_PERIOD {10.000} \
    CONFIG.MMCM_CLKIN2_PERIOD {10.000} \
-   CONFIG.MMCM_CLKOUT0_DIVIDE_F {10.625} \
-   CONFIG.MMCM_CLKOUT1_DIVIDE {16} \
-   CONFIG.MMCM_CLKOUT2_DIVIDE {1} \
-   CONFIG.MMCM_DIVCLK_DIVIDE {7} \
-   CONFIG.NUM_OUT_CLKS {2} \
+   CONFIG.MMCM_CLKOUT0_DIVIDE_F {8.000} \
+   CONFIG.MMCM_CLKOUT1_DIVIDE {12} \
+   CONFIG.MMCM_CLKOUT2_DIVIDE {30} \
+   CONFIG.MMCM_CLKOUT3_DIVIDE {44} \
+   CONFIG.MMCM_DIVCLK_DIVIDE {1} \
+   CONFIG.NUM_OUT_CLKS {4} \
    CONFIG.RESET_PORT {resetn} \
    CONFIG.RESET_TYPE {ACTIVE_LOW} \
  ] $clk_wiz_0
@@ -470,13 +544,17 @@ proc create_hier_cell_hier_clkrst { parentCell nameHier } {
   set uncorerst [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 uncorerst ]
 
   # Create port connections
+  connect_bd_net -net clk50rst_interconnect_aresetn [get_bd_pins interconnect_aresetn1] [get_bd_pins clk50rst/interconnect_aresetn]
+  connect_bd_net -net clk50rst_peripheral_reset [get_bd_pins peripheral_reset] [get_bd_pins clk50rst/peripheral_reset]
+  connect_bd_net -net clk_wiz_0_clk27 [get_bd_pins clk27] [get_bd_pins clk_wiz_0/clk27]
+  connect_bd_net -net clk_wiz_0_clk40 [get_bd_pins clk40] [get_bd_pins clk50rst/slowest_sync_clk] [get_bd_pins clk_wiz_0/clk40]
   connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins uncoreclk] [get_bd_pins clk_wiz_0/uncoreclk] [get_bd_pins uncorerst/slowest_sync_clk]
   connect_bd_net -net clk_wiz_0_coreclk [get_bd_pins coreclk] [get_bd_pins clk_wiz_0/coreclk]
-  connect_bd_net -net clk_wiz_0_locked [get_bd_pins locked] [get_bd_pins clk_wiz_0/locked] [get_bd_pins uncorerst/dcm_locked]
+  connect_bd_net -net clk_wiz_0_locked [get_bd_pins locked] [get_bd_pins clk50rst/dcm_locked] [get_bd_pins clk_wiz_0/locked] [get_bd_pins uncorerst/dcm_locked]
   connect_bd_net -net pardcore_uncorerst_interconnect_aresetn [get_bd_pins interconnect_aresetn] [get_bd_pins uncorerst/interconnect_aresetn]
   connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_pins uncorerstn] [get_bd_pins uncorerst/peripheral_aresetn]
   connect_bd_net -net zynq_ultra_ps_e_0_pl_clk1 [get_bd_pins clk_in1] [get_bd_pins clk_wiz_0/clk_in1]
-  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins resetn] [get_bd_pins clk_wiz_0/resetn] [get_bd_pins uncorerst/ext_reset_in]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins resetn] [get_bd_pins clk50rst/ext_reset_in] [get_bd_pins clk_wiz_0/resetn] [get_bd_pins uncorerst/ext_reset_in]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -589,6 +667,8 @@ proc create_root_design { parentCell } {
 
 
   # Create ports
+  set clk27 [ create_bd_port -dir O -type clk clk27 ]
+  set clk40 [ create_bd_port -dir O -type clk clk40 ]
   set coreclk [ create_bd_port -dir O -type clk coreclk ]
   set corerstn [ create_bd_port -dir O -from 0 -to 0 corerstn ]
   set intrs [ create_bd_port -dir O -from 4 -to 0 intrs ]
@@ -597,6 +677,10 @@ proc create_root_design { parentCell } {
    CONFIG.ASSOCIATED_BUSIF {AXI_MEM:AXI_MMIO:AXI_DMA} \
  ] $uncoreclk
   set uncorerstn [ create_bd_port -dir O -from 0 -to 0 -type rst uncorerstn ]
+  set vga_hsync [ create_bd_port -dir O vga_hsync ]
+  set vga_rgb [ create_bd_port -dir O -from 23 -to 0 vga_rgb ]
+  set vga_valid [ create_bd_port -dir O vga_valid ]
+  set vga_vsync [ create_bd_port -dir O vga_vsync ]
 
   # Create instance: hier_clkrst
   create_hier_cell_hier_clkrst [current_bd_instance .] hier_clkrst
@@ -2169,13 +2253,21 @@ proc create_root_design { parentCell } {
   # Create port connections
   connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_ports corerstn] [get_bd_pins hier_prm_peripheral/corerstn]
   connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_ports uncoreclk] [get_bd_pins hier_clkrst/uncoreclk] [get_bd_pins hier_pardcore_peripheral/uncoreclk] [get_bd_pins hier_prm_peripheral/uncoreclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_lpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk]
+  connect_bd_net -net hier_clkrst_clk27 [get_bd_ports clk27] [get_bd_pins hier_clkrst/clk27]
+  connect_bd_net -net hier_clkrst_clk40 [get_bd_ports clk40] [get_bd_pins hier_clkrst/clk40] [get_bd_pins hier_pardcore_peripheral/clock]
   connect_bd_net -net hier_clkrst_coreclk [get_bd_ports coreclk] [get_bd_pins hier_clkrst/coreclk]
+  connect_bd_net -net hier_clkrst_interconnect_aresetn1 [get_bd_pins hier_clkrst/interconnect_aresetn1] [get_bd_pins hier_pardcore_peripheral/M03_ARESETN]
   connect_bd_net -net hier_dma_mm2s_introut [get_bd_pins hier_prm_peripheral/mm2s_introut] [get_bd_pins xlconcat_1/In0]
   connect_bd_net -net hier_dma_s2mm_introut [get_bd_pins hier_prm_peripheral/s2mm_introut] [get_bd_pins xlconcat_1/In1]
+  connect_bd_net -net hier_pardcore_peripheral_io_vga_vsync [get_bd_ports vga_vsync] [get_bd_pins hier_pardcore_peripheral/io_vga_vsync]
   connect_bd_net -net hier_pardcore_peripheral_pardcore_intrs [get_bd_ports intrs] [get_bd_pins hier_pardcore_peripheral/intrs]
+  connect_bd_net -net hier_pardcore_peripheral_vga_hsync [get_bd_ports vga_hsync] [get_bd_pins hier_pardcore_peripheral/vga_hsync]
+  connect_bd_net -net hier_pardcore_peripheral_vga_rgb [get_bd_ports vga_rgb] [get_bd_pins hier_pardcore_peripheral/vga_rgb]
+  connect_bd_net -net hier_pardcore_peripheral_vga_valid [get_bd_ports vga_valid] [get_bd_pins hier_pardcore_peripheral/vga_valid]
   connect_bd_net -net hier_prm_peripheral_interrupt [get_bd_pins hier_prm_peripheral/interrupt] [get_bd_pins xlconcat_1/In2]
   connect_bd_net -net pardcore_uncorerst_interconnect_aresetn [get_bd_pins hier_clkrst/interconnect_aresetn] [get_bd_pins hier_pardcore_peripheral/ARESETN] [get_bd_pins hier_prm_peripheral/S00_ARESETN]
   connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_ports uncorerstn] [get_bd_pins hier_clkrst/uncorerstn] [get_bd_pins hier_pardcore_peripheral/uncorerstn] [get_bd_pins hier_prm_peripheral/uncorerstn]
+  connect_bd_net -net reset_1 [get_bd_pins hier_clkrst/peripheral_reset] [get_bd_pins hier_pardcore_peripheral/reset]
   connect_bd_net -net rx_1 [get_bd_pins hier_pardcore_peripheral/rx] [get_bd_pins hier_prm_peripheral/tx]
   connect_bd_net -net rx_2 [get_bd_pins hier_pardcore_peripheral/tx] [get_bd_pins hier_prm_peripheral/rx]
   connect_bd_net -net xlconcat_1_dout [get_bd_pins xlconcat_1/dout] [get_bd_pins zynq_ultra_ps_e_0/pl_ps_irq0]
@@ -2192,8 +2284,10 @@ proc create_root_design { parentCell } {
   create_bd_addr_seg -range 0x80000000 -offset 0x00000000 [get_bd_addr_spaces hier_prm_peripheral/axi_dma_arm/Data_SG] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
   create_bd_addr_seg -range 0x80000000 -offset 0x00000000 [get_bd_addr_spaces hier_prm_peripheral/axi_dma_arm/Data_MM2S] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
   create_bd_addr_seg -range 0x80000000 -offset 0x00000000 [get_bd_addr_spaces hier_prm_peripheral/axi_dma_arm/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
-  create_bd_addr_seg -range 0x00010000 -offset 0x40000000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/axi_dma_pardcore/S_AXI_LITE/Reg] SEG_axi_dma_pardcore_Reg
-  create_bd_addr_seg -range 0x00010000 -offset 0x40600000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/axi_uartlite_0/S_AXI/Reg] SEG_axi_uartlite_0_Reg
+  create_bd_addr_seg -range 0x00100000 -offset 0x50000000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/AXI4VGA_0/io_in_fb/reg0] SEG_AXI4VGA_0_reg0
+  create_bd_addr_seg -range 0x00001000 -offset 0x40001000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/AXI4VGA_0/io_in_ctrl/reg0] SEG_AXI4VGA_0_reg01
+  create_bd_addr_seg -range 0x00001000 -offset 0x40000000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/axi_dma_pardcore/S_AXI_LITE/Reg] SEG_axi_dma_pardcore_Reg
+  create_bd_addr_seg -range 0x00001000 -offset 0x40600000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/axi_uartlite_0/S_AXI/Reg] SEG_axi_uartlite_0_Reg
   create_bd_addr_seg -range 0x40000000 -offset 0x40000000 [get_bd_addr_spaces AXI_MEM] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
 
 
