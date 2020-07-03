@@ -37,6 +37,13 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 # To test this script, run the following commands from Vivado Tcl console:
 # source zynq_soc_script.tcl
 
+
+# The design that will be created by this Tcl script contains the following 
+# module references:
+# AXI4VGA
+
+# Please add the sources of those modules before sourcing this Tcl script.
+
 # If there is no project opened, this script will create a
 # project, but make sure you do not have an existing project
 # <./myproj/project_1.xpr> in the current working folder.
@@ -123,14 +130,13 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
-xilinx.com:ip:axi_protocol_converter:2.1\
-xilinx.com:ip:axi_crossbar:2.1\
-xilinx.com:ip:axi_uartlite:2.0\
 xilinx.com:ip:xlconcat:2.1\
 xilinx.com:ip:zynq_ultra_ps_e:3.3\
-xilinx.com:ip:axi_gpio:2.0\
-xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:proc_sys_reset:5.0\
+xilinx.com:ip:clk_wiz:6.0\
+xilinx.com:ip:axi_dma:7.1\
+xilinx.com:ip:axi_uartlite:2.0\
+xilinx.com:ip:axi_gpio:2.0\
 "
 
    set list_ips_missing ""
@@ -150,6 +156,31 @@ xilinx.com:ip:proc_sys_reset:5.0\
 
 }
 
+##################################################################
+# CHECK Modules
+##################################################################
+set bCheckModules 1
+if { $bCheckModules == 1 } {
+   set list_check_mods "\ 
+AXI4VGA\
+"
+
+   set list_mods_missing ""
+   common::send_msg_id "BD_TCL-006" "INFO" "Checking if the following modules exist in the project's sources: $list_check_mods ."
+
+   foreach mod_vlnv $list_check_mods {
+      if { [can_resolve_reference $mod_vlnv] == 0 } {
+         lappend list_mods_missing $mod_vlnv
+      }
+   }
+
+   if { $list_mods_missing ne "" } {
+      catch {common::send_msg_id "BD_TCL-115" "ERROR" "The following module(s) are not found in the project: $list_mods_missing" }
+      common::send_msg_id "BD_TCL-008" "INFO" "Please add source files for the missing module(s) above."
+      set bCheckIPsPassed 0
+   }
+}
+
 if { $bCheckIPsPassed != 1 } {
   common::send_msg_id "BD_TCL-1003" "WARNING" "Will not continue with creation of design due to the error(s) above."
   return 3
@@ -159,6 +190,266 @@ if { $bCheckIPsPassed != 1 } {
 # DESIGN PROCs
 ##################################################################
 
+
+# Hierarchical cell: hier_prm_peripheral
+proc create_hier_cell_hier_prm_peripheral { parentCell nameHier } {
+
+  variable script_folder
+
+  if { $parentCell eq "" || $nameHier eq "" } {
+     catch {common::send_msg_id "BD_TCL-102" "ERROR" "create_hier_cell_hier_prm_peripheral() - Empty argument(s)!"}
+     return
+  }
+
+  # Get object for parentCell
+  set parentObj [get_bd_cells $parentCell]
+  if { $parentObj == "" } {
+     catch {common::send_msg_id "BD_TCL-100" "ERROR" "Unable to find parent cell <$parentCell>!"}
+     return
+  }
+
+  # Make sure parentObj is hier blk
+  set parentType [get_property TYPE $parentObj]
+  if { $parentType ne "hier" } {
+     catch {common::send_msg_id "BD_TCL-101" "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
+     return
+  }
+
+  # Save current instance; Restore later
+  set oldCurInst [current_bd_instance .]
+
+  # Set parent object as current
+  current_bd_instance $parentObj
+
+  # Create cell and set as current instance
+  set hier_obj [create_bd_cell -type hier $nameHier]
+  current_bd_instance $hier_obj
+
+  # Create interface pins
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 M00_AXI1
+
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 M_AXIS_MM2S
+
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S00_AXI
+
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 S_AXIS_S2MM
+
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI_MEM
+
+
+  # Create pins
+  create_bd_pin -dir I -type rst S00_ARESETN
+  create_bd_pin -dir O -from 0 -to 0 corerstn
+  create_bd_pin -dir O -type intr interrupt
+  create_bd_pin -dir O -type intr mm2s_introut
+  create_bd_pin -dir I rx
+  create_bd_pin -dir O -type intr s2mm_introut
+  create_bd_pin -dir O tx
+  create_bd_pin -dir I -type clk uncoreclk
+  create_bd_pin -dir I -type rst uncorerstn
+
+  # Create instance: axi_dma_arm, and set properties
+  set axi_dma_arm [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_dma:7.1 axi_dma_arm ]
+  set_property -dict [ list \
+   CONFIG.c_include_mm2s_dre {1} \
+   CONFIG.c_include_s2mm_dre {1} \
+   CONFIG.c_sg_include_stscntrl_strm {0} \
+   CONFIG.c_sg_length_width {16} \
+ ] $axi_dma_arm
+
+  # Create instance: axi_interconnect_0, and set properties
+  set axi_interconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_0 ]
+  set_property -dict [ list \
+   CONFIG.NUM_MI {1} \
+   CONFIG.NUM_SI {4} \
+ ] $axi_interconnect_0
+
+  # Create instance: axi_interconnect_1, and set properties
+  set axi_interconnect_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_1 ]
+  set_property -dict [ list \
+   CONFIG.NUM_MI {3} \
+ ] $axi_interconnect_1
+
+  # Create instance: axi_uartlite_0, and set properties
+  set axi_uartlite_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_uartlite:2.0 axi_uartlite_0 ]
+  set_property -dict [ list \
+   CONFIG.C_BAUDRATE {115200} \
+ ] $axi_uartlite_0
+
+  # Create instance: corerst, and set properties
+  set corerst [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 corerst ]
+  set_property -dict [ list \
+   CONFIG.C_ALL_OUTPUTS {1} \
+   CONFIG.C_GPIO_WIDTH {1} \
+   CONFIG.GPIO_BOARD_INTERFACE {Custom} \
+ ] $corerst
+
+  # Create interface connections
+  connect_bd_intf_net -intf_net Conn2 [get_bd_intf_pins M00_AXI1] [get_bd_intf_pins axi_interconnect_0/M00_AXI]
+  connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins axi_dma_arm/M_AXI_SG] [get_bd_intf_pins axi_interconnect_0/S00_AXI]
+  connect_bd_intf_net -intf_net S00_AXI_2 [get_bd_intf_pins S00_AXI] [get_bd_intf_pins axi_interconnect_1/S00_AXI]
+  connect_bd_intf_net -intf_net S01_AXI_1 [get_bd_intf_pins axi_dma_arm/M_AXI_MM2S] [get_bd_intf_pins axi_interconnect_0/S01_AXI]
+  connect_bd_intf_net -intf_net S02_AXI_1 [get_bd_intf_pins axi_dma_arm/M_AXI_S2MM] [get_bd_intf_pins axi_interconnect_0/S02_AXI]
+  connect_bd_intf_net -intf_net S_AXIS_S2MM_1 [get_bd_intf_pins S_AXIS_S2MM] [get_bd_intf_pins axi_dma_arm/S_AXIS_S2MM]
+  connect_bd_intf_net -intf_net S_AXI_MEM_1 [get_bd_intf_pins S_AXI_MEM] [get_bd_intf_pins axi_interconnect_0/S03_AXI]
+  connect_bd_intf_net -intf_net axi_dma_arm_M_AXIS_MM2S [get_bd_intf_pins M_AXIS_MM2S] [get_bd_intf_pins axi_dma_arm/M_AXIS_MM2S]
+  connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_pins axi_interconnect_1/M00_AXI] [get_bd_intf_pins axi_uartlite_0/S_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_1_M01_AXI [get_bd_intf_pins axi_interconnect_1/M01_AXI] [get_bd_intf_pins corerst/S_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_1_M02_AXI [get_bd_intf_pins axi_dma_arm/S_AXI_LITE] [get_bd_intf_pins axi_interconnect_1/M02_AXI]
+
+  # Create port connections
+  connect_bd_net -net axi_dma_arm_mm2s_introut [get_bd_pins mm2s_introut] [get_bd_pins axi_dma_arm/mm2s_introut]
+  connect_bd_net -net axi_dma_arm_s2mm_introut [get_bd_pins s2mm_introut] [get_bd_pins axi_dma_arm/s2mm_introut]
+  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins corerstn] [get_bd_pins corerst/gpio_io_o]
+  connect_bd_net -net axi_uartlite_0_interrupt [get_bd_pins interrupt] [get_bd_pins axi_uartlite_0/interrupt]
+  connect_bd_net -net axi_uartlite_0_tx [get_bd_pins tx] [get_bd_pins axi_uartlite_0/tx]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins uncoreclk] [get_bd_pins axi_dma_arm/m_axi_mm2s_aclk] [get_bd_pins axi_dma_arm/m_axi_s2mm_aclk] [get_bd_pins axi_dma_arm/m_axi_sg_aclk] [get_bd_pins axi_dma_arm/s_axi_lite_aclk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_0/S01_ACLK] [get_bd_pins axi_interconnect_0/S02_ACLK] [get_bd_pins axi_interconnect_0/S03_ACLK] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_1/M01_ACLK] [get_bd_pins axi_interconnect_1/M02_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_uartlite_0/s_axi_aclk] [get_bd_pins corerst/s_axi_aclk]
+  connect_bd_net -net pardcore_uncorerst_interconnect_aresetn [get_bd_pins S00_ARESETN] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_0/S01_ARESETN] [get_bd_pins axi_interconnect_0/S02_ARESETN] [get_bd_pins axi_interconnect_0/S03_ARESETN] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_1/M01_ARESETN] [get_bd_pins axi_interconnect_1/M02_ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN]
+  connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_pins uncorerstn] [get_bd_pins axi_dma_arm/axi_resetn] [get_bd_pins axi_uartlite_0/s_axi_aresetn] [get_bd_pins corerst/s_axi_aresetn]
+  connect_bd_net -net rx_1 [get_bd_pins rx] [get_bd_pins axi_uartlite_0/rx]
+
+  # Restore current instance
+  current_bd_instance $oldCurInst
+}
+
+# Hierarchical cell: hier_pardcore_peripheral
+proc create_hier_cell_hier_pardcore_peripheral { parentCell nameHier } {
+
+  variable script_folder
+
+  if { $parentCell eq "" || $nameHier eq "" } {
+     catch {common::send_msg_id "BD_TCL-102" "ERROR" "create_hier_cell_hier_pardcore_peripheral() - Empty argument(s)!"}
+     return
+  }
+
+  # Get object for parentCell
+  set parentObj [get_bd_cells $parentCell]
+  if { $parentObj == "" } {
+     catch {common::send_msg_id "BD_TCL-100" "ERROR" "Unable to find parent cell <$parentCell>!"}
+     return
+  }
+
+  # Make sure parentObj is hier blk
+  set parentType [get_property TYPE $parentObj]
+  if { $parentType ne "hier" } {
+     catch {common::send_msg_id "BD_TCL-101" "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
+     return
+  }
+
+  # Save current instance; Restore later
+  set oldCurInst [current_bd_instance .]
+
+  # Set parent object as current
+  current_bd_instance $parentObj
+
+  # Create cell and set as current instance
+  set hier_obj [create_bd_cell -type hier $nameHier]
+  current_bd_instance $hier_obj
+
+  # Create interface pins
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 M_AXIS_MM2S
+
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 M_AXI_DMA
+
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXILITE_MMIO
+
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 S_AXIS_S2MM
+
+
+  # Create pins
+  create_bd_pin -dir I -type rst ARESETN
+  create_bd_pin -dir I -from 0 -to 0 -type rst M03_ARESETN
+  create_bd_pin -dir I -type clk clock
+  create_bd_pin -dir O -from 4 -to 0 intrs
+  create_bd_pin -dir O io_vga_vsync
+  create_bd_pin -dir I -from 0 -to 0 -type rst reset
+  create_bd_pin -dir I rx
+  create_bd_pin -dir O tx
+  create_bd_pin -dir I -type clk uncoreclk
+  create_bd_pin -dir I -type rst uncorerstn
+  create_bd_pin -dir O vga_hsync
+  create_bd_pin -dir O -from 23 -to 0 vga_rgb
+  create_bd_pin -dir O vga_valid
+
+  # Create instance: AXI4VGA_0, and set properties
+  set block_name AXI4VGA
+  set block_cell_name AXI4VGA_0
+  if { [catch {set AXI4VGA_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_msg_id "BD_TCL-105" "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $AXI4VGA_0 eq "" } {
+     catch {common::send_msg_id "BD_TCL-106" "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: axi_dma_pardcore, and set properties
+  set axi_dma_pardcore [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_dma:7.1 axi_dma_pardcore ]
+  set_property -dict [ list \
+   CONFIG.c_addr_width {40} \
+   CONFIG.c_include_mm2s_dre {1} \
+   CONFIG.c_include_s2mm_dre {1} \
+   CONFIG.c_sg_include_stscntrl_strm {0} \
+   CONFIG.c_sg_length_width {16} \
+ ] $axi_dma_pardcore
+
+  # Create instance: axi_interconnect_pardcore_dma, and set properties
+  set axi_interconnect_pardcore_dma [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_pardcore_dma ]
+  set_property -dict [ list \
+   CONFIG.NUM_MI {1} \
+   CONFIG.NUM_SI {3} \
+ ] $axi_interconnect_pardcore_dma
+
+  # Create instance: axi_interconnect_pardcore_mmio, and set properties
+  set axi_interconnect_pardcore_mmio [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_pardcore_mmio ]
+  set_property -dict [ list \
+   CONFIG.NUM_MI {4} \
+ ] $axi_interconnect_pardcore_mmio
+
+  # Create instance: axi_uartlite_0, and set properties
+  set axi_uartlite_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_uartlite:2.0 axi_uartlite_0 ]
+  set_property -dict [ list \
+   CONFIG.C_BAUDRATE {115200} \
+ ] $axi_uartlite_0
+
+  # Create instance: xlconcat_0, and set properties
+  set xlconcat_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 xlconcat_0 ]
+  set_property -dict [ list \
+   CONFIG.NUM_PORTS {5} \
+ ] $xlconcat_0
+
+  # Create interface connections
+  connect_bd_intf_net -intf_net Conn1 [get_bd_intf_pins S_AXIS_S2MM] [get_bd_intf_pins axi_dma_pardcore/S_AXIS_S2MM]
+  connect_bd_intf_net -intf_net Conn2 [get_bd_intf_pins M_AXIS_MM2S] [get_bd_intf_pins axi_dma_pardcore/M_AXIS_MM2S]
+  connect_bd_intf_net -intf_net S_AXILITE_MMIO_1 [get_bd_intf_pins S_AXILITE_MMIO] [get_bd_intf_pins axi_interconnect_pardcore_mmio/S00_AXI]
+  connect_bd_intf_net -intf_net axi_dma_pardcore_M_AXI_MM2S [get_bd_intf_pins axi_dma_pardcore/M_AXI_MM2S] [get_bd_intf_pins axi_interconnect_pardcore_dma/S01_AXI]
+  connect_bd_intf_net -intf_net axi_dma_pardcore_M_AXI_S2MM [get_bd_intf_pins axi_dma_pardcore/M_AXI_S2MM] [get_bd_intf_pins axi_interconnect_pardcore_dma/S02_AXI]
+  connect_bd_intf_net -intf_net axi_dma_pardcore_M_AXI_SG [get_bd_intf_pins axi_dma_pardcore/M_AXI_SG] [get_bd_intf_pins axi_interconnect_pardcore_dma/S00_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_pins M_AXI_DMA] [get_bd_intf_pins axi_interconnect_pardcore_dma/M00_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M00_AXI [get_bd_intf_pins axi_interconnect_pardcore_mmio/M00_AXI] [get_bd_intf_pins axi_uartlite_0/S_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M01_AXI [get_bd_intf_pins axi_dma_pardcore/S_AXI_LITE] [get_bd_intf_pins axi_interconnect_pardcore_mmio/M01_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M02_AXI [get_bd_intf_pins AXI4VGA_0/io_in_ctrl] [get_bd_intf_pins axi_interconnect_pardcore_mmio/M02_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_pardcore_mmio_M03_AXI [get_bd_intf_pins AXI4VGA_0/io_in_fb] [get_bd_intf_pins axi_interconnect_pardcore_mmio/M03_AXI]
+
+  # Create port connections
+  connect_bd_net -net AXI4VGA_0_io_vga_hsync [get_bd_pins vga_hsync] [get_bd_pins AXI4VGA_0/io_vga_hsync]
+  connect_bd_net -net AXI4VGA_0_io_vga_rgb [get_bd_pins vga_rgb] [get_bd_pins AXI4VGA_0/io_vga_rgb]
+  connect_bd_net -net AXI4VGA_0_io_vga_valid [get_bd_pins vga_valid] [get_bd_pins AXI4VGA_0/io_vga_valid]
+  connect_bd_net -net AXI4VGA_0_io_vga_vsync [get_bd_pins io_vga_vsync] [get_bd_pins AXI4VGA_0/io_vga_vsync]
+  connect_bd_net -net M03_ARESETN_1 [get_bd_pins M03_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M02_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M03_ARESETN]
+  connect_bd_net -net axi_dma_pardcore_mm2s_introut [get_bd_pins axi_dma_pardcore/mm2s_introut] [get_bd_pins xlconcat_0/In0]
+  connect_bd_net -net axi_dma_pardcore_s2mm_introut [get_bd_pins axi_dma_pardcore/s2mm_introut] [get_bd_pins xlconcat_0/In1]
+  connect_bd_net -net axi_resetn_1 [get_bd_pins uncorerstn] [get_bd_pins axi_dma_pardcore/axi_resetn] [get_bd_pins axi_uartlite_0/s_axi_aresetn]
+  connect_bd_net -net axi_uartlite_0_tx [get_bd_pins tx] [get_bd_pins axi_uartlite_0/tx]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins uncoreclk] [get_bd_pins axi_dma_pardcore/m_axi_mm2s_aclk] [get_bd_pins axi_dma_pardcore/m_axi_s2mm_aclk] [get_bd_pins axi_dma_pardcore/m_axi_sg_aclk] [get_bd_pins axi_dma_pardcore/s_axi_lite_aclk] [get_bd_pins axi_interconnect_pardcore_dma/ACLK] [get_bd_pins axi_interconnect_pardcore_dma/M00_ACLK] [get_bd_pins axi_interconnect_pardcore_dma/S00_ACLK] [get_bd_pins axi_interconnect_pardcore_dma/S01_ACLK] [get_bd_pins axi_interconnect_pardcore_dma/S02_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/M00_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/M01_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/S00_ACLK] [get_bd_pins axi_uartlite_0/s_axi_aclk]
+  connect_bd_net -net clock_1 [get_bd_pins clock] [get_bd_pins AXI4VGA_0/clock] [get_bd_pins axi_interconnect_pardcore_mmio/M02_ACLK] [get_bd_pins axi_interconnect_pardcore_mmio/M03_ACLK]
+  connect_bd_net -net pardcore_uncorerst_interconnect_aresetn [get_bd_pins ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/M00_ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/S00_ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/S01_ARESETN] [get_bd_pins axi_interconnect_pardcore_dma/S02_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M00_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/M01_ARESETN] [get_bd_pins axi_interconnect_pardcore_mmio/S00_ARESETN]
+  connect_bd_net -net reset_1 [get_bd_pins reset] [get_bd_pins AXI4VGA_0/reset]
+  connect_bd_net -net rx_1 [get_bd_pins rx] [get_bd_pins axi_uartlite_0/rx]
+  connect_bd_net -net xlconcat_0_dout [get_bd_pins intrs] [get_bd_pins xlconcat_0/dout]
+
+  # Restore current instance
+  current_bd_instance $oldCurInst
+}
 
 # Hierarchical cell: hier_clkrst
 proc create_hier_cell_hier_clkrst { parentCell nameHier } {
@@ -195,95 +486,75 @@ proc create_hier_cell_hier_clkrst { parentCell nameHier } {
   current_bd_instance $hier_obj
 
   # Create interface pins
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI
-
 
   # Create pins
   create_bd_pin -dir O -type clk clk27
-  create_bd_pin -dir O -type clk clk50
+  create_bd_pin -dir O -type clk clk40
   create_bd_pin -dir I -type clk clk_in1
   create_bd_pin -dir O -type clk coreclk
-  create_bd_pin -dir O -from 0 -to 0 corerstn
   create_bd_pin -dir O -from 0 -to 0 -type rst interconnect_aresetn
+  create_bd_pin -dir O -from 0 -to 0 -type rst interconnect_aresetn1
+  create_bd_pin -dir O locked
+  create_bd_pin -dir O -from 0 -to 0 -type rst peripheral_aresetn
+  create_bd_pin -dir O -from 0 -to 0 -type rst peripheral_reset
   create_bd_pin -dir I -type rst resetn
-  create_bd_pin -dir O -from 0 -to 0 -type rst rstn50
   create_bd_pin -dir O -type clk uncoreclk
   create_bd_pin -dir O -from 0 -to 0 -type rst uncorerstn
 
-  # Create instance: axi_gpio_0, and set properties
-  set axi_gpio_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_0 ]
-  set_property -dict [ list \
-   CONFIG.C_ALL_OUTPUTS {1} \
-   CONFIG.C_GPIO_WIDTH {1} \
- ] $axi_gpio_0
+  # Create instance: clk50rst, and set properties
+  set clk50rst [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 clk50rst ]
 
   # Create instance: clk_wiz_0, and set properties
   set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
   set_property -dict [ list \
    CONFIG.CLKIN1_JITTER_PS {100.0} \
-   CONFIG.CLKOUT1_DRIVES {BUFG} \
-   CONFIG.CLKOUT1_JITTER {114.831} \
-   CONFIG.CLKOUT1_PHASE_ERROR {98.576} \
-   CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {200} \
-   CONFIG.CLKOUT2_DRIVES {BUFG} \
-   CONFIG.CLKOUT2_JITTER {130.959} \
-   CONFIG.CLKOUT2_PHASE_ERROR {98.576} \
+   CONFIG.CLKOUT1_JITTER {107.569} \
+   CONFIG.CLKOUT1_PHASE_ERROR {87.181} \
+   CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {150.000} \
+   CONFIG.CLKOUT2_JITTER {115.833} \
+   CONFIG.CLKOUT2_PHASE_ERROR {87.181} \
    CONFIG.CLKOUT2_REQUESTED_OUT_FREQ {100.000} \
    CONFIG.CLKOUT2_USED {true} \
-   CONFIG.CLKOUT3_DRIVES {BUFG} \
-   CONFIG.CLKOUT3_JITTER {159.373} \
-   CONFIG.CLKOUT3_PHASE_ERROR {98.576} \
-   CONFIG.CLKOUT3_REQUESTED_OUT_FREQ {40} \
+   CONFIG.CLKOUT3_JITTER {139.035} \
+   CONFIG.CLKOUT3_PHASE_ERROR {87.181} \
+   CONFIG.CLKOUT3_REQUESTED_OUT_FREQ {40.000} \
    CONFIG.CLKOUT3_USED {true} \
-   CONFIG.CLKOUT4_DRIVES {Buffer} \
-   CONFIG.CLKOUT4_JITTER {172.734} \
-   CONFIG.CLKOUT4_PHASE_ERROR {98.576} \
-   CONFIG.CLKOUT4_REQUESTED_OUT_FREQ {27} \
+   CONFIG.CLKOUT4_JITTER {151.083} \
+   CONFIG.CLKOUT4_PHASE_ERROR {87.181} \
+   CONFIG.CLKOUT4_REQUESTED_OUT_FREQ {27.000} \
    CONFIG.CLKOUT4_USED {true} \
-   CONFIG.CLKOUT5_DRIVES {Buffer} \
-   CONFIG.CLKOUT6_DRIVES {Buffer} \
-   CONFIG.CLKOUT7_DRIVES {Buffer} \
    CONFIG.CLK_OUT1_PORT {coreclk} \
    CONFIG.CLK_OUT2_PORT {uncoreclk} \
-   CONFIG.CLK_OUT3_PORT {clk50} \
+   CONFIG.CLK_OUT3_PORT {clk40} \
    CONFIG.CLK_OUT4_PORT {clk27} \
-   CONFIG.MMCM_CLKFBOUT_MULT_F {10.000} \
+   CONFIG.MMCM_CLKFBOUT_MULT_F {12.000} \
    CONFIG.MMCM_CLKIN1_PERIOD {10.000} \
    CONFIG.MMCM_CLKIN2_PERIOD {10.000} \
-   CONFIG.MMCM_CLKOUT0_DIVIDE_F {5.000} \
-   CONFIG.MMCM_CLKOUT1_DIVIDE {10} \
-   CONFIG.MMCM_CLKOUT2_DIVIDE {25} \
-   CONFIG.MMCM_CLKOUT3_DIVIDE {37} \
-   CONFIG.MMCM_COMPENSATION {AUTO} \
+   CONFIG.MMCM_CLKOUT0_DIVIDE_F {8.000} \
+   CONFIG.MMCM_CLKOUT1_DIVIDE {12} \
+   CONFIG.MMCM_CLKOUT2_DIVIDE {30} \
+   CONFIG.MMCM_CLKOUT3_DIVIDE {44} \
    CONFIG.MMCM_DIVCLK_DIVIDE {1} \
    CONFIG.NUM_OUT_CLKS {4} \
-   CONFIG.PHASESHIFT_MODE {WAVEFORM} \
    CONFIG.RESET_PORT {resetn} \
    CONFIG.RESET_TYPE {ACTIVE_LOW} \
-   CONFIG.USE_PHASE_ALIGNMENT {true} \
  ] $clk_wiz_0
-
-  # Create instance: proc_sys_reset_0, and set properties
-  set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
 
   # Create instance: uncorerst, and set properties
   set uncorerst [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 uncorerst ]
 
-  # Create interface connections
-  connect_bd_intf_net -intf_net axi_crossbar_0_M00_AXI [get_bd_intf_pins S_AXI] [get_bd_intf_pins axi_gpio_0/S_AXI]
-
   # Create port connections
-  connect_bd_net -net armv7_processing_system_FCLK_RESET0_N [get_bd_pins resetn] [get_bd_pins clk_wiz_0/resetn] [get_bd_pins proc_sys_reset_0/ext_reset_in] [get_bd_pins uncorerst/ext_reset_in]
-  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins corerstn] [get_bd_pins axi_gpio_0/gpio_io_o]
+  connect_bd_net -net clk50rst_interconnect_aresetn [get_bd_pins interconnect_aresetn1] [get_bd_pins clk50rst/interconnect_aresetn]
+  connect_bd_net -net clk50rst_peripheral_reset [get_bd_pins peripheral_reset] [get_bd_pins clk50rst/peripheral_reset]
   connect_bd_net -net clk_wiz_0_clk27 [get_bd_pins clk27] [get_bd_pins clk_wiz_0/clk27]
-  connect_bd_net -net clk_wiz_0_clk50 [get_bd_pins clk50] [get_bd_pins clk_wiz_0/clk50] [get_bd_pins proc_sys_reset_0/slowest_sync_clk]
+  connect_bd_net -net clk_wiz_0_clk40 [get_bd_pins clk40] [get_bd_pins clk50rst/slowest_sync_clk] [get_bd_pins clk_wiz_0/clk40]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins uncoreclk] [get_bd_pins clk_wiz_0/uncoreclk] [get_bd_pins uncorerst/slowest_sync_clk]
   connect_bd_net -net clk_wiz_0_coreclk [get_bd_pins coreclk] [get_bd_pins clk_wiz_0/coreclk]
-  connect_bd_net -net clk_wiz_0_locked [get_bd_pins clk_wiz_0/locked] [get_bd_pins proc_sys_reset_0/dcm_locked] [get_bd_pins uncorerst/dcm_locked]
-  connect_bd_net -net clk_wiz_0_uncoreclk [get_bd_pins uncoreclk] [get_bd_pins axi_gpio_0/s_axi_aclk] [get_bd_pins clk_wiz_0/uncoreclk] [get_bd_pins uncorerst/slowest_sync_clk]
-  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_pins rstn50] [get_bd_pins proc_sys_reset_0/peripheral_aresetn]
-  connect_bd_net -net proc_sys_reset_1_interconnect_aresetn [get_bd_pins interconnect_aresetn] [get_bd_pins uncorerst/interconnect_aresetn]
-  connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_pins uncorerstn] [get_bd_pins axi_gpio_0/s_axi_aresetn] [get_bd_pins uncorerst/peripheral_aresetn]
-  connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins clk_in1] [get_bd_pins clk_wiz_0/clk_in1]
+  connect_bd_net -net clk_wiz_0_locked [get_bd_pins locked] [get_bd_pins clk50rst/dcm_locked] [get_bd_pins clk_wiz_0/locked] [get_bd_pins uncorerst/dcm_locked]
+  connect_bd_net -net pardcore_uncorerst_interconnect_aresetn [get_bd_pins interconnect_aresetn] [get_bd_pins uncorerst/interconnect_aresetn]
+  connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_pins uncorerstn] [get_bd_pins uncorerst/peripheral_aresetn]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk1 [get_bd_pins clk_in1] [get_bd_pins clk_wiz_0/clk_in1]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins resetn] [get_bd_pins clk50rst/ext_reset_in] [get_bd_pins clk_wiz_0/resetn] [get_bd_pins uncorerst/ext_reset_in]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -323,11 +594,20 @@ proc create_root_design { parentCell } {
 
 
   # Create interface ports
+  set AXI_DMA [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 AXI_DMA ]
+  set_property -dict [ list \
+   CONFIG.ADDR_WIDTH {40} \
+   CONFIG.DATA_WIDTH {64} \
+   CONFIG.NUM_READ_OUTSTANDING {2} \
+   CONFIG.NUM_WRITE_OUTSTANDING {2} \
+   CONFIG.PROTOCOL {AXI4} \
+   ] $AXI_DMA
+
   set AXI_MEM [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 AXI_MEM ]
   set_property -dict [ list \
-   CONFIG.ADDR_WIDTH {32} \
-   CONFIG.ARUSER_WIDTH {0} \
-   CONFIG.AWUSER_WIDTH {0} \
+   CONFIG.ADDR_WIDTH {40} \
+   CONFIG.ARUSER_WIDTH {1} \
+   CONFIG.AWUSER_WIDTH {1} \
    CONFIG.BUSER_WIDTH {0} \
    CONFIG.DATA_WIDTH {64} \
    CONFIG.HAS_BRESP {1} \
@@ -339,11 +619,11 @@ proc create_root_design { parentCell } {
    CONFIG.HAS_REGION {0} \
    CONFIG.HAS_RRESP {1} \
    CONFIG.HAS_WSTRB {1} \
-   CONFIG.ID_WIDTH {5} \
+   CONFIG.ID_WIDTH {4} \
    CONFIG.MAX_BURST_LENGTH {256} \
-   CONFIG.NUM_READ_OUTSTANDING {2} \
+   CONFIG.NUM_READ_OUTSTANDING {16} \
    CONFIG.NUM_READ_THREADS {1} \
-   CONFIG.NUM_WRITE_OUTSTANDING {2} \
+   CONFIG.NUM_WRITE_OUTSTANDING {16} \
    CONFIG.NUM_WRITE_THREADS {1} \
    CONFIG.PROTOCOL {AXI4} \
    CONFIG.READ_WRITE_MODE {READ_WRITE} \
@@ -354,386 +634,68 @@ proc create_root_design { parentCell } {
    CONFIG.WUSER_WIDTH {0} \
    ] $AXI_MEM
 
-  set uart [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:uart_rtl:1.0 uart ]
+  set AXI_MMIO [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 AXI_MMIO ]
+  set_property -dict [ list \
+   CONFIG.ADDR_WIDTH {40} \
+   CONFIG.ARUSER_WIDTH {0} \
+   CONFIG.AWUSER_WIDTH {0} \
+   CONFIG.BUSER_WIDTH {0} \
+   CONFIG.DATA_WIDTH {64} \
+   CONFIG.HAS_BRESP {1} \
+   CONFIG.HAS_BURST {0} \
+   CONFIG.HAS_CACHE {0} \
+   CONFIG.HAS_LOCK {0} \
+   CONFIG.HAS_PROT {1} \
+   CONFIG.HAS_QOS {0} \
+   CONFIG.HAS_REGION {0} \
+   CONFIG.HAS_RRESP {1} \
+   CONFIG.HAS_WSTRB {1} \
+   CONFIG.ID_WIDTH {8} \
+   CONFIG.MAX_BURST_LENGTH {1} \
+   CONFIG.NUM_READ_OUTSTANDING {2} \
+   CONFIG.NUM_READ_THREADS {1} \
+   CONFIG.NUM_WRITE_OUTSTANDING {2} \
+   CONFIG.NUM_WRITE_THREADS {1} \
+   CONFIG.PROTOCOL {AXI4} \
+   CONFIG.READ_WRITE_MODE {READ_WRITE} \
+   CONFIG.RUSER_BITS_PER_BYTE {0} \
+   CONFIG.RUSER_WIDTH {0} \
+   CONFIG.SUPPORTS_NARROW_BURST {0} \
+   CONFIG.WUSER_BITS_PER_BYTE {0} \
+   CONFIG.WUSER_WIDTH {0} \
+   ] $AXI_MMIO
 
 
   # Create ports
   set clk27 [ create_bd_port -dir O -type clk clk27 ]
-  set clk50 [ create_bd_port -dir O -type clk clk50 ]
+  set clk40 [ create_bd_port -dir O -type clk clk40 ]
   set coreclk [ create_bd_port -dir O -type clk coreclk ]
-  set_property -dict [ list \
-   CONFIG.ASSOCIATED_RESET {pardcore_corerstn} \
- ] $coreclk
   set corerstn [ create_bd_port -dir O -from 0 -to 0 corerstn ]
-  set rstn50 [ create_bd_port -dir O -from 0 -to 0 -type rst rstn50 ]
+  set intrs [ create_bd_port -dir O -from 4 -to 0 intrs ]
   set uncoreclk [ create_bd_port -dir O -type clk uncoreclk ]
   set_property -dict [ list \
-   CONFIG.ASSOCIATED_BUSIF {AXI_MEM} \
+   CONFIG.ASSOCIATED_BUSIF {AXI_MEM:AXI_MMIO:AXI_DMA} \
  ] $uncoreclk
   set uncorerstn [ create_bd_port -dir O -from 0 -to 0 -type rst uncorerstn ]
-
-  # Create instance: axi3_to_lite_pc, and set properties
-  set axi3_to_lite_pc [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_protocol_converter:2.1 axi3_to_lite_pc ]
-  set_property -dict [ list \
-   CONFIG.TRANSLATION_MODE {2} \
- ] $axi3_to_lite_pc
-
-  # Create instance: axi_crossbar_0, and set properties
-  set axi_crossbar_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_0 ]
-  set_property -dict [ list \
-   CONFIG.CONNECTIVITY_MODE {SASD} \
-   CONFIG.M00_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M00_READ_ISSUING {1} \
-   CONFIG.M00_WRITE_ISSUING {1} \
-   CONFIG.M01_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M01_READ_ISSUING {1} \
-   CONFIG.M01_WRITE_ISSUING {1} \
-   CONFIG.M02_A00_ADDR_WIDTH {0} \
-   CONFIG.M02_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M02_READ_ISSUING {1} \
-   CONFIG.M02_WRITE_ISSUING {1} \
-   CONFIG.M03_A00_ADDR_WIDTH {0} \
-   CONFIG.M03_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M03_READ_ISSUING {1} \
-   CONFIG.M03_WRITE_ISSUING {1} \
-   CONFIG.M04_A00_ADDR_WIDTH {0} \
-   CONFIG.M04_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M04_READ_ISSUING {1} \
-   CONFIG.M04_WRITE_ISSUING {1} \
-   CONFIG.M05_A00_ADDR_WIDTH {0} \
-   CONFIG.M05_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M05_READ_ISSUING {1} \
-   CONFIG.M05_WRITE_ISSUING {1} \
-   CONFIG.M06_A00_ADDR_WIDTH {0} \
-   CONFIG.M06_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M06_READ_ISSUING {1} \
-   CONFIG.M06_WRITE_ISSUING {1} \
-   CONFIG.M07_A00_ADDR_WIDTH {0} \
-   CONFIG.M07_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M07_READ_ISSUING {1} \
-   CONFIG.M07_WRITE_ISSUING {1} \
-   CONFIG.M08_A00_ADDR_WIDTH {0} \
-   CONFIG.M08_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M08_READ_ISSUING {1} \
-   CONFIG.M08_WRITE_ISSUING {1} \
-   CONFIG.M09_A00_ADDR_WIDTH {0} \
-   CONFIG.M09_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M09_READ_ISSUING {1} \
-   CONFIG.M09_WRITE_ISSUING {1} \
-   CONFIG.M10_A00_ADDR_WIDTH {0} \
-   CONFIG.M10_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M10_READ_ISSUING {1} \
-   CONFIG.M10_WRITE_ISSUING {1} \
-   CONFIG.M11_A00_ADDR_WIDTH {0} \
-   CONFIG.M11_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M11_READ_ISSUING {1} \
-   CONFIG.M11_WRITE_ISSUING {1} \
-   CONFIG.M12_A00_ADDR_WIDTH {0} \
-   CONFIG.M12_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M12_READ_ISSUING {1} \
-   CONFIG.M12_WRITE_ISSUING {1} \
-   CONFIG.M13_A00_ADDR_WIDTH {0} \
-   CONFIG.M13_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M13_READ_ISSUING {1} \
-   CONFIG.M13_WRITE_ISSUING {1} \
-   CONFIG.M14_A00_ADDR_WIDTH {0} \
-   CONFIG.M14_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M14_READ_ISSUING {1} \
-   CONFIG.M14_WRITE_ISSUING {1} \
-   CONFIG.M15_A00_ADDR_WIDTH {0} \
-   CONFIG.M15_A00_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A01_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A02_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A03_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A04_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A05_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A06_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A07_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A08_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A09_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A10_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A11_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A12_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A13_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A14_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_A15_BASE_ADDR {0xffffffffffffffff} \
-   CONFIG.M15_READ_ISSUING {1} \
-   CONFIG.M15_WRITE_ISSUING {1} \
-   CONFIG.NUM_MI {2} \
-   CONFIG.R_REGISTER {1} \
-   CONFIG.S00_READ_ACCEPTANCE {1} \
-   CONFIG.S00_SINGLE_THREAD {1} \
-   CONFIG.S00_WRITE_ACCEPTANCE {1} \
-   CONFIG.S01_READ_ACCEPTANCE {1} \
-   CONFIG.S01_WRITE_ACCEPTANCE {1} \
-   CONFIG.S02_READ_ACCEPTANCE {1} \
-   CONFIG.S02_WRITE_ACCEPTANCE {1} \
-   CONFIG.S03_READ_ACCEPTANCE {1} \
-   CONFIG.S03_WRITE_ACCEPTANCE {1} \
-   CONFIG.S04_READ_ACCEPTANCE {1} \
-   CONFIG.S04_WRITE_ACCEPTANCE {1} \
-   CONFIG.S05_READ_ACCEPTANCE {1} \
-   CONFIG.S05_WRITE_ACCEPTANCE {1} \
-   CONFIG.S06_READ_ACCEPTANCE {1} \
-   CONFIG.S06_WRITE_ACCEPTANCE {1} \
-   CONFIG.S07_READ_ACCEPTANCE {1} \
-   CONFIG.S07_WRITE_ACCEPTANCE {1} \
-   CONFIG.S08_READ_ACCEPTANCE {1} \
-   CONFIG.S08_WRITE_ACCEPTANCE {1} \
-   CONFIG.S09_READ_ACCEPTANCE {1} \
-   CONFIG.S09_WRITE_ACCEPTANCE {1} \
-   CONFIG.S10_READ_ACCEPTANCE {1} \
-   CONFIG.S10_WRITE_ACCEPTANCE {1} \
-   CONFIG.S11_READ_ACCEPTANCE {1} \
-   CONFIG.S11_WRITE_ACCEPTANCE {1} \
-   CONFIG.S12_READ_ACCEPTANCE {1} \
-   CONFIG.S12_WRITE_ACCEPTANCE {1} \
-   CONFIG.S13_READ_ACCEPTANCE {1} \
-   CONFIG.S13_WRITE_ACCEPTANCE {1} \
-   CONFIG.S14_READ_ACCEPTANCE {1} \
-   CONFIG.S14_WRITE_ACCEPTANCE {1} \
-   CONFIG.S15_READ_ACCEPTANCE {1} \
-   CONFIG.S15_WRITE_ACCEPTANCE {1} \
- ] $axi_crossbar_0
-
-  # Create instance: axi_uartlite_0, and set properties
-  set axi_uartlite_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_uartlite:2.0 axi_uartlite_0 ]
-  set_property -dict [ list \
-   CONFIG.C_BAUDRATE {115200} \
-   CONFIG.C_S_AXI_ACLK_FREQ_HZ {99999000} \
- ] $axi_uartlite_0
+  set vga_hsync [ create_bd_port -dir O vga_hsync ]
+  set vga_rgb [ create_bd_port -dir O -from 23 -to 0 vga_rgb ]
+  set vga_valid [ create_bd_port -dir O vga_valid ]
+  set vga_vsync [ create_bd_port -dir O vga_vsync ]
 
   # Create instance: hier_clkrst
   create_hier_cell_hier_clkrst [current_bd_instance .] hier_clkrst
 
-  # Create instance: xlconcat_0, and set properties
-  set xlconcat_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 xlconcat_0 ]
+  # Create instance: hier_pardcore_peripheral
+  create_hier_cell_hier_pardcore_peripheral [current_bd_instance .] hier_pardcore_peripheral
+
+  # Create instance: hier_prm_peripheral
+  create_hier_cell_hier_prm_peripheral [current_bd_instance .] hier_prm_peripheral
+
+  # Create instance: xlconcat_1, and set properties
+  set xlconcat_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 xlconcat_1 ]
   set_property -dict [ list \
-   CONFIG.NUM_PORTS {1} \
- ] $xlconcat_0
+   CONFIG.NUM_PORTS {3} \
+ ] $xlconcat_1
 
   # Create instance: zynq_ultra_ps_e_0, and set properties
   set zynq_ultra_ps_e_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.3 zynq_ultra_ps_e_0 ]
@@ -1733,7 +1695,9 @@ proc create_root_design { parentCell } {
    CONFIG.PSU__ENET1__TSU__ENABLE {0} \
    CONFIG.PSU__ENET2__FIFO__ENABLE {0} \
    CONFIG.PSU__ENET2__GRP_MDIO__ENABLE {0} \
+   CONFIG.PSU__ENET2__GRP_MDIO__IO {<Select>} \
    CONFIG.PSU__ENET2__PERIPHERAL__ENABLE {0} \
+   CONFIG.PSU__ENET2__PERIPHERAL__IO {<Select>} \
    CONFIG.PSU__ENET2__PTP__ENABLE {0} \
    CONFIG.PSU__ENET2__TSU__ENABLE {0} \
    CONFIG.PSU__ENET3__FIFO__ENABLE {0} \
@@ -1961,6 +1925,9 @@ proc create_root_design { parentCell } {
    CONFIG.PSU__PCIE__BAR0_64BIT {0} \
    CONFIG.PSU__PCIE__BAR0_ENABLE {0} \
    CONFIG.PSU__PCIE__BAR0_PREFETCHABLE {0} \
+   CONFIG.PSU__PCIE__BAR0_SCALE {<Select>} \
+   CONFIG.PSU__PCIE__BAR0_SIZE {<Select>} \
+   CONFIG.PSU__PCIE__BAR0_TYPE {<Select>} \
    CONFIG.PSU__PCIE__BAR0_VAL {} \
    CONFIG.PSU__PCIE__BAR1_64BIT {0} \
    CONFIG.PSU__PCIE__BAR1_ENABLE {0} \
@@ -1982,6 +1949,7 @@ proc create_root_design { parentCell } {
    CONFIG.PSU__PCIE__BAR5_ENABLE {0} \
    CONFIG.PSU__PCIE__BAR5_PREFETCHABLE {0} \
    CONFIG.PSU__PCIE__BAR5_VAL {} \
+   CONFIG.PSU__PCIE__BRIDGE_BAR_INDICATOR {<Select>} \
    CONFIG.PSU__PCIE__CLASS_CODE_BASE {0x06} \
    CONFIG.PSU__PCIE__CLASS_CODE_INTERFACE {0x0} \
    CONFIG.PSU__PCIE__CLASS_CODE_SUB {0x4} \
@@ -2001,6 +1969,7 @@ proc create_root_design { parentCell } {
    CONFIG.PSU__PCIE__FLOW_CONTROL_PROTOCOL_ERR {0} \
    CONFIG.PSU__PCIE__HEADER_LOG_OVERFLOW {0} \
    CONFIG.PSU__PCIE__INTX_GENERATION {0} \
+   CONFIG.PSU__PCIE__INTX_PIN {<Select>} \
    CONFIG.PSU__PCIE__LANE0__ENABLE {0} \
    CONFIG.PSU__PCIE__LANE0__IO {<Select>} \
    CONFIG.PSU__PCIE__LANE1__ENABLE {0} \
@@ -2021,6 +1990,7 @@ proc create_root_design { parentCell } {
    CONFIG.PSU__PCIE__MULTIHEADER {0} \
    CONFIG.PSU__PCIE__PERIPHERAL__ENABLE {0} \
    CONFIG.PSU__PCIE__PERIPHERAL__ENDPOINT_ENABLE {1} \
+   CONFIG.PSU__PCIE__PERIPHERAL__ENDPOINT_IO {<Select>} \
    CONFIG.PSU__PCIE__PERIPHERAL__ROOTPORT_ENABLE {0} \
    CONFIG.PSU__PCIE__PERIPHERAL__ROOTPORT_IO {<Select>} \
    CONFIG.PSU__PCIE__PERM_ROOT_ERR_UPDATE {0} \
@@ -2053,11 +2023,21 @@ proc create_root_design { parentCell } {
    CONFIG.PSU__PMU__GPI4__ENABLE {0} \
    CONFIG.PSU__PMU__GPI5__ENABLE {0} \
    CONFIG.PSU__PMU__GPO0__ENABLE {0} \
+   CONFIG.PSU__PMU__GPO0__IO {<Select>} \
    CONFIG.PSU__PMU__GPO1__ENABLE {0} \
+   CONFIG.PSU__PMU__GPO1__IO {<Select>} \
    CONFIG.PSU__PMU__GPO2__ENABLE {0} \
+   CONFIG.PSU__PMU__GPO2__IO {<Select>} \
+   CONFIG.PSU__PMU__GPO2__POLARITY {<Select>} \
    CONFIG.PSU__PMU__GPO3__ENABLE {0} \
+   CONFIG.PSU__PMU__GPO3__IO {<Select>} \
+   CONFIG.PSU__PMU__GPO3__POLARITY {<Select>} \
    CONFIG.PSU__PMU__GPO4__ENABLE {0} \
+   CONFIG.PSU__PMU__GPO4__IO {<Select>} \
+   CONFIG.PSU__PMU__GPO4__POLARITY {<Select>} \
    CONFIG.PSU__PMU__GPO5__ENABLE {0} \
+   CONFIG.PSU__PMU__GPO5__IO {<Select>} \
+   CONFIG.PSU__PMU__GPO5__POLARITY {<Select>} \
    CONFIG.PSU__PMU__PERIPHERAL__ENABLE {0} \
    CONFIG.PSU__PMU__PLERROR__ENABLE {0} \
    CONFIG.PSU__PRESET_APPLIED {0} \
@@ -2113,6 +2093,7 @@ proc create_root_design { parentCell } {
    CONFIG.PSU__SD1__GRP_CD__ENABLE {1} \
    CONFIG.PSU__SD1__GRP_CD__IO {MIO 45} \
    CONFIG.PSU__SD1__GRP_POW__ENABLE {0} \
+   CONFIG.PSU__SD1__GRP_POW__IO {<Select>} \
    CONFIG.PSU__SD1__GRP_WP__ENABLE {0} \
    CONFIG.PSU__SD1__GRP_WP__IO {<Select>} \
    CONFIG.PSU__SD1__PERIPHERAL__ENABLE {1} \
@@ -2261,31 +2242,53 @@ proc create_root_design { parentCell } {
  ] $zynq_ultra_ps_e_0
 
   # Create interface connections
-  connect_bd_intf_net -intf_net AXI_MEM_1 [get_bd_intf_ports AXI_MEM] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
-  connect_bd_intf_net -intf_net axi3_to_lite_pc_M_AXI [get_bd_intf_pins axi3_to_lite_pc/M_AXI] [get_bd_intf_pins axi_crossbar_0/S00_AXI]
-  connect_bd_intf_net -intf_net axi_crossbar_0_M00_AXI [get_bd_intf_pins axi_crossbar_0/M00_AXI] [get_bd_intf_pins hier_clkrst/S_AXI]
-  connect_bd_intf_net -intf_net axi_crossbar_0_M01_AXI [get_bd_intf_pins axi_crossbar_0/M01_AXI] [get_bd_intf_pins axi_uartlite_0/S_AXI]
-  connect_bd_intf_net -intf_net axi_uartlite_0_UART [get_bd_intf_ports uart] [get_bd_intf_pins axi_uartlite_0/UART]
-  connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_LPD [get_bd_intf_pins axi3_to_lite_pc/S_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_LPD]
+  connect_bd_intf_net -intf_net S_AXILITE_MMIO_1 [get_bd_intf_ports AXI_MMIO] [get_bd_intf_pins hier_pardcore_peripheral/S_AXILITE_MMIO]
+  connect_bd_intf_net -intf_net S_AXIS_S2MM_1 [get_bd_intf_pins hier_pardcore_peripheral/M_AXIS_MM2S] [get_bd_intf_pins hier_prm_peripheral/S_AXIS_S2MM]
+  connect_bd_intf_net -intf_net S_AXI_MEM_1 [get_bd_intf_ports AXI_MEM] [get_bd_intf_pins hier_prm_peripheral/S_AXI_MEM]
+  connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_ports AXI_DMA] [get_bd_intf_pins hier_pardcore_peripheral/M_AXI_DMA]
+  connect_bd_intf_net -intf_net hier_prm_peripheral_M00_AXI1 [get_bd_intf_pins hier_prm_peripheral/M00_AXI1] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
+  connect_bd_intf_net -intf_net hier_prm_peripheral_M_AXIS_MM2S [get_bd_intf_pins hier_pardcore_peripheral/S_AXIS_S2MM] [get_bd_intf_pins hier_prm_peripheral/M_AXIS_MM2S]
+  connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_LPD [get_bd_intf_pins hier_prm_peripheral/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_LPD]
 
   # Create port connections
-  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_ports corerstn] [get_bd_pins hier_clkrst/corerstn]
-  connect_bd_net -net axi_uartlite_0_interrupt [get_bd_pins axi_uartlite_0/interrupt] [get_bd_pins xlconcat_0/In0]
-  connect_bd_net -net clk_in1_1 [get_bd_pins hier_clkrst/clk_in1] [get_bd_pins zynq_ultra_ps_e_0/pl_clk0]
-  connect_bd_net -net clk_wiz_0_clk50 [get_bd_ports clk50] [get_bd_pins hier_clkrst/clk50]
-  connect_bd_net -net clk_wiz_0_coreclk [get_bd_ports coreclk] [get_bd_pins hier_clkrst/coreclk]
-  connect_bd_net -net clk_wiz_0_uncoreclk [get_bd_ports uncoreclk] [get_bd_pins axi3_to_lite_pc/aclk] [get_bd_pins axi_crossbar_0/aclk] [get_bd_pins axi_uartlite_0/s_axi_aclk] [get_bd_pins hier_clkrst/uncoreclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_lpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk]
+  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_ports corerstn] [get_bd_pins hier_prm_peripheral/corerstn]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_ports uncoreclk] [get_bd_pins hier_clkrst/uncoreclk] [get_bd_pins hier_pardcore_peripheral/uncoreclk] [get_bd_pins hier_prm_peripheral/uncoreclk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_lpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk]
   connect_bd_net -net hier_clkrst_clk27 [get_bd_ports clk27] [get_bd_pins hier_clkrst/clk27]
-  connect_bd_net -net proc_sys_reset_0_peripheral_aresetn [get_bd_ports rstn50] [get_bd_pins hier_clkrst/rstn50]
-  connect_bd_net -net proc_sys_reset_1_interconnect_aresetn [get_bd_pins axi3_to_lite_pc/aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins hier_clkrst/interconnect_aresetn]
-  connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_ports uncorerstn] [get_bd_pins axi_uartlite_0/s_axi_aresetn] [get_bd_pins hier_clkrst/uncorerstn]
-  connect_bd_net -net resetn_1 [get_bd_pins hier_clkrst/resetn] [get_bd_pins zynq_ultra_ps_e_0/pl_resetn0]
-  connect_bd_net -net xlconcat_0_dout [get_bd_pins xlconcat_0/dout] [get_bd_pins zynq_ultra_ps_e_0/pl_ps_irq0]
+  connect_bd_net -net hier_clkrst_clk40 [get_bd_ports clk40] [get_bd_pins hier_clkrst/clk40] [get_bd_pins hier_pardcore_peripheral/clock]
+  connect_bd_net -net hier_clkrst_coreclk [get_bd_ports coreclk] [get_bd_pins hier_clkrst/coreclk]
+  connect_bd_net -net hier_clkrst_interconnect_aresetn1 [get_bd_pins hier_clkrst/interconnect_aresetn1] [get_bd_pins hier_pardcore_peripheral/M03_ARESETN]
+  connect_bd_net -net hier_dma_mm2s_introut [get_bd_pins hier_prm_peripheral/mm2s_introut] [get_bd_pins xlconcat_1/In0]
+  connect_bd_net -net hier_dma_s2mm_introut [get_bd_pins hier_prm_peripheral/s2mm_introut] [get_bd_pins xlconcat_1/In1]
+  connect_bd_net -net hier_pardcore_peripheral_io_vga_vsync [get_bd_ports vga_vsync] [get_bd_pins hier_pardcore_peripheral/io_vga_vsync]
+  connect_bd_net -net hier_pardcore_peripheral_pardcore_intrs [get_bd_ports intrs] [get_bd_pins hier_pardcore_peripheral/intrs]
+  connect_bd_net -net hier_pardcore_peripheral_vga_hsync [get_bd_ports vga_hsync] [get_bd_pins hier_pardcore_peripheral/vga_hsync]
+  connect_bd_net -net hier_pardcore_peripheral_vga_rgb [get_bd_ports vga_rgb] [get_bd_pins hier_pardcore_peripheral/vga_rgb]
+  connect_bd_net -net hier_pardcore_peripheral_vga_valid [get_bd_ports vga_valid] [get_bd_pins hier_pardcore_peripheral/vga_valid]
+  connect_bd_net -net hier_prm_peripheral_interrupt [get_bd_pins hier_prm_peripheral/interrupt] [get_bd_pins xlconcat_1/In2]
+  connect_bd_net -net pardcore_uncorerst_interconnect_aresetn [get_bd_pins hier_clkrst/interconnect_aresetn] [get_bd_pins hier_pardcore_peripheral/ARESETN] [get_bd_pins hier_prm_peripheral/S00_ARESETN]
+  connect_bd_net -net proc_sys_reset_1_peripheral_aresetn [get_bd_ports uncorerstn] [get_bd_pins hier_clkrst/uncorerstn] [get_bd_pins hier_pardcore_peripheral/uncorerstn] [get_bd_pins hier_prm_peripheral/uncorerstn]
+  connect_bd_net -net reset_1 [get_bd_pins hier_clkrst/peripheral_reset] [get_bd_pins hier_pardcore_peripheral/reset]
+  connect_bd_net -net rx_1 [get_bd_pins hier_pardcore_peripheral/rx] [get_bd_pins hier_prm_peripheral/tx]
+  connect_bd_net -net rx_2 [get_bd_pins hier_pardcore_peripheral/tx] [get_bd_pins hier_prm_peripheral/rx]
+  connect_bd_net -net xlconcat_1_dout [get_bd_pins xlconcat_1/dout] [get_bd_pins zynq_ultra_ps_e_0/pl_ps_irq0]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk1 [get_bd_pins hier_clkrst/clk_in1] [get_bd_pins zynq_ultra_ps_e_0/pl_clk0]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins hier_clkrst/resetn] [get_bd_pins zynq_ultra_ps_e_0/pl_resetn0]
 
   # Create address segments
-  create_bd_addr_seg -range 0x00001000 -offset 0x80001000 [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs hier_clkrst/axi_gpio_0/S_AXI/Reg] SEG_axi_gpio_0_Reg
-  create_bd_addr_seg -range 0x00001000 -offset 0x80000000 [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs axi_uartlite_0/S_AXI/Reg] SEG_axi_uartlite_0_Reg
-  create_bd_addr_seg -range 0x80000000 -offset 0x00000000 [get_bd_addr_spaces AXI_MEM] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
+  create_bd_addr_seg -range 0x00001000 -offset 0x80020000 [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs hier_prm_peripheral/axi_dma_arm/S_AXI_LITE/Reg] SEG_axi_dma_arm_Reg
+  create_bd_addr_seg -range 0x00001000 -offset 0x80000000 [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs hier_prm_peripheral/axi_uartlite_0/S_AXI/Reg] SEG_axi_uartlite_0_Reg
+  create_bd_addr_seg -range 0x00001000 -offset 0x80001000 [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs hier_prm_peripheral/corerst/S_AXI/Reg] SEG_pardcore_corerst_Reg
+  create_bd_addr_seg -range 0x010000000000 -offset 0x00000000 [get_bd_addr_spaces hier_pardcore_peripheral/axi_dma_pardcore/Data_SG] [get_bd_addr_segs AXI_DMA/Reg] SEG_AXI_DMA_Reg
+  create_bd_addr_seg -range 0x010000000000 -offset 0x00000000 [get_bd_addr_spaces hier_pardcore_peripheral/axi_dma_pardcore/Data_MM2S] [get_bd_addr_segs AXI_DMA/Reg] SEG_AXI_DMA_Reg
+  create_bd_addr_seg -range 0x010000000000 -offset 0x00000000 [get_bd_addr_spaces hier_pardcore_peripheral/axi_dma_pardcore/Data_S2MM] [get_bd_addr_segs AXI_DMA/Reg] SEG_AXI_DMA_Reg
+  create_bd_addr_seg -range 0x80000000 -offset 0x00000000 [get_bd_addr_spaces hier_prm_peripheral/axi_dma_arm/Data_SG] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
+  create_bd_addr_seg -range 0x80000000 -offset 0x00000000 [get_bd_addr_spaces hier_prm_peripheral/axi_dma_arm/Data_MM2S] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
+  create_bd_addr_seg -range 0x80000000 -offset 0x00000000 [get_bd_addr_spaces hier_prm_peripheral/axi_dma_arm/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
+  create_bd_addr_seg -range 0x00100000 -offset 0x50000000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/AXI4VGA_0/io_in_fb/reg0] SEG_AXI4VGA_0_reg0
+  create_bd_addr_seg -range 0x00001000 -offset 0x40001000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/AXI4VGA_0/io_in_ctrl/reg0] SEG_AXI4VGA_0_reg01
+  create_bd_addr_seg -range 0x00001000 -offset 0x40000000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/axi_dma_pardcore/S_AXI_LITE/Reg] SEG_axi_dma_pardcore_Reg
+  create_bd_addr_seg -range 0x00001000 -offset 0x40600000 [get_bd_addr_spaces AXI_MMIO] [get_bd_addr_segs hier_pardcore_peripheral/axi_uartlite_0/S_AXI/Reg] SEG_axi_uartlite_0_Reg
+  create_bd_addr_seg -range 0x40000000 -offset 0x40000000 [get_bd_addr_spaces AXI_MEM] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] SEG_zynq_ultra_ps_e_0_HP0_DDR_LOW
 
 
   # Restore current instance

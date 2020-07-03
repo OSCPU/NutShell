@@ -5,7 +5,7 @@ object DefaultSettings {
     "MemMapBase" -> 0x0000000000000000L,
     "MemMapRegionBits" -> 0,
     "MMIOBase" -> 0x0000000040000000L,
-    "MMIOSize" -> 0x0000000020000000L,
+    "MMIOSize" -> 0x0000000040000000L,
     "ResetVector" -> 0x80000000L,
     "NrExtIntr" -> 1,
 
@@ -38,14 +38,14 @@ object PynqSettings {
 }
 
 object Axu3cgSettings {
-  def apply() = Map()
+  def apply() = Map(
+    "NrExtIntr" -> 2
+  )
 }
 
 object PXIeSettings {
   def apply() = Map(
-    "NrExtIntr" -> 5,
-    "MMIOBase" -> 0x0000000040000000L,
-    "MMIOSize" -> 0x0000000040000000L
+    "NrExtIntr" -> 5
   )
 }
 
