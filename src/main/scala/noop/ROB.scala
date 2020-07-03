@@ -15,8 +15,9 @@ object physicalRFTools{
 class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasBackendConst with HasRegFileParameter{
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
-    val brMaskIn = Input(Vec(robWidth, UInt(robInstCapacity.W)))
+    val brMaskIn = Input(Vec(robWidth, UInt(checkpointSize.W)))
     val cdb = Vec(robWidth, Flipped(Valid(new OOCommitIO)))
+    val mispredictRec = Flipped(new MisPredictionRecIO)
     val wb = Vec(robWidth, new WriteBackIO)
     val redirect = new RedirectIO
     val flush = Input(Bool())
@@ -37,21 +38,20 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     val rcommited = Output(Vec(robWidth * 2, Bool()))
 
     // Misprediction recovery
-    val brMaskClearVec = Output(UInt(robInstCapacity.W))
     val updateCheckpoint = Input(Valid(UInt(log2Up(checkpointSize).W)))
     val recoverCheckpoint = Input(Valid(UInt(log2Up(checkpointSize).W)))
   })
 
   def needMispredictionRecovery(brMask: UInt) = {
-    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
+    io.mispredictRec.valid && io.mispredictRec.redirect.valid && brMask(io.mispredictRec.checkpoint)
   }
 
   def updateBrMask(brMask: UInt) = {
-    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+    brMask & ~ (UIntToOH(io.mispredictRec.checkpoint) & Fill(checkpointSize, io.mispredictRec.valid))
   }
 
   val decode = Reg(Vec(robSize, Vec(robWidth, new DecodeIO)))
-  val brMask = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(0.U(robInstCapacity.W))))))
+  val brMask = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(0.U(checkpointSize.W))))))
   val valid = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
   // val valid = List.fill(robWidth)(Mem(robSize, Bool()))
   // val validReg = RegInit(0.U.asTypeOf(Vec(robSize * robWidth, Bool())))
@@ -71,6 +71,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   // In NOOP-Argo's backend, non-l/s int/exc will be sent dircetly to CSR when dispatch,
   // while l/s exc will be sent to CSR by LSU.
 
+  // FIXME: use additional bit to distinguish full/empty
   val ringBufferHead = RegInit(0.U(log2Up(robSize).W))
   val ringBufferTail = RegInit(0.U(log2Up(robSize).W))
   val ringBufferEmpty = ringBufferHead === ringBufferTail && !valid(ringBufferHead)(0) && !valid(ringBufferHead)(1)
@@ -153,15 +154,15 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
           // In several cases, FU will invalidate rfWen
           decode(i)(j).ctrl.rfWen := io.cdb(k).bits.decode.ctrl.rfWen
         }
-        when(valid(i)(j) && brMask(i)(j)(io.cdb(k).bits.prfidx) && io.cdb(k).valid && io.cdb(k).bits.decode.cf.redirect.valid ){
-          valid(i)(j) := false.B
-          canceled(i)(j) := true.B
-          Debug(){
-            printf("[MB] %d: robIdx %d %x (%b) reset by %d %x\n", GTimer(), robIdx, decode(i)(j).cf.pc, brMask(i)(j), io.cdb(k).bits.prfidx, io.cdb(k).bits.decode.cf.pc)
-          }
+      }
+      when(valid(i)(j) && needMispredictionRecovery(brMask(i)(j))){
+        valid(i)(j) := false.B
+        canceled(i)(j) := true.B
+        Debug(){
+          printf("[ROB] %d: mis-prediction recovery invalidated robidx %d pc %x (%b)\n", GTimer(), robIdx, decode(i)(j).cf.pc, brMask(i)(j))
         }
       }
-      brMask(i)(j) := updateBrMask(brMask(i)(j) & ~io.brMaskClearVec)
+      brMask(i)(j) := updateBrMask(brMask(i)(j))
     }
   }
 
@@ -209,9 +210,6 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     })
     ringBufferTail := ringBufferTail + 1.U
   }
-
-  // FIXIT
-  io.brMaskClearVec := 0.U
 
   // mispredict checkpoint recovery
   when(io.updateCheckpoint.valid){

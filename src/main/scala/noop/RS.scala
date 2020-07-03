@@ -16,9 +16,10 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
-    val brMaskIn = Input(UInt(robInstCapacity.W))
-    val brMaskOut = Output(UInt(robInstCapacity.W))
+    val brMaskIn = Input(UInt(checkpointSize.W))
+    val brMaskOut = Output(UInt(checkpointSize.W))
     val cdb = Vec(rsCommitWidth, Flipped(Valid(new OOCommitIO)))
+    val mispredictRec = Flipped(new MisPredictionRecIO)
     val flush = Input(Bool())
     val empty = Output(Bool())
     val updateCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
@@ -34,7 +35,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val valid   = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src1Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src2Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
-  val brMask  = RegInit(VecInit(Seq.fill(rsSize)(0.U(robInstCapacity.W))))
+  val brMask  = RegInit(VecInit(Seq.fill(rsSize)(0.U(checkpointSize.W))))
   val prfSrc1 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val prfSrc2 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val src1    = Reg(Vec(rsSize, UInt(XLEN.W)))
@@ -52,11 +53,11 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val forceDequeue = WireInit(false.B)
 
   def needMispredictionRecovery(brMask: UInt) = {
-    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
+    io.mispredictRec.valid && io.mispredictRec.redirect.valid && brMask(io.mispredictRec.checkpoint)
   }
 
   def updateBrMask(brMask: UInt) = {
-    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+    brMask & ~ (UIntToOH(io.mispredictRec.checkpoint) & Fill(checkpointSize, io.mispredictRec.valid))
   }
 
   // Listen to Common Data Bus
@@ -143,7 +144,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   // if an unpipelined fu can store uop itself, set `pipelined` to true (it behaves just like a pipelined FU)
   if(!pipelined){
     val fuValidReg = RegInit(false.B)
-    val brMaskPReg = RegInit(0.U(robInstCapacity.W))
+    val brMaskPReg = RegInit(0.U(checkpointSize.W))
     val fuFlushReg = RegInit(false.B)
     val fuDecodeReg = RegEnable(io.out.bits, io.out.fire())
     brMaskPReg := updateBrMask(brMaskPReg)

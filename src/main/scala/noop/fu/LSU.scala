@@ -81,8 +81,8 @@ class LSUIO extends FunctionUnitIO {
   // val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr // TODO
   val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
   val dtlb = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
-  val cdb = Vec(robWidth, Flipped(Valid(new OOCommitIO)))
-  val brMaskIn = Input(UInt(robInstCapacity.W))
+  val mispredictRec = Flipped(new MisPredictionRecIO)
+  val brMaskIn = Input(UInt(checkpointSize.W))
   val stMaskIn = Input(UInt(robSize.W))
   val robAllocate = Input(Valid(UInt(log2Up(robSize).W)))
   val uopIn = Input(new RenamedDecodeIO)
@@ -98,7 +98,7 @@ class LSUIO extends FunctionUnitIO {
 class StoreQueueEntry extends NOOPBundle{
   val pc       = UInt(VAddrBits.W)
   val prfidx   = UInt(prfAddrWidth.W) // for debug
-  val brMask   = UInt(robInstCapacity.W)
+  val brMask   = UInt(checkpointSize.W)
   val wmask    = UInt((XLEN/8).W) // for store queue forwarding
   val vaddr    = UInt(VAddrBits.W)
   val paddr    = UInt(PAddrBits.W)
@@ -114,7 +114,7 @@ class moqEntry extends NOOPBundle{
   val pc       = UInt(VAddrBits.W)
   val isRVC    = Bool()
   val prfidx   = UInt(prfAddrWidth.W)
-  val brMask   = UInt(robInstCapacity.W)
+  val brMask   = UInt(checkpointSize.W)
   val stMask   = UInt(robSize.W)
   val vaddr    = UInt(VAddrBits.W) // for debug
   val paddr    = UInt(PAddrBits.W)
@@ -200,11 +200,11 @@ class LSU extends NOOPModule with HasLSUConst {
   }
 
   def needMispredictionRecovery(brMask: UInt) = {
-    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
+    io.mispredictRec.valid && io.mispredictRec.redirect.valid && brMask(io.mispredictRec.checkpoint)
   }
 
   def updateBrMask(brMask: UInt) = {
-    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+    brMask & ~ (UIntToOH(io.mispredictRec.checkpoint) & Fill(checkpointSize, io.mispredictRec.valid))
   }
 
   val dmem = io.dmem
@@ -214,14 +214,6 @@ class LSU extends NOOPModule with HasLSUConst {
   val opResp = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val opReq = dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val moqidxResp = dmemUserOut.moqidx
-  val branchIndex = Mux(
-    io.cdb(0).valid && io.cdb(0).bits.decode.cf.redirect.valid && io.cdb(0).bits.decode.cf.redirect.rtype === 1.U,
-    io.cdb(0).bits.prfidx,
-    io.cdb(1).bits.prfidx
-  )
-  val bruFlush = List.tabulate(CommitWidth)(i => 
-    io.cdb(i).bits.decode.cf.redirect.valid && io.cdb(i).bits.decode.cf.redirect.rtype === 1.U
-  ).reduce(_ | _)
 
   // Decode
   val instr    = io.uopIn.decode.cf.instr
@@ -342,7 +334,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // when branch, invalidate insts in wrong branch direction
   List.tabulate(moqSize)(i => {
-    when(moq(i).brMask(branchIndex) && bruFlush){
+    when(needMispredictionRecovery(moq(i).brMask)){
       moq(i).valid := false.B
     }
     moq(i).brMask := updateBrMask(moq(i).brMask) // fixit, AS WELL AS STORE BRMASK !!!!!
@@ -469,12 +461,12 @@ class LSU extends NOOPModule with HasLSUConst {
   // when branch, invalidate insts in wrong branch direction
   List.tabulate(storeQueueSize)(i => {
     when(storeQueueDequeue){
-      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+      when(needMispredictionRecovery(storeQueue(i).brMask)){
         if(i != 0){ storeQueue(i-1).valid := false.B }
       }
       if(i != 0){ storeQueue(i-1).brMask := updateBrMask(storeQueue(i).brMask) }
     }.otherwise{
-      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+      when(needMispredictionRecovery(storeQueue(i).brMask)){
         storeQueue(i).valid := false.B
       }
       storeQueue(i).brMask := updateBrMask(storeQueue(i).brMask)
@@ -497,7 +489,7 @@ class LSU extends NOOPModule with HasLSUConst {
     storeQueue(storeQueueEnqPtr).op := moq(storeQueueEnqSrcPick).op
     storeQueue(storeQueueEnqPtr).data := moq(storeQueueEnqSrcPick).data
     storeQueue(storeQueueEnqPtr).isMMIO := Mux(havePendingStqEnq, moq(moqDmemPtr).isMMIO, paddrIsMMIO)
-    storeQueue(storeQueueEnqPtr).valid := true.B && !(moq(storeQueueEnqSrcPick).brMask(branchIndex) && bruFlush)
+    storeQueue(storeQueueEnqPtr).valid := true.B && !(needMispredictionRecovery(moq(storeQueueEnqSrcPick).brMask))
   }
 
   // detect unfinished uncache store

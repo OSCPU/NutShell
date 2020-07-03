@@ -31,6 +31,12 @@ class RedirectIO extends NOOPBundle {
   val valid = Output(Bool())
 }
 
+class MisPredictionRecIO extends NOOPBundle {
+  val redirect = new RedirectIO
+  val valid = Output(Bool())
+  val checkpoint = Output(UInt(brTagWidth.W))
+}
+
 class CtrlFlowIO extends NOOPBundle {
   val instr = Output(UInt(32.W))
   val pc = Output(UInt(VAddrBits.W))
