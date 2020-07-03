@@ -18,6 +18,8 @@ module system_top (
 
   `axi_wire(AXI_MEM_MAPPED, 64, 8);
   `axi_wire(AXI_MEM, 64, 8);
+  `axi_wire(AXI_MMIO, 64, 8);
+  `axi_wire(AXI_DMA, 64, 16);
 
   wire coreclk;
   wire corerstn;
@@ -27,21 +29,19 @@ module system_top (
   wire uncoreclk;
   wire uncorerstn;
 
+  wire [4:0] intrs;
   wire noop_uart_tx;
   wire noop_uart_rx;
 
   zynq_soc zynq_soc_i (
     `axi_connect_if(AXI_MEM, AXI_MEM_MAPPED),
+    `axi_connect_if(AXI_MMIO, AXI_MMIO),
+    `axi_connect_if(AXI_DMA, AXI_DMA),
 
-    // invert connection
-    .uart_txd(noop_uart_rx),
-    .uart_rxd(noop_uart_tx),
+    .intrs(intrs),
 
     .coreclk(coreclk),
     .corerstn(corerstn),
-    .clk50(clk50),
-    .clk27(clk27),
-    .rstn50(rstn50),
     .uncoreclk(uncoreclk),
     .uncorerstn(uncorerstn)
   );
@@ -64,9 +64,10 @@ module system_top (
 
   noop noop_i(
     `axi_connect_if(AXI_MEM, AXI_MEM),
+    `axi_connect_if(AXI_DMA, AXI_DMA),
+    `axi_connect_if_no_id(AXI_MMIO, AXI_MMIO),
 
-    .uart_txd(noop_uart_tx),
-    .uart_rxd(noop_uart_rx),
+    .intrs(intrs),
 
 `ifdef HAS_HDMI
     .VGA_rgb(hdmi_rgb),
@@ -77,8 +78,6 @@ module system_top (
 
     .coreclk(coreclk),
     .corerstn(corerstn_sync[1]),
-    .clk50(clk50),
-    .rstn50(rstn50),
     .uncoreclk(uncoreclk),
     .uncorerstn(uncorerstn)
   );
