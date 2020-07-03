@@ -17,9 +17,6 @@ module system_top (
 
   wire coreclk;
   wire corerstn;
-  wire clk50;
-  wire clk27;
-  wire rstn50;
   wire uncoreclk;
   wire uncorerstn;
 
