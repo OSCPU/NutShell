@@ -25,8 +25,8 @@ module system_top (
 
   wire [4:0] intrs;
 
-  wire noop_uart_tx;
-  wire noop_uart_rx;
+  wire nutshell_uart_tx;
+  wire nutshell_uart_rx;
 
   zynq_soc zynq_soc_i (
     `axi_connect_if(AXI_MEM, AXI_MEM_MAPPED),
@@ -64,7 +64,7 @@ module system_top (
     corerstn_sync[1] <= corerstn_sync[0];
   end
 
-  noop noop_i(
+  nutshell nutshell_i(
     `axi_connect_if(AXI_MEM, AXI_MEM),
     `axi_connect_if(AXI_DMA, AXI_DMA),
     `axi_connect_if_no_id(AXI_MMIO, AXI_MMIO),

@@ -14,15 +14,15 @@ module system_top (
   wire uncoreclk;
   wire uncorerstn;
 
-  wire noop_uart_tx;
-  wire noop_uart_rx;
+  wire nutshell_uart_tx;
+  wire nutshell_uart_rx;
 
   zynq_soc zynq_soc_i (
     `axi_connect_if(AXI_MEM, AXI_MEM_MAPPED),
 
     // invert connection
-    .uart_txd(noop_uart_rx),
-    .uart_rxd(noop_uart_tx),
+    .uart_txd(nutshell_uart_rx),
+    .uart_rxd(nutshell_uart_tx),
 
     .coreclk(coreclk),
     .corerstn(corerstn),
@@ -48,11 +48,11 @@ module system_top (
     corerstn_sync[1] <= corerstn_sync[0];
   end
 
-  noop noop_i(
+  nutshell nutshell_i(
     `axi_connect_if(AXI_MEM, AXI_MEM),
 
-    .uart_txd(noop_uart_tx),
-    .uart_rxd(noop_uart_rx),
+    .uart_txd(nutshell_uart_tx),
+    .uart_rxd(nutshell_uart_rx),
 
     //.VGA_b(VGA_b),
     //.VGA_r(VGA_r),
