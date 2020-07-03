@@ -25,7 +25,7 @@ class ILABundle extends NOOPBundle {
   val InstrCnt = UInt(64.W)
 }
 
-class NOOPSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
+class NutShellSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })

@@ -30,14 +30,14 @@ class DiffTestIO extends Bundle {
   val scause = Output(UInt(64.W))
 }
 
-class NOOPSimTop extends Module {
+class NutShellSimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
     val difftestCtrl = new DiffTestCtrlIO
   })
 
   lazy val config = NOOPConfig(FPGAPlatform = false)
-  val soc = Module(new NOOPSoC()(config))
+  val soc = Module(new NutShellSoC()(config))
   val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
   // Be careful with the commit checking of emu.
   // A large delay will make emu incorrectly report getting stuck.

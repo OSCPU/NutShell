@@ -40,7 +40,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 
 # The design that will be created by this Tcl script contains the following 
 # module references:
-# NOOPSoC
+# NutShellSoC
 
 # Please add the sources of those modules before sourcing this Tcl script.
 
@@ -165,7 +165,7 @@ xilinx.com:ip:util_vector_logic:2.0\
 set bCheckModules 1
 if { $bCheckModules == 1 } {
    set list_check_mods "\ 
-NOOPSoC\
+NutShellSoC\
 "
 
    set list_mods_missing ""
@@ -241,13 +241,13 @@ proc create_hier_cell_rv_system { parentCell nameHier } {
   create_bd_pin -dir I -from 0 -to 0 -type data corerstn
   create_bd_pin -dir I -from 2 -to 0 io_meip
 
-  # Create instance: NOOPSoC_0, and set properties
-  set block_name NOOPSoC
-  set block_cell_name NOOPSoC_0
-  if { [catch {set NOOPSoC_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+  # Create instance: NutShellSoC_0, and set properties
+  set block_name NutShellSoC
+  set block_cell_name NutShellSoC_0
+  if { [catch {set NutShellSoC_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
      catch {common::send_msg_id "BD_TCL-105" "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
-   } elseif { $NOOPSoC_0 eq "" } {
+   } elseif { $NutShellSoC_0 eq "" } {
      catch {common::send_msg_id "BD_TCL-106" "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
@@ -306,24 +306,24 @@ proc create_hier_cell_rv_system { parentCell nameHier } {
 
   # Create interface connections
   connect_bd_intf_net -intf_net Conn2 [get_bd_intf_pins io_frontend] [get_bd_intf_pins axi_protocol_convert_1/S_AXI]
-  connect_bd_intf_net -intf_net NOOPSoC_0_io_mem [get_bd_intf_pins io_mem] [get_bd_intf_pins NOOPSoC_0/io_mem]
-  connect_bd_intf_net -intf_net NOOPSoC_0_io_mmio [get_bd_intf_pins io_mmio] [get_bd_intf_pins NOOPSoC_0/io_mmio]
-  connect_bd_intf_net -intf_net axi_protocol_convert_0_M_AXI [get_bd_intf_pins NOOPSoC_0/io_frontend] [get_bd_intf_pins axi_protocol_convert_0/M_AXI]
+  connect_bd_intf_net -intf_net NutShellSoC_0_io_mem [get_bd_intf_pins io_mem] [get_bd_intf_pins NutShellSoC_0/io_mem]
+  connect_bd_intf_net -intf_net NutShellSoC_0_io_mmio [get_bd_intf_pins io_mmio] [get_bd_intf_pins NutShellSoC_0/io_mmio]
+  connect_bd_intf_net -intf_net axi_protocol_convert_0_M_AXI [get_bd_intf_pins NutShellSoC_0/io_frontend] [get_bd_intf_pins axi_protocol_convert_0/M_AXI]
   connect_bd_intf_net -intf_net axi_protocol_convert_1_M_AXI [get_bd_intf_pins axi_protocol_convert_0/S_AXI] [get_bd_intf_pins axi_protocol_convert_1/M_AXI]
 
   # Create port connections
-  connect_bd_net -net NOOPSoC_0_io_ila_InstrCnt [get_bd_pins NOOPSoC_0/io_ila_InstrCnt] [get_bd_pins system_ila_0/probe5]
-  connect_bd_net -net NOOPSoC_0_io_ila_WBUpc [get_bd_pins NOOPSoC_0/io_ila_WBUpc] [get_bd_pins system_ila_0/probe0]
-  connect_bd_net -net NOOPSoC_0_io_ila_WBUrfData [get_bd_pins NOOPSoC_0/io_ila_WBUrfData] [get_bd_pins system_ila_0/probe4]
-  connect_bd_net -net NOOPSoC_0_io_ila_WBUrfDest [get_bd_pins NOOPSoC_0/io_ila_WBUrfDest] [get_bd_pins system_ila_0/probe3]
-  connect_bd_net -net NOOPSoC_0_io_ila_WBUrfWen [get_bd_pins NOOPSoC_0/io_ila_WBUrfWen] [get_bd_pins system_ila_0/probe2]
-  connect_bd_net -net NOOPSoC_0_io_ila_WBUvalid [get_bd_pins NOOPSoC_0/io_ila_WBUvalid] [get_bd_pins system_ila_0/probe1]
+  connect_bd_net -net NutShellSoC_0_io_ila_InstrCnt [get_bd_pins NutShellSoC_0/io_ila_InstrCnt] [get_bd_pins system_ila_0/probe5]
+  connect_bd_net -net NutShellSoC_0_io_ila_WBUpc [get_bd_pins NutShellSoC_0/io_ila_WBUpc] [get_bd_pins system_ila_0/probe0]
+  connect_bd_net -net NutShellSoC_0_io_ila_WBUrfData [get_bd_pins NutShellSoC_0/io_ila_WBUrfData] [get_bd_pins system_ila_0/probe4]
+  connect_bd_net -net NutShellSoC_0_io_ila_WBUrfDest [get_bd_pins NutShellSoC_0/io_ila_WBUrfDest] [get_bd_pins system_ila_0/probe3]
+  connect_bd_net -net NutShellSoC_0_io_ila_WBUrfWen [get_bd_pins NutShellSoC_0/io_ila_WBUrfWen] [get_bd_pins system_ila_0/probe2]
+  connect_bd_net -net NutShellSoC_0_io_ila_WBUvalid [get_bd_pins NutShellSoC_0/io_ila_WBUvalid] [get_bd_pins system_ila_0/probe1]
   connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins corerstn] [get_bd_pins axi_protocol_convert_0/aresetn] [get_bd_pins axi_protocol_convert_1/aresetn] [get_bd_pins c_shift_ram_1/D]
   connect_bd_net -net c_shift_ram_0_Q [get_bd_pins c_shift_ram_0/Q] [get_bd_pins util_vector_logic_0/Op1]
   connect_bd_net -net c_shift_ram_1_Q [get_bd_pins c_shift_ram_0/D] [get_bd_pins c_shift_ram_1/Q]
-  connect_bd_net -net clk_wiz_0_coreclk [get_bd_pins coreclk] [get_bd_pins NOOPSoC_0/clock] [get_bd_pins axi_protocol_convert_0/aclk] [get_bd_pins axi_protocol_convert_1/aclk] [get_bd_pins c_shift_ram_0/CLK] [get_bd_pins c_shift_ram_1/CLK] [get_bd_pins system_ila_0/clk]
-  connect_bd_net -net io_meip_1 [get_bd_pins io_meip] [get_bd_pins NOOPSoC_0/io_meip]
-  connect_bd_net -net util_vector_logic_0_Res [get_bd_pins NOOPSoC_0/reset] [get_bd_pins util_vector_logic_0/Res]
+  connect_bd_net -net clk_wiz_0_coreclk [get_bd_pins coreclk] [get_bd_pins NutShellSoC_0/clock] [get_bd_pins axi_protocol_convert_0/aclk] [get_bd_pins axi_protocol_convert_1/aclk] [get_bd_pins c_shift_ram_0/CLK] [get_bd_pins c_shift_ram_1/CLK] [get_bd_pins system_ila_0/clk]
+  connect_bd_net -net io_meip_1 [get_bd_pins io_meip] [get_bd_pins NutShellSoC_0/io_meip]
+  connect_bd_net -net util_vector_logic_0_Res [get_bd_pins NutShellSoC_0/reset] [get_bd_pins util_vector_logic_0/Res]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -1310,7 +1310,7 @@ proc create_root_design { parentCell } {
  ] $xlconcat_0
 
   # Create interface connections
-  connect_bd_intf_net -intf_net NOOPSoC_0_io_mem [get_bd_intf_pins axi_interconnect_0/S00_AXI] [get_bd_intf_pins rv_system/io_mem]
+  connect_bd_intf_net -intf_net NutShellSoC_0_io_mem [get_bd_intf_pins axi_interconnect_0/S00_AXI] [get_bd_intf_pins rv_system/io_mem]
   connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins axi_interconnect_1/S00_AXI] [get_bd_intf_pins processing_system7_0/M_AXI_GP0]
   connect_bd_intf_net -intf_net S00_AXI_2 [get_bd_intf_pins axi_interconnect_2/S00_AXI] [get_bd_intf_pins rv_system/io_mmio]
   connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins axi_interconnect_0/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP0]
@@ -1334,13 +1334,13 @@ proc create_root_design { parentCell } {
   connect_bd_net -net xlconcat_0_dout [get_bd_pins rv_system/io_meip] [get_bd_pins xlconcat_0/dout]
 
   # Create address segments
-  create_bd_addr_seg -range 0x20000000 -offset 0x60000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs rv_system/NOOPSoC_0/io_frontend/reg0] SEG_NOOPSoC_0_reg0
+  create_bd_addr_seg -range 0x20000000 -offset 0x60000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs rv_system/NutShellSoC_0/io_frontend/reg0] SEG_NutShellSoC_0_reg0
   create_bd_addr_seg -range 0x00001000 -offset 0x40000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs hier_clkrst/axi_gpio_0/S_AXI/Reg] SEG_axi_gpio_0_Reg
-  create_bd_addr_seg -range 0x00001000 -offset 0xE000B000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_ENET0] SEG_processing_system7_0_GP0_ENET0
-  create_bd_addr_seg -range 0x00010000 -offset 0xF8000000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_PS_SLCR_REGS] SEG_processing_system7_0_GP0_PS_SLCR_REGS
-  create_bd_addr_seg -range 0x00001000 -offset 0xE0100000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_SDIO0] SEG_processing_system7_0_GP0_SDIO0
-  create_bd_addr_seg -range 0x00001000 -offset 0xE0000000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_UART0] SEG_processing_system7_0_GP0_UART0
-  create_bd_addr_seg -range 0x10000000 -offset 0x10000000 [get_bd_addr_spaces rv_system/NOOPSoC_0/io_mem] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_DDR_LOWOCM] SEG_processing_system7_0_HP0_DDR_LOWOCM
+  create_bd_addr_seg -range 0x00001000 -offset 0xE000B000 [get_bd_addr_spaces rv_system/NutShellSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_ENET0] SEG_processing_system7_0_GP0_ENET0
+  create_bd_addr_seg -range 0x00010000 -offset 0xF8000000 [get_bd_addr_spaces rv_system/NutShellSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_PS_SLCR_REGS] SEG_processing_system7_0_GP0_PS_SLCR_REGS
+  create_bd_addr_seg -range 0x00001000 -offset 0xE0100000 [get_bd_addr_spaces rv_system/NutShellSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_SDIO0] SEG_processing_system7_0_GP0_SDIO0
+  create_bd_addr_seg -range 0x00001000 -offset 0xE0000000 [get_bd_addr_spaces rv_system/NutShellSoC_0/io_mmio] [get_bd_addr_segs processing_system7_0/S_AXI_GP0/GP0_UART0] SEG_processing_system7_0_GP0_UART0
+  create_bd_addr_seg -range 0x10000000 -offset 0x10000000 [get_bd_addr_spaces rv_system/NutShellSoC_0/io_mem] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_DDR_LOWOCM] SEG_processing_system7_0_HP0_DDR_LOWOCM
 
 
   # Restore current instance

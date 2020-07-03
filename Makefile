@@ -1,5 +1,5 @@
 TOP = TopMain
-FPGATOP = FPGANOOP
+FPGATOP = FPGANUTSHELL
 BUILD_DIR = ./build
 TOP_V = $(BUILD_DIR)/$(TOP).v
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
@@ -41,7 +41,7 @@ build/top.zip: $(TOP_V)
 
 verilog: $(TOP_V)
 
-SIM_TOP = NOOPSimTop
+SIM_TOP = NutShellSimTop
 SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
