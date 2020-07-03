@@ -3,7 +3,7 @@ package bus.simplebus
 import chisel3._
 import chisel3.util._
 
-import noop.HasNOOPParameter
+import nutshell.HasNOOPParameter
 import utils._
 import bus.axi4._
 import bus.memport._

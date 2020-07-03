@@ -1,4 +1,4 @@
-package noop
+package nutshell
 
 import chisel3._
 import chisel3.util._
@@ -10,7 +10,7 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
-    val isWFI = Output(Bool()) // require NOOPSim to advance mtime when wfi to reduce the idle time in Linux
+    val isWFI = Output(Bool()) // require NutShellSim to advance mtime when wfi to reduce the idle time in Linux
     val flush = Input(Bool())
   })
 

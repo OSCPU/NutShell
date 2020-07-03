@@ -3,7 +3,7 @@ package utils
 import chisel3._
 import chisel3.util._
 
-import noop.NOOPConfig
+import nutshell.NOOPConfig
 
 object Debug {
   def apply(flag: Boolean = NOOPConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any =

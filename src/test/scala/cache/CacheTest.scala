@@ -1,6 +1,6 @@
 package top
 
-import noop._
+import nutshell._
 import bus.simplebus._
 import device._
 import utils._
@@ -11,12 +11,12 @@ import chisel3.util.experimental.BoringUtils
 
 // To run the following cache random test, do the following:
 // * uncomment the following class
-// * comment the NOOPSimTop class in noop/src/test/scala/top/NOOPSim.scala
+// * comment the NutShellSimTop class in noop/src/test/scala/top/NutShellSim.scala
 // * define the macro CACHE_TEST in noop/src/test/csrc/emu.h:141
 // * run 'make cache' under noop/
 
 /*
-class NOOPSimTop extends Module {
+class NutShellSimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
   })
@@ -144,7 +144,7 @@ class NOOPSimTop extends Module {
       GTimer(), cohIn.resp.bits.rdata, cohAddr)
   }
 
-  // only use to keep consistent with NOOPSimTop
+  // only use to keep consistent with NutShellSimTop
   io.difftest := DontCare
   dontTouch(io.difftest)
 }

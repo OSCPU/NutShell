@@ -1,7 +1,7 @@
 package sim
 
 import system._
-import noop.NOOPConfig
+import nutshell.NOOPConfig
 
 import chisel3._
 import chisel3.util._

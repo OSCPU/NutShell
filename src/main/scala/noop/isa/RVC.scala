@@ -1,5 +1,5 @@
 // This package is used to deal with RVC decode
-package noop
+package nutshell
 
 import chisel3._
 import chisel3.util._

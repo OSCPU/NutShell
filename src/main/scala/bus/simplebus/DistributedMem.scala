@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.loadMemoryFromFile
 
-import noop.HasNOOPParameter
+import nutshell.HasNOOPParameter
 
 class DistributedMem(memByte: Int, dualPort: Boolean, delayCycles: Int = 0, dataFile: String = "")
   extends Module with HasNOOPParameter {

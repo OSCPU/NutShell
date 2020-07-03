@@ -3,7 +3,7 @@ package device
 import chisel3._
 import chisel3.util._
 
-import noop.HasNOOPParameter
+import nutshell.HasNOOPParameter
 import bus.axi4._
 import utils._
 

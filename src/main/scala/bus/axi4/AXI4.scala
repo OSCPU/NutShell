@@ -5,7 +5,7 @@ package bus.axi4
 import chisel3._
 import chisel3.util._
 
-import noop.HasNOOPParameter
+import nutshell.HasNOOPParameter
 import utils._
 
 object AXI4Parameters extends HasNOOPParameter {

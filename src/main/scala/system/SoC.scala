@@ -1,6 +1,6 @@
 package system
 
-import noop._
+import nutshell._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import device.{AXI4Timer, AXI4PLIC}

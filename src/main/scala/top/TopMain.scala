@@ -1,6 +1,6 @@
 package top
 
-import noop.NOOPConfig
+import nutshell.NOOPConfig
 import system.NutShellSoC
 import device.{AXI4Timer, AXI4VGA, AXI4Flash}
 import gpu._
