@@ -68,7 +68,7 @@ class ROB(implicit val p: NutShellConfig) extends NutShellModule with HasInstrTy
   // }
 
   // Almost all int/exceptions can be detected at decode stage, excepting for load/store related exception.
-  // In NOOP-Argo's backend, non-l/s int/exc will be sent dircetly to CSR when dispatch,
+  // In NutShell-Argo's backend, non-l/s int/exc will be sent dircetly to CSR when dispatch,
   // while l/s exc will be sent to CSR by LSU.
 
   val ringBufferHead = RegInit(0.U(log2Up(robSize).W))

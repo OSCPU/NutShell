@@ -89,7 +89,7 @@ trait HasCSRConst {
   val PmpaddrBase   = 0x3B0 
 
   // Machine Counter/Timers 
-  // Currently, NOOP uses perfcnt csr set instead of standard Machine Counter/Timers 
+  // Currently, NutShell uses perfcnt csr set instead of standard Machine Counter/Timers 
   // 0xB80 - 0x89F are also used as perfcnt csr
 
   // Machine Counter Setup (not implemented)
@@ -646,7 +646,7 @@ class CSR(implicit val p: NutShellConfig) extends NutShellModule with HasCSRCons
   val deleg = Mux(raiseIntr, mideleg , medeleg)
   // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
   val delegS = (deleg(causeNO(3,0))) && (priviledgeMode < ModeM)
-  val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in noop-riscv64, no exception will come together with PF
+  val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in nutshell-riscv64, no exception will come together with PF
 
   ret := isMret || isSret || isUret
   trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)

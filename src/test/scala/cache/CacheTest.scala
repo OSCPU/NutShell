@@ -11,9 +11,9 @@ import chisel3.util.experimental.BoringUtils
 
 // To run the following cache random test, do the following:
 // * uncomment the following class
-// * comment the NutShellSimTop class in noop/src/test/scala/top/NutShellSim.scala
-// * define the macro CACHE_TEST in noop/src/test/csrc/emu.h:141
-// * run 'make cache' under noop/
+// * comment the NutShellSimTop class in nutshell/src/test/scala/top/NutShellSim.scala
+// * define the macro CACHE_TEST in nutshell/src/test/csrc/emu.h:141
+// * run 'make cache' under nutshell/
 
 /*
 class NutShellSimTop extends Module {
