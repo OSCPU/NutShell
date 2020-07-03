@@ -37,7 +37,7 @@ object SrcType {
   def apply() = UInt(1.W)
 }
 
-object FuType extends HasNOOPConst {
+object FuType extends HasNutShellConst {
   def num = 5
   def alu = "b000".U
   def lsu = "b001".U
@@ -53,7 +53,7 @@ object FuOpType {
   def apply() = UInt(7.W)
 }
 
-object Instructions extends HasInstrType with HasNOOPParameter {
+object Instructions extends HasInstrType with HasNutShellParameter {
   def NOP = 0x00000013.U
   val DecodeDefault = List(InstrN, FuType.csr, CSROpType.jmp)
   def DecodeTable = RVIInstr.table ++ NOOPTrap.table ++
@@ -64,7 +64,7 @@ object Instructions extends HasInstrType with HasNOOPParameter {
     RVZicsrInstr.table ++ RVZifenceiInstr.table
 }
 
-object CInstructions extends HasInstrType with HasNOOPParameter{
+object CInstructions extends HasInstrType with HasNutShellParameter{
   def NOP = 0x00000013.U
   val DecodeDefault = List(RVCInstr.ImmNone, RVCInstr.DtCare, RVCInstr.DtCare, RVCInstr.DtCare)
   // val DecodeDefault = List(InstrN, FuType.csr, CSROpType.jmp)

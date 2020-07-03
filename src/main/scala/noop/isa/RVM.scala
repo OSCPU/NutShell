@@ -3,7 +3,7 @@ package nutshell
 import chisel3._
 import chisel3.util._
 
-object RV32MInstr extends HasInstrType with HasNOOPParameter {
+object RV32MInstr extends HasInstrType with HasNutShellParameter {
   def MUL     = BitPat("b0000001_?????_?????_000_?????_0110011")
   def MULH    = BitPat("b0000001_?????_?????_001_?????_0110011")
   def MULHSU  = BitPat("b0000001_?????_?????_010_?????_0110011")
@@ -33,7 +33,7 @@ object RV32MInstr extends HasInstrType with HasNOOPParameter {
   val table = mulTable ++ (if (HasDiv) divTable else Nil)
 }
 
-object RV64MInstr extends HasInstrType with HasNOOPParameter {
+object RV64MInstr extends HasInstrType with HasNutShellParameter {
   def MULW    = BitPat("b0000001_?????_?????_000_?????_0111011")
   def DIVW    = BitPat("b0000001_?????_?????_100_?????_0111011")
   def DIVUW   = BitPat("b0000001_?????_?????_101_?????_0111011")
@@ -52,6 +52,6 @@ object RV64MInstr extends HasInstrType with HasNOOPParameter {
   val table = mulTable ++ (if (HasDiv) divTable else Nil)
 }
 
-object RVMInstr extends HasNOOPParameter {
+object RVMInstr extends HasNutShellParameter {
   val table = RV32MInstr.table ++ (if (XLEN == 64) RV64MInstr.table else Nil)
 }

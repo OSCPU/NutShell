@@ -9,7 +9,7 @@ import bus.axi4._
 import utils._
 import top.Settings
 
-trait HasNOOPParameter {
+trait HasNutShellParameter {
   val XLEN = if (Settings.get("IsRV32")) 32 else 64
   val HasMExtension = true
   val HasCExtension = true
@@ -32,22 +32,22 @@ trait HasNOOPParameter {
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
 }
 
-trait HasNOOPConst extends HasNOOPParameter {
+trait HasNutShellConst extends HasNutShellParameter {
   val CacheReadWidth = 8
   val ICacheUserBundleWidth = VAddrBits*2 + 9 // TODO: this const depends on VAddrBits
   val DCacheUserBundleWidth = 16
   val IndependentBru = if (Settings.get("EnableOutOfOrderExec")) true else false
 }
 
-abstract class NOOPModule extends Module with HasNOOPParameter with HasNOOPConst with HasExceptionNO with HasBackendConst
-abstract class NOOPBundle extends Bundle with HasNOOPParameter with HasNOOPConst with HasBackendConst
+abstract class NutShellModule extends Module with HasNutShellParameter with HasNutShellConst with HasExceptionNO with HasBackendConst
+abstract class NutShellBundle extends Bundle with HasNutShellParameter with HasNutShellConst with HasBackendConst
 
-case class NOOPConfig (
+case class NutShellConfig (
   FPGAPlatform: Boolean = true,
   EnableDebug: Boolean = Settings.get("EnableDebug")
 )
 
-object AddressSpace extends HasNOOPParameter {
+object AddressSpace extends HasNutShellParameter {
   // (start, size)
   // address out of MMIO will be considered as DRAM
   def mmio = List(
@@ -62,7 +62,7 @@ object AddressSpace extends HasNOOPParameter {
   }).reduce(_ || _)
 }
 
-class NOOP(implicit val p: NOOPConfig) extends NOOPModule {
+class NutShell(implicit val p: NutShellConfig) extends NutShellModule {
   val io = IO(new Bundle {
     val imem = new SimpleBusC
     val dmem = new SimpleBusC

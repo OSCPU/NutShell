@@ -67,8 +67,8 @@ sealed trait HasCacheConst {
   def isSetConflict(a1: UInt, a2: UInt) = (a1.asTypeOf(addrBundle).index === a2.asTypeOf(addrBundle).index)
 }
 
-sealed abstract class CacheBundle(implicit cacheConfig: CacheConfig) extends Bundle with HasNOOPParameter with HasCacheConst
-sealed abstract class CacheModule(implicit cacheConfig: CacheConfig) extends Module with HasNOOPParameter with HasCacheConst
+sealed abstract class CacheBundle(implicit cacheConfig: CacheConfig) extends Bundle with HasNutShellParameter with HasCacheConst
+sealed abstract class CacheModule(implicit cacheConfig: CacheConfig) extends Module with HasNutShellParameter with HasCacheConst
 
 sealed class MetaBundle(implicit val cacheConfig: CacheConfig) extends CacheBundle {
   val tag = Output(UInt(TagBits.W))

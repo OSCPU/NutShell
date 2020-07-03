@@ -5,10 +5,10 @@ package bus.axi4
 import chisel3._
 import chisel3.util._
 
-import nutshell.HasNOOPParameter
+import nutshell.HasNutShellParameter
 import utils._
 
-object AXI4Parameters extends HasNOOPParameter {
+object AXI4Parameters extends HasNutShellParameter {
   // These are all fixed by the AXI4 standard:
   val lenBits   = 8
   val sizeBits  = 3

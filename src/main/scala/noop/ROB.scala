@@ -12,7 +12,7 @@ object physicalRFTools{
   }
 }
 
-class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with HasBackendConst with HasRegFileParameter{
+class ROB(implicit val p: NutShellConfig) extends NutShellModule with HasInstrType with HasBackendConst with HasRegFileParameter{
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
     val brMaskIn = Input(Vec(robWidth, UInt(robInstCapacity.W)))
@@ -88,7 +88,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   val rmtMap = Reg(Vec(NRReg, UInt(prfAddrWidth.W)))
   val rmtValid = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
 
-  sealed class Checkpoint extends NOOPBundle {
+  sealed class Checkpoint extends NutShellBundle {
     val map = Vec(NRReg, UInt(prfAddrWidth.W))
     val valid = Vec(NRReg, Bool())
   }

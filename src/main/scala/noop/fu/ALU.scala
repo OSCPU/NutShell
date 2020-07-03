@@ -54,7 +54,7 @@ class ALUIO extends FunctionUnitIO {
   val offset = Input(UInt(XLEN.W))
 }
 
-class ALU(hasBru: Boolean = false) extends NOOPModule {
+class ALU(hasBru: Boolean = false) extends NutShellModule {
   val io = IO(new ALUIO)
 
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)

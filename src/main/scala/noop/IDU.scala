@@ -6,7 +6,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
+class Decoder(implicit val p: NutShellConfig) extends NutShellModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
@@ -171,7 +171,7 @@ class Decoder(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
 
 }
 
-class IDU(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType {
+class IDU(implicit val p: NutShellConfig) extends NutShellModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Vec(2, Flipped(Decoupled(new CtrlFlowIO)))
     val out = Vec(2, Decoupled(new DecodeIO))

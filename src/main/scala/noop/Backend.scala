@@ -24,7 +24,7 @@ trait HasBackendConst{
 }
 
 // Out Of Order Execution Backend 
-class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParameter with HasBackendConst{
+class Backend(implicit val p: NutShellConfig) extends NutShellModule with HasRegFileParameter with HasBackendConst{
 
   val io = IO(new Bundle {
     // EXU
@@ -710,7 +710,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   
 }
 
-class Backend_seq(implicit val p: NOOPConfig) extends NOOPModule {
+class Backend_seq(implicit val p: NutShellConfig) extends NutShellModule {
   val io = IO(new Bundle {
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
     val flush = Input(UInt(2.W))

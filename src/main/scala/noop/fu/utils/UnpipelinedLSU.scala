@@ -17,7 +17,7 @@ class UnpipeLSUIO extends FunctionUnitIO {
   val storeAddrMisaligned = Output(Bool()) // TODO: refactor it for new backend
 }
 
-class UnpipelinedLSU extends NOOPModule with HasLSUConst {
+class UnpipelinedLSU extends NutShellModule with HasLSUConst {
   val io = IO(new UnpipeLSUIO)
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt, dtlbPF: Bool): UInt = {
@@ -272,7 +272,7 @@ class UnpipelinedLSU extends NOOPModule with HasLSUConst {
     io.storeAddrMisaligned := lsExecUnit.io.storeAddrMisaligned
 }
 
-class LSExecUnit extends NOOPModule {
+class LSExecUnit extends NutShellModule {
   val io = IO(new UnpipeLSUIO)
 
   val (valid, addr, func) = (io.in.valid, io.in.bits.src1, io.in.bits.func) // src1 is used as address

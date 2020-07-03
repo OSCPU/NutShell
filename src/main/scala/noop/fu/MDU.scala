@@ -33,7 +33,7 @@ class MulDivIO(val len: Int) extends Bundle {
   val out = DecoupledIO(Output(UInt((len * 2).W)))
 }
 
-class Multiplier(len: Int) extends NOOPModule {
+class Multiplier(len: Int) extends NutShellModule {
   val io = IO(new MulDivIO(len))
   val latency = 1
 
@@ -49,7 +49,7 @@ class Multiplier(len: Int) extends NOOPModule {
   io.in.ready := (if (latency == 0) true.B else !busy)
 }
 
-class Divider(len: Int = 64) extends NOOPModule {
+class Divider(len: Int = 64) extends NutShellModule {
   val io = IO(new MulDivIO(len))
 
   def abs(a: UInt, sign: Bool): (Bool, UInt) = {
@@ -116,7 +116,7 @@ class Divider(len: Int = 64) extends NOOPModule {
 class MDUIO extends FunctionUnitIO {
 }
 
-class MDU extends NOOPModule {
+class MDU extends NutShellModule {
   val io = IO(new MDUIO)
 
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)

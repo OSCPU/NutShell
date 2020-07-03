@@ -7,7 +7,7 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 
 // Sequential Inst Issue Unit 
-class ISU(implicit val p: NOOPConfig) extends NOOPModule with HasRegFileParameter {
+class ISU(implicit val p: NutShellConfig) extends NutShellModule with HasRegFileParameter {
   val io = IO(new Bundle {
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
     val out = Decoupled(Vec(2, new DecodeIO))

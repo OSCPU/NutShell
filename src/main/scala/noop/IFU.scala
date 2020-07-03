@@ -12,7 +12,7 @@ trait HasResetVector {
   val resetVector = Settings.getLong("ResetVector")
 }
 
-class IFU extends NOOPModule with HasResetVector {
+class IFU extends NutShellModule with HasResetVector {
   val io = IO(new Bundle {
 
     val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
@@ -116,7 +116,7 @@ class IFU extends NOOPModule with HasResetVector {
   mcp.io.flush := io.redirect.valid
   mcp.io.ignore := lateJumpLatch
 
-  class MCPResult extends NOOPBundle{
+  class MCPResult extends NutShellBundle{
     val redirect = new RedirectIO
     val brIdx = Output(Vec(4, Bool()))
   }

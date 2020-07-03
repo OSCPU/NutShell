@@ -3,7 +3,7 @@ package nutshell
 import chisel3._
 import chisel3.util._
 
-object RV32I_ALUInstr extends HasInstrType with HasNOOPParameter {
+object RV32I_ALUInstr extends HasInstrType with HasNutShellParameter {
   def ADDI    = BitPat("b????????????_?????_000_?????_0010011")
   def SLLI    = if (XLEN == 32) BitPat("b0000000?????_?????_001_?????_0010011")
                            else BitPat("b000000??????_?????_001_?????_0010011")
@@ -149,7 +149,7 @@ object RV64IInstr extends HasInstrType {
   )
 }
 
-object RVIInstr extends HasNOOPParameter {
+object RVIInstr extends HasNutShellParameter {
   val table = RV32I_ALUInstr.table ++ RV32I_BRUInstr.table ++ RV32I_LSUInstr.table ++
     (if (XLEN == 64) RV64IInstr.table else Nil)
 }

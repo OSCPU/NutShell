@@ -3,7 +3,7 @@ package nutshell
 import chisel3._
 import chisel3.util._
 
-class CtrlSignalIO extends NOOPBundle {
+class CtrlSignalIO extends NutShellBundle {
   val src1Type = Output(SrcType())
   val src2Type = Output(SrcType())
   val fuType = Output(FuType())
@@ -19,19 +19,19 @@ class CtrlSignalIO extends NOOPBundle {
   val isBlocked = Output(Bool())   // This inst requires pipeline to be blocked
 }
 
-class DataSrcIO extends NOOPBundle {
+class DataSrcIO extends NutShellBundle {
   val src1 = Output(UInt(XLEN.W))
   val src2 = Output(UInt(XLEN.W))
   val imm  = Output(UInt(XLEN.W))
 }
 
-class RedirectIO extends NOOPBundle {
+class RedirectIO extends NutShellBundle {
   val target = Output(UInt(VAddrBits.W))
   val rtype = Output(UInt(1.W)) // 1: branch mispredict: only need to flush frontend  0: others: flush the whole pipeline
   val valid = Output(Bool())
 }
 
-class CtrlFlowIO extends NOOPBundle {
+class CtrlFlowIO extends NutShellBundle {
   val instr = Output(UInt(32.W))
   val pc = Output(UInt(VAddrBits.W))
   val pnpc = Output(UInt(VAddrBits.W))
@@ -43,27 +43,27 @@ class CtrlFlowIO extends NOOPBundle {
   val crossPageIPFFix = Output(Bool())
 }
 
-class DecodeIO extends NOOPBundle {
+class DecodeIO extends NutShellBundle {
   val cf = new CtrlFlowIO
   val ctrl = new CtrlSignalIO
   val data = new DataSrcIO
   val pipeline2 = Output(Bool())
 }
 
-class WriteBackIO extends NOOPBundle {
+class WriteBackIO extends NutShellBundle {
   val rfWen = Output(Bool())
   val rfDest = Output(UInt(5.W))
   val rfData = Output(UInt(XLEN.W))
 }
 
-class CommitIO extends NOOPBundle {
+class CommitIO extends NutShellBundle {
   val decode = new DecodeIO
   val isMMIO = Output(Bool())
   val intrNO = Output(UInt(XLEN.W))
   val commits = Output(Vec(FuType.num, UInt(XLEN.W)))
 }
 
-class OOCommitIO extends NOOPBundle with HasBackendConst{
+class OOCommitIO extends NutShellBundle with HasBackendConst{
   val decode = new DecodeIO
   val isMMIO = Output(Bool())
   val intrNO = Output(UInt(XLEN.W))
@@ -72,7 +72,7 @@ class OOCommitIO extends NOOPBundle with HasBackendConst{
   val exception = Output(Bool())
 }
 
-class FunctionUnitIO extends NOOPBundle {
+class FunctionUnitIO extends NutShellBundle {
   val in = Flipped(Decoupled(new Bundle {
     val src1 = Output(UInt(XLEN.W))
     val src2 = Output(UInt(XLEN.W))
@@ -81,13 +81,13 @@ class FunctionUnitIO extends NOOPBundle {
   val out = Decoupled(Output(UInt(XLEN.W)))
 }
 
-class ForwardIO extends NOOPBundle {
+class ForwardIO extends NutShellBundle {
   val valid = Output(Bool())
   val wb = new WriteBackIO
   val fuType = Output(FuType())
 }
 
-class MMUIO extends NOOPBundle {
+class MMUIO extends NutShellBundle {
   // val ptev = Output(Bool())
   // val pteu = Output(Bool())
   // val ptex = Output(Bool())
@@ -105,12 +105,12 @@ class MMUIO extends NOOPBundle {
   def isPF() = loadPF || storePF
 }
 
-class MemMMUIO extends NOOPBundle {
+class MemMMUIO extends NutShellBundle {
   val imem = new MMUIO
   val dmem = new MMUIO
 }
 
-class TLBExuIO extends NOOPBundle {
+class TLBExuIO extends NutShellBundle {
   val satp = Output(UInt(XLEN.W))
   val sfence = new Bundle {
     val valid = Output(Bool())
@@ -126,7 +126,7 @@ class TLBExuIO extends NOOPBundle {
   }
 }
 
-class InstFetchIO extends NOOPBundle {
+class InstFetchIO extends NutShellBundle {
   val pc = Output(UInt(VAddrBits.W)) // real PC will be regenerated in IBF 
   val pnpc = Output(UInt(VAddrBits.W))
   val brIdx = Output(UInt(4.W))
@@ -136,7 +136,7 @@ class InstFetchIO extends NOOPBundle {
   val instr = Output(UInt(64.W))
 }
 
-class RenamedDecodeIO extends NOOPBundle with HasBackendConst {
+class RenamedDecodeIO extends NutShellBundle with HasBackendConst {
   val decode = new DecodeIO
   val prfDest = Output(UInt(prfAddrWidth.W))
   val prfSrc1 = Output(UInt(prfAddrWidth.W))

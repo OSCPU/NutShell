@@ -5,9 +5,9 @@ import chisel3.util._
 
 import utils._
 import bus.simplebus._
-import nutshell.HasNOOPParameter
+import nutshell.HasNutShellParameter
 
-trait HasCoherenceParameter extends HasNOOPParameter {
+trait HasCoherenceParameter extends HasNutShellParameter {
   val supportCoh = HasDcache
 }
 

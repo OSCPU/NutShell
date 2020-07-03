@@ -6,7 +6,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-class TableAddr(val idxBits: Int) extends NOOPBundle {
+class TableAddr(val idxBits: Int) extends NutShellBundle {
   def tagBits = VAddrBits - 3 - idxBits
 
   //val res = UInt((AddrBits - VAddrBits).W)
@@ -28,7 +28,7 @@ object BTBtype {
   def apply() = UInt(2.W)
 }
 
-class BPUUpdateReq extends NOOPBundle {
+class BPUUpdateReq extends NutShellBundle {
   val valid = Output(Bool())
   val pc = Output(UInt(VAddrBits.W))
   val isMissPredict = Output(Bool())
@@ -40,7 +40,7 @@ class BPUUpdateReq extends NOOPBundle {
 }
 
 // nextline predicter generates NPC from current NPC in 1 cycle
-class NLP extends NOOPModule {
+class NLP extends NutShellModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
     val out = new RedirectIO 
@@ -180,7 +180,7 @@ class NLP extends NOOPModule {
   // ROCKET uses a 32 bit instline, and its IDU logic is more simple than this implentation.
 }
 
-class BPU2 extends NOOPModule {
+class BPU2 extends NutShellModule {
   val io = IO(new Bundle {
     val in = Flipped(Valid(new CtrlFlowIO))
     val out = new RedirectIO
@@ -207,7 +207,7 @@ class BPU2 extends NOOPModule {
 }
 
 // multi-cycle predicter must generates NPC from current NPC in no more than 3 cycles
-class DummyPredicter extends NOOPModule {
+class DummyPredicter extends NutShellModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
     val out = new RedirectIO

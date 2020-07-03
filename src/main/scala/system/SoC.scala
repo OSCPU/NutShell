@@ -16,7 +16,7 @@ trait HasSoCParameter {
   val HasPrefetch = Settings.get("HasL2cache")
 }
 
-class ILABundle extends NOOPBundle {
+class ILABundle extends NutShellBundle {
   val WBUpc = UInt(VAddrBits.W)
   val WBUvalid = UInt(1.W)
   val WBUrfWen = UInt(1.W)
@@ -25,7 +25,7 @@ class ILABundle extends NOOPBundle {
   val InstrCnt = UInt(64.W)
 }
 
-class NutShellSoC(implicit val p: NOOPConfig) extends Module with HasSoCParameter {
+class NutShellSoC(implicit val p: NutShellConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
@@ -34,17 +34,17 @@ class NutShellSoC(implicit val p: NOOPConfig) extends Module with HasSoCParamete
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
-  val noop = Module(new NOOP)
+  val nutshell = Module(new NutShell)
   val cohMg = Module(new CoherenceManager)
   val xbar = Module(new SimpleBusCrossbarNto1(2))
-  cohMg.io.in <> noop.io.imem.mem
-  noop.io.dmem.coh <> cohMg.io.out.coh
+  cohMg.io.in <> nutshell.io.imem.mem
+  nutshell.io.dmem.coh <> cohMg.io.out.coh
   xbar.io.in(0) <> cohMg.io.out.mem
-  xbar.io.in(1) <> noop.io.dmem.mem
+  xbar.io.in(1) <> nutshell.io.dmem.mem
 
   val axi2sb = Module(new AXI42SimpleBusConverter())
   axi2sb.io.in <> io.frontend
-  noop.io.frontend <> axi2sb.io.out
+  nutshell.io.frontend <> axi2sb.io.out
 
   val memport = xbar.io.out.toMemPort()
   memport.resp.bits.data := DontCare
@@ -78,9 +78,9 @@ class NutShellSoC(implicit val p: NOOPConfig) extends Module with HasSoCParamete
   memAddrMap.io.in <> mem
   io.mem <> memAddrMap.io.out.toAXI4(true)
   
-  noop.io.imem.coh.resp.ready := true.B
-  noop.io.imem.coh.req.valid := false.B
-  noop.io.imem.coh.req.bits := DontCare
+  nutshell.io.imem.coh.resp.ready := true.B
+  nutshell.io.imem.coh.req.valid := false.B
+  nutshell.io.imem.coh.req.bits := DontCare
 
   val addrSpace = List(
     (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices
@@ -88,7 +88,7 @@ class NutShellSoC(implicit val p: NOOPConfig) extends Module with HasSoCParamete
     (0x3c000000L, 0x04000000L)  // PLIC
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
-  mmioXbar.io.in <> noop.io.mmio
+  mmioXbar.io.in <> nutshell.io.mmio
 
   val extDev = mmioXbar.io.out(0)
   if (p.FPGAPlatform) { io.mmio <> extDev.toAXI4() }

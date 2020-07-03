@@ -95,7 +95,7 @@ class LSUIO extends FunctionUnitIO {
   val flush = Input(Bool())
 }
 
-class StoreQueueEntry extends NOOPBundle{
+class StoreQueueEntry extends NutShellBundle{
   val pc       = UInt(VAddrBits.W)
   val prfidx   = UInt(prfAddrWidth.W) // for debug
   val brMask   = UInt(robInstCapacity.W)
@@ -110,7 +110,7 @@ class StoreQueueEntry extends NOOPBundle{
   val valid    = Bool()
 }
 
-class moqEntry extends NOOPBundle{
+class moqEntry extends NutShellBundle{
   val pc       = UInt(VAddrBits.W)
   val isRVC    = Bool()
   val prfidx   = UInt(prfAddrWidth.W)
@@ -137,12 +137,12 @@ class moqEntry extends NOOPBundle{
   val storeAddrMisaligned = Bool()
 }
 
-class DCacheUserBundle extends NOOPBundle {
+class DCacheUserBundle extends NutShellBundle {
   val moqidx   = UInt(5.W) //TODO
   val op       = UInt(7.W)
 }
 
-class MemReq extends NOOPBundle {
+class MemReq extends NutShellBundle {
   val addr = UInt(VAddrBits.W)
   val size = UInt(2.W)
   val wdata = UInt(XLEN.W)
@@ -152,8 +152,8 @@ class MemReq extends NOOPBundle {
   val valid = Bool()
 }
 
-class AtomALU extends NOOPModule {
-  val io = IO(new NOOPBundle{
+class AtomALU extends NutShellModule {
+  val io = IO(new NutShellBundle{
     val src1 = Input(UInt(XLEN.W))
     val src2 = Input(UInt(XLEN.W))
     val func = Input(UInt(7.W))
@@ -188,7 +188,7 @@ class AtomALU extends NOOPModule {
 }
 
 // Out Of Order Load/Store Unit
-class LSU extends NOOPModule with HasLSUConst {
+class LSU extends NutShellModule with HasLSUConst {
   val io = IO(new LSUIO)
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt, dtlbPF: Bool): UInt = {

@@ -171,7 +171,7 @@ class CSRIO extends FunctionUnitIO {
   val wenFix = Output(Bool())
 }
 
-class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
+class CSR(implicit val p: NutShellConfig) extends NutShellModule with HasCSRConst{
   val io = IO(new CSRIO)
 
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)

@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 import utils._
 
-class WBU(implicit val p: NOOPConfig) extends NOOPModule{
+class WBU(implicit val p: NutShellConfig) extends NutShellModule{
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(Vec(2, new CommitIO)))
     val wb = Vec(2, new WriteBackIO)

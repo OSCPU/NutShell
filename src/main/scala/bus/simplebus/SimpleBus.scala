@@ -3,12 +3,12 @@ package bus.simplebus
 import chisel3._
 import chisel3.util._
 
-import nutshell.HasNOOPParameter
+import nutshell.HasNutShellParameter
 import utils._
 import bus.axi4._
 import bus.memport._
 
-sealed abstract class SimpleBusBundle extends Bundle with HasNOOPParameter
+sealed abstract class SimpleBusBundle extends Bundle with HasNutShellParameter
 
 object SimpleBusCmd {
   // req

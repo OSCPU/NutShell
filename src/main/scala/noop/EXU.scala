@@ -8,7 +8,7 @@ import utils._
 import bus.simplebus._
 import top.Settings
 
-class EXU(implicit val p: NOOPConfig) extends NOOPModule {
+class EXU(implicit val p: NutShellConfig) extends NutShellModule {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(Vec(2, new DecodeIO)))
     val out = Decoupled(Vec(2, new CommitIO))
