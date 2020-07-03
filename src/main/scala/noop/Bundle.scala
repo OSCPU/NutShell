@@ -12,7 +12,7 @@ class CtrlSignalIO extends NutShellBundle {
   val rfSrc2 = Output(UInt(5.W))
   val rfWen = Output(Bool())
   val rfDest = Output(UInt(5.W))
-  val isNoopTrap = Output(Bool())
+  val isNutShellTrap = Output(Bool())
   val isSrc1Forward = Output(Bool())
   val isSrc2Forward = Output(Bool())
   val noSpecExec = Output(Bool())  // This inst can not be speculated

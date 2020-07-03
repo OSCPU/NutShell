@@ -145,10 +145,10 @@ class EXU(implicit val p: NutShellConfig) extends NutShellModule {
     val mon = Module(new Monitor)
     val cycleCnt = WireInit(0.U(64.W))
     val instrCnt = WireInit(0.U(64.W))
-    val nooptrap = io.in.bits(0).ctrl.isNoopTrap && io.in.valid
+    val nutshelltrap = io.in.bits(0).ctrl.isNutShellTrap && io.in.valid
     mon.io.clk := clock
     mon.io.reset := reset.asBool
-    mon.io.isNoopTrap := nooptrap
+    mon.io.isNutShellTrap := nutshelltrap
     mon.io.trapCode := io.in.bits(0).data.src1
     mon.io.trapPC := io.in.bits(0).cf.pc
     mon.io.cycleCnt := cycleCnt
@@ -156,6 +156,6 @@ class EXU(implicit val p: NutShellConfig) extends NutShellModule {
 
     BoringUtils.addSink(cycleCnt, "simCycleCnt")
     BoringUtils.addSink(instrCnt, "simInstrCnt")
-    BoringUtils.addSource(nooptrap, "nooptrap")
+    BoringUtils.addSource(nutshelltrap, "nutshelltrap")
   }
 }

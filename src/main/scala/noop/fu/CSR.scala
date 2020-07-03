@@ -874,8 +874,8 @@ class CSR(implicit val p: NutShellConfig) extends NutShellModule with HasCSRCons
     }
   }}
 
-  val nooptrap = WireInit(false.B)
-  BoringUtils.addSink(nooptrap, "nooptrap")
+  val nutshelltrap = WireInit(false.B)
+  BoringUtils.addSink(nutshelltrap, "nutshelltrap")
   def readWithScala(addr: Int): UInt = mapping(addr)._1
 
   if (!p.FPGAPlatform) {
@@ -883,9 +883,9 @@ class CSR(implicit val p: NutShellConfig) extends NutShellModule with HasCSRCons
     BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
     BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
 
-    // display all perfcnt when nooptrap is executed
+    // display all perfcnt when nutshelltrap is executed
     val PrintPerfCntToCSV = true
-    when (nooptrap) {
+    when (nutshelltrap) {
       printf("======== PerfCnt =========\n")
       perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
         printf("%d <- " + name + "\n", readWithScala(addr)) }

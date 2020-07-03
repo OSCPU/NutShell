@@ -3,7 +3,7 @@ package nutshell
 import chisel3._
 import chisel3.util._
 
-object NOOPTrap extends HasInstrType {
+object NutShellTrap extends HasInstrType {
   def StateGoodTrap  = 0.U
   def StateBadTrap   = 1.U
   def StateInvOpcode = 2.U
@@ -17,7 +17,7 @@ class Monitor extends BlackBox {
   val io = IO(new Bundle {
     val clk = Input(Clock())
     val reset = Input(Bool())
-    val isNoopTrap = Input(Bool())
+    val isNutShellTrap = Input(Bool())
     val trapCode = Input(UInt(32.W))
     val trapPC = Input(UInt(64.W))
     val cycleCnt = Input(UInt(64.W))

@@ -694,10 +694,10 @@ class Backend(implicit val p: NutShellConfig) extends NutShellModule with HasReg
     val mon = Module(new Monitor)
     val cycleCnt = WireInit(0.U(XLEN.W))
     val instrCnt = WireInit(0.U(XLEN.W))
-    val nooptrap = csrrs.io.out.bits.decode.ctrl.isNoopTrap && csrrs.io.out.valid
+    val nutshelltrap = csrrs.io.out.bits.decode.ctrl.isNutShellTrap && csrrs.io.out.valid
     mon.io.clk := clock
     mon.io.reset := reset.asBool
-    mon.io.isNoopTrap := nooptrap
+    mon.io.isNutShellTrap := nutshelltrap
     mon.io.trapCode := csrrs.io.out.bits.decode.data.src1
     mon.io.trapPC := csrrs.io.out.bits.decode.cf.pc
     mon.io.cycleCnt := cycleCnt
@@ -705,7 +705,7 @@ class Backend(implicit val p: NutShellConfig) extends NutShellModule with HasReg
 
     BoringUtils.addSink(cycleCnt, "simCycleCnt")
     BoringUtils.addSink(instrCnt, "simInstrCnt")
-    BoringUtils.addSource(nooptrap, "nooptrap")
+    BoringUtils.addSource(nutshelltrap, "nutshelltrap")
   }
   
 }

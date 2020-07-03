@@ -56,7 +56,7 @@ object FuOpType {
 object Instructions extends HasInstrType with HasNutShellParameter {
   def NOP = 0x00000013.U
   val DecodeDefault = List(InstrN, FuType.csr, CSROpType.jmp)
-  def DecodeTable = RVIInstr.table ++ NOOPTrap.table ++
+  def DecodeTable = RVIInstr.table ++ NutShellTrap.table ++
     (if (HasMExtension) RVMInstr.table else Nil) ++
     (if (HasCExtension) RVCInstr.table else Nil) ++
     Priviledged.table ++

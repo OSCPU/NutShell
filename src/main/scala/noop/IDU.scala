@@ -131,7 +131,7 @@ class Decoder(implicit val p: NutShellConfig) extends NutShellModule with HasIns
   val BlockList = Seq(
   )
 
-  io.out.bits.ctrl.isNoopTrap := (instr(31,0) === NOOPTrap.TRAP) && io.in.valid
+  io.out.bits.ctrl.isNutShellTrap := (instr(31,0) === NutShellTrap.TRAP) && io.in.valid
   io.out.bits.ctrl.noSpecExec := NoSpecList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
   io.out.bits.ctrl.isBlocked :=
   (
@@ -166,7 +166,7 @@ class Decoder(implicit val p: NutShellConfig) extends NutShellModule with HasIns
     io.out.bits.cf.exceptionVec(instrAccessFault) := false.B
   }
 
-  io.out.bits.ctrl.isNoopTrap := (instr === NOOPTrap.TRAP) && io.in.valid
+  io.out.bits.ctrl.isNutShellTrap := (instr === NutShellTrap.TRAP) && io.in.valid
   io.isWFI := (instr === Priviledged.WFI) && io.in.valid
 
 }
