@@ -122,7 +122,7 @@ class IFU extends NOOPModule with HasResetVector {
     val brIdx = Output(Vec(4, Bool()))
   }
   val mcpResultQueue = Module(new FlushableQueue(new MCPResult, entries = 4, pipe = true, flow = true))
-  mcpResultQueue.io.flush := io.redirect.valid
+  mcpResultQueue.io.flush := io.redirect.valid || io.bpFlush
   mcpResultQueue.io.enq.valid := mcp.io.valid
   mcpResultQueue.io.enq.bits.redirect := mcp.io.out
   mcpResultQueue.io.enq.bits.brIdx := mcp.io.brIdx
@@ -130,10 +130,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   val validMCPRedirect = 
     mcpResultQueue.io.deq.bits.redirect.valid && //mcp predicts branch
-    (
-      mcpResultQueue.io.deq.bits.redirect.target =/= io.imem.resp.bits.user.get(VAddrBits*2-1,VAddrBits) || //npc is different
-      mcpResultQueue.io.deq.bits.brIdx.asUInt =/= io.imem.resp.bits.user.get(VAddrBits*2 + 3, VAddrBits*2) //brIdx is different
-    ) &&
+    mcpResultQueue.io.deq.bits.brIdx.asUInt =/= io.imem.resp.bits.user.get(VAddrBits*2 + 3, VAddrBits*2) //brIdx is different
     (mcpResultQueue.io.deq.bits.brIdx.asUInt & io.imem.resp.bits.user.get(VAddrBits*2 + 7, VAddrBits*2 + 4)).orR //mcp reports a valid branch
 
 
