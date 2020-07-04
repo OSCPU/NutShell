@@ -90,7 +90,7 @@ class LSUIO extends FunctionUnitIO {
   val isMMIO = Output(Bool())
   val exceptionVec = Output(Vec(16, Bool()))
   val scommit = Input(Bool())
-  val atomData = Output(UInt(XLEN.W))
+  val commitStoreToCDB = Output(Bool())
   val haveUnfinishedStore = Output(Bool())
   val flush = Input(Bool())
 }
@@ -420,6 +420,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val haveUnfinishedStore = 0.U =/= storeHeadPtr
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
   io.haveUnfinishedStore := haveUnfinishedStore
+  assert(storeCmtPtr <= storeHeadPtr, "retired store should be less than valid store")
 
   // alloc a slot when a store tlb request is sent
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
@@ -444,6 +445,7 @@ class LSU extends NOOPModule with HasLSUConst {
     List.tabulate(storeQueueSize - 1)(i => {
       storeQueue(i) := storeQueue(i+1)
     })
+    storeQueue(storeQueueSize-1).valid := false.B
   }
 
   // move storeCmtPtr ptr
@@ -649,6 +651,9 @@ class LSU extends NOOPModule with HasLSUConst {
     //!loadPF && !storePF && !moq(tlbRespmoqidx).loadAddrMisaligned && !moq(tlbRespmoqidx).storeAddrMisaligned &&
     //!bruFlush && moq(tlbRespmoqidx).valid && tlbRespmoqidx === moqDmemPtr
   val loadSideUserBundle = Wire(new DCacheUserBundle)
+
+  val atomData = Wire(UInt(XLEN.W))
+  
   loadSideUserBundle.moqidx := loadDMemReqSrcPick
   loadSideUserBundle.op := moq(loadDMemReqSrcPick).op
 
@@ -673,7 +678,7 @@ class LSU extends NOOPModule with HasLSUConst {
   storeDMemReq.user := storeSideUserBundle
   storeDMemReq.valid := haveUnrequiredStore
   when(LSUOpType.isAMO(storeQueue(0.U).func)){
-    storeDMemReq.wdata := io.atomData
+    storeDMemReq.wdata := atomData
   }
 
   // noDMemReq
@@ -847,7 +852,7 @@ class LSU extends NOOPModule with HasLSUConst {
   // When an atom inst reaches here, store its result to store buffer,
   // then commit it to CDB, set atom-on-the-fly to false
   val atomDataReg = RegEnable(genWdata(atomALU.io.result, moq(moqidxResp).size), io.out.fire() && LSUOpType.isAMO(moq(moqidxResp).func))
-  io.atomData := atomDataReg
+  atomData := atomDataReg
 
   // Commit to CDB
   io.out.bits := MuxCase(
@@ -876,6 +881,7 @@ class LSU extends NOOPModule with HasLSUConst {
   io.uopOut.decode.cf.redirect.valid := moq(writebackSelect).rollback
   io.uopOut.decode.cf.redirect.target := moq(writebackSelect).pc + Mux(moq(writebackSelect).isRVC, 2.U, 4.U)
   io.uopOut.decode.cf.redirect.rtype := 0.U // do not redirect until that inst is being commited
+  io.commitStoreToCDB := MEMOpID.needStore(moq(writebackSelect).op)
 
   io.in.ready := !moqFull
   io.out.valid := havePendingCDBCmt || haveLoadResp

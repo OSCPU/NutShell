@@ -375,6 +375,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     brucommit.exception := false.B
     bruRedirect.valid := false.B
   }
+  brucommit.store := false.B
   bruDelayer.io.in.bits := brucommit
   bruDelayer.io.in.valid := bru.io.out.valid
   bruDelayer.io.out.ready := bruWritebackReady
@@ -404,6 +405,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1commit.decode.cf.redirect.valid := false.B
   alu1commit.decode.cf.redirect.rtype := DontCare
   alu1commit.exception := false.B
+  alu1commit.store := false.B
 
   // def isBru(func: UInt) = func(4)
   val alu2 = Module(new ALU)
@@ -426,6 +428,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu2commit.decode.cf.redirect.valid := false.B
   alu2commit.decode.cf.redirect.rtype := DontCare
   alu2commit.exception := false.B
+  alu2commit.store := false.B
 
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)
@@ -461,6 +464,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsucommit.commits := lsuOut
   lsucommit.prfidx := lsu.io.uopOut.prfDest
   lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
+  lsucommit.store := lsu.io.commitStoreToCDB
   // fix exceptionVec
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
@@ -489,6 +493,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.decode.cf.redirect.valid := false.B
   mducommit.decode.cf.redirect.rtype := DontCare
   mducommit.exception := false.B
+  mducommit.store := false.B
   mdurs.io.commit.get := mdu.io.out.valid
 
   // assert(!(mdu.io.out.valid && !mduDelayer.io.in.ready))
@@ -524,6 +529,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   csrcommit.prfidx := csrUop.prfDest
   csrcommit.decode.cf.redirect := csr.io.redirect
   csrcommit.exception := false.B
+  csrcommit.store := false.B
   // fix wen
   when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
 
@@ -554,6 +560,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   moucommit.prfidx := csrrs.io.out.bits.prfDest
   moucommit.decode.cf.redirect := mou.io.redirect
   moucommit.exception := false.B
+  moucommit.store := false.B
 
   // ------------------------------------------------
   // Backend stage 3+

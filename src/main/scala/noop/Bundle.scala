@@ -76,6 +76,7 @@ class OOCommitIO extends NOOPBundle with HasBackendConst{
   val commits = Output(UInt(XLEN.W))
   val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
   val exception = Output(Bool())
+  val store = Output(Bool())
 }
 
 class FunctionUnitIO extends NOOPBundle {

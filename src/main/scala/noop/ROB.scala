@@ -56,8 +56,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
   val decode = Reg(Vec(robSize, Vec(robWidth, new DecodeIO)))
   val brMask = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(0.U(checkpointSize.W))))))
   val valid = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
-  // val valid = List.fill(robWidth)(Mem(robSize, Bool()))
-  // val validReg = RegInit(0.U.asTypeOf(Vec(robSize * robWidth, Bool())))
+  val store = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
   val commited = Reg(Vec(robSize, Vec(robWidth, Bool())))
   val canceled = Reg(Vec(robSize, Vec(robWidth, Bool())))
   val redirect = Reg(Vec(robSize, Vec(robWidth, new RedirectIO)))
@@ -176,6 +175,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       exception(index)(bank) := io.cdb(k).bits.exception
       // Update wen
       // In several cases, FU will invalidate rfWen
+      store(index)(bank) := io.cdb(k).bits.store
       decode(index)(bank).ctrl.rfWen := io.cdb(k).bits.decode.ctrl.rfWen
     }
   }
@@ -291,8 +291,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
 
   io.scommit := List.tabulate(robWidth)(i => 
     valid(ringBufferTail)(i) && 
-    decode(ringBufferTail)(i).ctrl.fuType === FuType.lsu && 
-    LSUOpType.needMemWrite(decode(ringBufferTail)(i).ctrl.fuOpType) && 
+    store(ringBufferTail)(i) && 
     List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
     List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k) &&
     !cancelScommit
@@ -373,6 +372,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       decode(ringBufferHead)(i) := io.in(i).bits
       brMask(ringBufferHead)(i) := io.brMaskIn(i)
       valid(ringBufferHead)(i) := io.in(i).valid
+      store(ringBufferHead)(i) := false.B // not necessary
       commited(ringBufferHead)(i) := false.B
       canceled(ringBufferHead)(i) := false.B
       redirect(ringBufferHead)(i).valid := false.B
