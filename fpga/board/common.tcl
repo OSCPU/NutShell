@@ -58,7 +58,7 @@ if {${standalone} == "true"} {
   add_files -norecurse -fileset sources_1 $project_dir/$project_name.srcs/sources_1/bd/system_top/hdl/system_top_wrapper.v
   set topmodule system_top_wrapper
 } else {
-  add_bd ${fpga_dir}/nutshell.tcl
+  add_bd ${fpga_dir}/NutShell.tcl
   add_bd ${bd_dir}/arm.tcl
   set topmodule system_top
 }

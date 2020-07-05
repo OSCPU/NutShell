@@ -3,10 +3,10 @@ package utils
 import chisel3._
 import chisel3.util._
 
-import nutshell.NutShellConfig
+import nutcore.NutCoreConfig
 
 object Debug {
-  def apply(flag: Boolean = NutShellConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any =
+  def apply(flag: Boolean = NutCoreConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any =
     if (flag) { when (cond && GTimer() > 0.U) { body } } // 2645000
     // if (flag) { when (cond && GTimer() > 11125600.U) { body } } // 2645000
 }

@@ -8,7 +8,7 @@
 
 //#include "VSimTop__Dpi.h"
 #include "common.h"
-#include "VNutShellSimTop.h"
+#include "VNutCoreSimTop.h"
 #if VM_TRACE
 #include <verilated_vcd_c.h>	// Trace file format header
 #endif
@@ -16,7 +16,7 @@
 
 class Emulator {
   const char *image;
-  std::shared_ptr<VNutShellSimTop> dut_ptr;
+  std::shared_ptr<VNutCoreSimTop> dut_ptr;
 #if VM_TRACE
   VerilatedVcdC* tfp;
 #endif
