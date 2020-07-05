@@ -1,7 +1,7 @@
 package sim
 
 import system._
-import nutshell.NutShellConfig
+import nutcore.NutCoreConfig
 
 import chisel3._
 import chisel3.util._
@@ -36,8 +36,8 @@ class NutShellSimTop extends Module {
     val difftestCtrl = new DiffTestCtrlIO
   })
 
-  lazy val config = NutShellConfig(FPGAPlatform = false)
-  val soc = Module(new NutShellSoC()(config))
+  lazy val config = NutCoreConfig(FPGAPlatform = false)
+  val soc = Module(new NutShell()(config))
   val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
   // Be careful with the commit checking of emu.
   // A large delay will make emu incorrectly report getting stuck.

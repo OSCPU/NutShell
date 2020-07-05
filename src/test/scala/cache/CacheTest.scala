@@ -1,6 +1,6 @@
 package top
 
-import nutshell._
+import nutcore._
 import bus.simplebus._
 import device._
 import utils._
@@ -11,12 +11,12 @@ import chisel3.util.experimental.BoringUtils
 
 // To run the following cache random test, do the following:
 // * uncomment the following class
-// * comment the NutShellSimTop class in nutshell/src/test/scala/top/NutShellSim.scala
-// * define the macro CACHE_TEST in nutshell/src/test/csrc/emu.h:141
-// * run 'make cache' under nutshell/
+// * comment the NutCoreSimTop class in nutcore/src/test/scala/top/NutCoreSim.scala
+// * define the macro CACHE_TEST in nutcore/src/test/csrc/emu.h:141
+// * run 'make cache' under nutcore/
 
 /*
-class NutShellSimTop extends Module {
+class NutCoreSimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
   })
@@ -144,7 +144,7 @@ class NutShellSimTop extends Module {
       GTimer(), cohIn.resp.bits.rdata, cohAddr)
   }
 
-  // only use to keep consistent with NutShellSimTop
+  // only use to keep consistent with NutCoreSimTop
   io.difftest := DontCare
   dontTouch(io.difftest)
 }

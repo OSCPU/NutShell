@@ -11,7 +11,7 @@ import "DPI-C" function void monitor
 module Monitor(
   input         clk,
   input         reset,
-  input         isNutShellTrap,
+  input         isNutCoreTrap,
   input  [31:0] trapCode,
   input  [63:0] trapPC,
   input  [63:0] cycleCnt,
@@ -20,7 +20,7 @@ module Monitor(
 
 `ifdef VERILATOR
   always @(posedge clk) begin
-     monitor((isNutShellTrap && !reset) ? trapCode : -1,
+     monitor((isNutCoreTrap && !reset) ? trapCode : -1,
        trapPC, cycleCnt, instrCnt);
   end
 `endif

@@ -4,9 +4,9 @@ import chisel3._
 import chisel3.util._
 
 import utils._
-import nutshell.HasNutShellParameter
+import nutcore.HasNutCoreParameter
 
-class SimpleBusAddressMapper(map: (Int, Long)) extends Module with HasNutShellParameter {
+class SimpleBusAddressMapper(map: (Int, Long)) extends Module with HasNutCoreParameter {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC)
     val out = new SimpleBusUC

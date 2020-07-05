@@ -3,7 +3,7 @@ package bus.memport
 import chisel3._
 import chisel3.util._
 
-import nutshell.HasNutShellParameter
+import nutcore.HasNutCoreParameter
 
 trait MemoryOpConstants
 {

@@ -1,7 +1,7 @@
 package top
 
-import nutshell.NutShellConfig
-import system.NutShellSoC
+import nutcore.NutCoreConfig
+import system.NutShell
 import device.{AXI4Timer, AXI4VGA, AXI4Flash}
 import gpu._
 import sim.NutShellSimTop
@@ -10,13 +10,13 @@ import chisel3._
 
 class Top extends Module {
   val io = IO(new Bundle{})
-  val nutshell = Module(new NutShellSoC()(NutShellConfig()))
+  val nutshell = Module(new NutShell()(NutCoreConfig()))
   val timer = Module(new AXI4Timer)
   val vga = Module(new AXI4VGA)
   val flash = Module(new AXI4Flash)
 //  val gpu = Module(new AXI4GPU)
 
-  nutshell.io := DontCare
+  nutcore.io := DontCare
   timer.io := DontCare
   vga.io := DontCare
   flash.io := DontCare
