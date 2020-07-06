@@ -11,8 +11,8 @@ This step is only needed for zynqmp. If your target board is zynq, skip this ste
 git clone --depth 1 https://github.com/xilinx/arm-trusted-firmware
 cd arm-trusted-firmware
 make PLAT=zynqmp RESET_TO_BL31=1 CROSS_COMPILE=aarch64-none-elf-
-mkdir -p $(NOOP_HOME)/fpga/boot/build/zynqmp
-cp build/zynqmp/release/bl31/bl31.elf $(NOOP_HOME)/fpga/boot/build/zynqmp/
+mkdir -p $(NUTSHELL_HOME)/fpga/boot/build/zynqmp
+cp build/zynqmp/release/bl31/bl31.elf $(NUTSHELL_HOME)/fpga/boot/build/zynqmp/
 ```
 
 To clean, run
@@ -29,27 +29,27 @@ cd u-boot-xlnx
 # for zynqmp
 make xilinx_zynqmp_zcu102_rev1_0_defconfig  # can be found under u-boot-xlnx/configs/
 make CROSS_COMPILE=aarch64-linux-gnu-
-mkdir -p $(NOOP_HOME)/fpga/boot/build/zynqmp
-cp u-boot-xlnx/u-boot.elf $(NOOP_HOME)/fpga/boot/build/zynqmp/
+mkdir -p $(NUTSHELL_HOME)/fpga/boot/build/zynqmp
+cp u-boot-xlnx/u-boot.elf $(NUTSHELL_HOME)/fpga/boot/build/zynqmp/
 
 # for zynq
 make zynq_zed_defconfig  # can be found under u-boot-xlnx/configs/
 make CROSS_COMPILE=arm-linux-gnueabihf-
-mkdir -p $(NOOP_HOME)/fpga/boot/build/zynq
-cp u-boot-xlnx/u-boot.elf $(NOOP_HOME)/fpga/boot/build/zynq/
+mkdir -p $(NUTSHELL_HOME)/fpga/boot/build/zynq
+cp u-boot-xlnx/u-boot.elf $(NUTSHELL_HOME)/fpga/boot/build/zynq/
 ```
 
 ## Build BOOT.BIN and Device Tree Source
 
 * (Optional) If you want to download the bitstream in fsbl,
-also put the bitstream under `$(NOOP_HOME)/fpga/boot/build/{zynqmp,zynq}`,
+also put the bitstream under `$(NUTSHELL_HOME)/fpga/boot/build/{zynqmp,zynq}`,
 and uncomment the description about bitstream in `bootgen-{zynqmp,zynq}.bif`.
 
 ```
 # for zynqmp
-$(NOOP_HOME)/fpga/boot $ ls build/zynqmp
+$(NUTSHELL_HOME)/fpga/boot $ ls build/zynqmp
 bl31.elf   system_top.bit   u-boot.elf
-$(NOOP_HOME)/fpga/boot $ cat bootgen-zynqmp.bif
+$(NUTSHELL_HOME)/fpga/boot $ cat bootgen-zynqmp.bif
 the_ROM_image:
 {
   [fsbl_config] a53_x64
@@ -61,9 +61,9 @@ the_ROM_image:
 }
 
 # for zynq
-$(NOOP_HOME)/fpga/boot $ ls build/zynq
+$(NUTSHELL_HOME)/fpga/boot $ ls build/zynq
 system_top.bit   u-boot.elf
-$(NOOP_HOME)/fpga/boot $ cat bootgen-zynq.bif
+$(NUTSHELL_HOME)/fpga/boot $ cat bootgen-zynq.bif
 the_ROM_image:
 {
   [bootloader] build/zynq/fsbl.elf
@@ -82,11 +82,11 @@ git clone --depth 1 https://github.com/xilinx/device-tree-xlnx
 ```
 * generate BOOT.BIN and device tree source
 ```
-cd $(NOOP_HOME)/fpga
+cd $(NUTSHELL_HOME)/fpga
 make bootgen PRJ=my-project BOARD=your-target-board
 ```
 
-Find `BOOT.BIN` and `dts` under `$(NOOP_HOME)/fpga/boot/build/myproject-your-target-board/`.
+Find `BOOT.BIN` and `dts` under `$(NUTSHELL_HOME)/fpga/boot/build/myproject-your-target-board/`.
 
 ## Build linux kernel
 
@@ -118,7 +118,7 @@ make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j16
 * create a new file `top.dts` to set bootargs and reserved-memory for the RISC-V subsystem
 ```
 # for zynqmp
-$(NOOP_HOME)/fpga/boot/build/myproject-your-target-board/dts $ cat top.dts
+$(NUTSHELL_HOME)/fpga/boot/build/myproject-your-target-board/dts $ cat top.dts
 #include "system-top.dts"
 / {
   chosen {
@@ -137,7 +137,7 @@ $(NOOP_HOME)/fpga/boot/build/myproject-your-target-board/dts $ cat top.dts
 ```
 ```
 # for zynq
-$(NOOP_HOME)/fpga/boot/build/myproject-your-target-board/dts $ cat top.dts
+$(NUTSHELL_HOME)/fpga/boot/build/myproject-your-target-board/dts $ cat top.dts
 #include "system-top.dts"
 / {
   chosen {

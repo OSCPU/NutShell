@@ -114,7 +114,7 @@ Microbench 是一个建立在 AM 之上的基准测试程序, 位置在 nexus-am
 * 准备好 NutShell, NEMU, AM 这三个项目, 注意使用 git 切换到相应的分支, 做好 NutShell 的 Setting 工作
 * 设置三个环境变量
   * `NEMU_HOME` = NEMU 项目的**绝对路径**
-  * `NOOP_HOME` = NutShell 项目的**绝对路径**
+  * `NUTSHELL_HOME` = NutShell 项目的**绝对路径**
   * `AM_HOME` = AM 项目的**绝对路径**
 
 * 进入 nexus-am/apps/microbench/, 执行
@@ -130,7 +130,7 @@ Microbench 是一个建立在 AM 之上的基准测试程序, 位置在 nexus-am
 * 进入 nexus-am/apps/microbench/, 执行
 
   ```bash
-  make ARCH=riscv64-noop mainargs=test run
+  make ARCH=riscv64-nutshell mainargs=test run
   ```
 
   该命令与上面唯一的不同是让 Microbench 运行到了 NutShell 的仿真平台之上, 如果顺利的话可以看到终端输出了和 NEMU 上一致的内容（除了运行时间有差异）.
@@ -144,7 +144,7 @@ Microbench 是一个建立在 AM 之上的基准测试程序, 位置在 nexus-am
 * 准备好 NutShell, NEMU, RISCV-PK 这三个项目, 注意使用 git 切换到相应的分支, 做好 NutShell 的 Setting 工作
 * 设置两个环境变量
   * `NEMU_HOME` = NEMU 项目的**绝对路径**
-  * `NOOP_HOME` = NutShell 项目的**绝对路径**
+  * `NUTSHELL_HOME` = NutShell 项目的**绝对路径**
 
 * 进入riscv-pk/, 执行
 
@@ -165,13 +165,13 @@ Microbench 是一个建立在 AM 之上的基准测试程序, 位置在 nexus-am
 * 进入riscv-pk/, 执行
 
   ```bash
-  rm dts/platform.dtsi; ln -s dts/noop.dtsi dts/platform.dtsi
+  rm dts/platform.dtsi; ln -s dts/nutshell.dtsi dts/platform.dtsi
   ```
 
   建立一个软连接, 然后执行
 
   ```bash
-  make noop
+  make nutshell
   ```
 
   与之前类似, 该项目会生成一个内存映像二进制文件, 但是运行在 NutShell 的仿真平台之上, 最终看到终端打印出来 Hello World 代表启动成功.
