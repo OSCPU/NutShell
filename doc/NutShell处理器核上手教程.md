@@ -1,8 +1,8 @@
 
 
-# COOSCA处理器核快速上手教程
+# NutShell处理器核快速上手教程
 
-> COOSCA核隶属于国科大与计算所“一生一芯”项目, 采用Chisel语言模块化设计, 目前支持 RISCV32/64.
+> NutShell核隶属于国科大与计算所“一生一芯”项目, 采用Chisel语言模块化设计, 目前支持可配置顺序/乱序核,RISCV32/64.
 
 
 
@@ -13,14 +13,14 @@
 ```
 .
 ├── debug/             # 处理器核测试脚本
+├── ready-to-run/      # 仿真支持文件
 ├── fpga/              # 用于FPGA平台调试运行的相关文件
 ├── doc/               # 项目文档
 ├── project/           # 构建SBT项目的相关配置文件
 ├── src/               # 处理器核源代码
 ├── script/            # 其他脚本文件
 ├── tool/              # 其他工具
-├── Makefile           # Makefile
-├── devlog.md          # 开发日志
+├── Makefile           
 └── README.md          # 项目介绍
 ```
 
@@ -31,8 +31,8 @@
   ├── main/scala
   │    ├── bus         # 总线相关
   │    ├── device      # 输入输出设备相关
-  │    ├── gpu         # GPU相关
-  │    ├── noop        # 核心相关
+  │    ├── nutcore     # 核心相关
+  │    ├── sim         # 仿真顶层文件
   │    ├── system      # 外围系统
   │    ├── top         # 项目顶层文件
   │    └── utils       # 工具相关
@@ -80,7 +80,7 @@ sudo apt-get install verilator
 
 ## 关联项目
 
-> 运行和测试 COOSCA 核心还需要一些关联项目的辅助, 来提供核上运行时, 操作系统, 以及行为对比验证等
+> 运行和测试 NutShell 核心还需要一些关联项目的辅助, 来提供核上运行时, 操作系统, 以及行为对比验证等
 
 ### NEMU
 
@@ -91,7 +91,7 @@ NEMU (NJU Emulator) 是一个简单但完整的全系统模拟器, 目前支持 
 
 ### AM
 
-AM (Abstract Machine) 是一个向程序提供运行时环境的包装库, 它提供了一个面向裸金属的运行时环境, 把程序与体系结构进行了解耦. 我们只要在 AM 的框架下编写好程序, 就能方便地运行在 NEMU 和 NOOP 之上. AM 在一生一芯项目中被用来包装一系列测试程序从而验证核心的正确性.
+AM (Abstract Machine) 是一个向程序提供运行时环境的包装库, 它提供了一个面向裸金属的运行时环境, 把程序与体系结构进行了解耦. 我们只要在 AM 的框架下编写好程序, 就能方便地运行在 NEMU 和 NutShell 之上. AM 在一生一芯项目中被用来包装一系列测试程序从而验证核心的正确性.
 
 * AM 项目的完整源码在 GitLab 上, 它的安装运行过程和相关概念请参考南京大学计算机系统基础课程的[PA2部分](https://nju-projectn.github.io/ics-pa-gitbook/ics2019/2.3.html).
 
@@ -111,10 +111,10 @@ RISCV-PK (The RISC-V Proxy Kernel) 是一个轻量的 RISCV 运行时环境, 它
 
 Microbench 是一个建立在 AM 之上的基准测试程序, 位置在 nexus-am/apps/microbench/.
 
-* 准备好 NOOP, NEMU, AM 这三个项目, 注意使用 git 切换到相应的分支, 做好 NOOP 的 Setting 工作
+* 准备好 NutShell, NEMU, AM 这三个项目, 注意使用 git 切换到相应的分支, 做好 NutShell 的 Setting 工作
 * 设置三个环境变量
   * `NEMU_HOME` = NEMU 项目的**绝对路径**
-  * `NOOP_HOME` = NOOP 项目的**绝对路径**
+  * `NOOP_HOME` = NutShell 项目的**绝对路径**
   * `AM_HOME` = AM 项目的**绝对路径**
 
 * 进入 nexus-am/apps/microbench/, 执行
@@ -133,18 +133,18 @@ Microbench 是一个建立在 AM 之上的基准测试程序, 位置在 nexus-am
   make ARCH=riscv64-noop mainargs=test run
   ```
 
-  该命令与上面唯一的不同是让 Microbench 运行到了 NOOP 的仿真平台之上, 如果顺利的话可以看到终端输出了和 NEMU 上一致的内容（除了运行时间有差异）.
+  该命令与上面唯一的不同是让 Microbench 运行到了 NutShell 的仿真平台之上, 如果顺利的话可以看到终端输出了和 NEMU 上一致的内容（除了运行时间有差异）.
 
-  值得注意的是, 第一次运行该命令会从头开始 build NOOP 项目, 通常第一次 build 的时间会非常漫长, 这是因为 Mill 工具会下载依赖的 Scala/Java 包, 这些包在国内的网络环境中下载速度很慢. 一旦第一次构建成功后, 后续就不会重复下载了, build 速度会快很多.
+  值得注意的是, 第一次运行该命令会从头开始 build NutShell 项目, 通常第一次 build 的时间会非常漫长, 这是因为 Mill 工具会下载依赖的 Scala/Java 包, 这些包在国内的网络环境中下载速度很慢. 一旦第一次构建成功后, 后续就不会重复下载了, build 速度会快很多.
 
 
 
 ### Linux Kernel
 
-* 准备好 NOOP, NEMU, RISCV-PK 这三个项目, 注意使用 git 切换到相应的分支, 做好 NOOP 的 Setting 工作
+* 准备好 NutShell, NEMU, RISCV-PK 这三个项目, 注意使用 git 切换到相应的分支, 做好 NutShell 的 Setting 工作
 * 设置两个环境变量
   * `NEMU_HOME` = NEMU 项目的**绝对路径**
-  * `NOOP_HOME` = NOOP 项目的**绝对路径**
+  * `NOOP_HOME` = NutShell 项目的**绝对路径**
 
 * 进入riscv-pk/, 执行
 
@@ -174,7 +174,7 @@ Microbench 是一个建立在 AM 之上的基准测试程序, 位置在 nexus-am
   make noop
   ```
 
-  与之前类似, 该项目会生成一个内存映像二进制文件, 但是运行在 NOOP 的仿真平台之上, 最终看到终端打印出来 Hello World 代表启动成功.
+  与之前类似, 该项目会生成一个内存映像二进制文件, 但是运行在 NutShell 的仿真平台之上, 最终看到终端打印出来 Hello World 代表启动成功.
 
 
 
