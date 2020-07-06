@@ -344,7 +344,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val priviledgeMode = RegInit(UInt(2.W), ModeM)
 
   // perfcnt
-  val hasPerfCnt = !p.FPGAPlatform
+  val hasPerfCnt = EnablePerfCnt && !p.FPGAPlatform
   val nrPerfCnts = if (hasPerfCnt) 0x80 else 0x3
   val perfCnts = List.fill(nrPerfCnts)(RegInit(0.U(64.W)))
   val perfCntsLoMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb00 + i, perfCnts(i)) }
@@ -857,7 +857,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   BoringUtils.addSink(pendingSCmt, "perfCntSrcMpendingSCmt")
   BoringUtils.addSink(pendingSReq, "perfCntSrcMpendingSReq")
   when(perfCntCond(0xb03 & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
-  if (!p.FPGAPlatform) {
+  if (hasPerfCnt) {
     when(true.B) { perfCnts(0xb63 & 0x7f) := perfCnts(0xb63 & 0x7f) + pendingLS } 
     when(true.B) { perfCnts(0xb64 & 0x7f) := perfCnts(0xb64 & 0x7f) + pendingSCmt } 
     when(true.B) { perfCnts(0xb65 & 0x7f) := perfCnts(0xb66 & 0x7f) + pendingSReq } 
@@ -883,20 +883,22 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
     BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
 
-    // display all perfcnt when nutcoretrap is executed
-    val PrintPerfCntToCSV = true
-    when (nutcoretrap) {
-      printf("======== PerfCnt =========\n")
-      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
-        printf("%d <- " + name + "\n", readWithScala(addr)) }
-      if(PrintPerfCntToCSV){
-      printf("======== PerfCntCSV =========\n\n")
-      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
-        printf(name + ", ")}
-      printf("\n\n\n")
-      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
-        printf("%d, ", readWithScala(addr)) }
-      printf("\n\n\n")
+    if (hasPerfCnt) {
+      // display all perfcnt when nutcoretrap is executed
+      val PrintPerfCntToCSV = true
+      when (nutcoretrap) {
+        printf("======== PerfCnt =========\n")
+        perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+          printf("%d <- " + name + "\n", readWithScala(addr)) }
+        if(PrintPerfCntToCSV){
+        printf("======== PerfCntCSV =========\n\n")
+        perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+          printf(name + ", ")}
+        printf("\n\n\n")
+        perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+          printf("%d, ", readWithScala(addr)) }
+        printf("\n\n\n")
+        }
       }
     }
 
@@ -909,6 +911,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     BoringUtils.addSource(RegNext(mcause), "difftestMcause")
     BoringUtils.addSource(RegNext(scause), "difftestScause")
   } else {
-    BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "ilaInstrCnt")
+    if (!p.FPGAPlatform) {
+      BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
+      BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
+    } else {
+      BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "ilaInstrCnt")
+    }
   }
 }

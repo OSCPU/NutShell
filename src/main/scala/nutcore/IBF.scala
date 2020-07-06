@@ -9,7 +9,7 @@ import utils._
 trait HasIBUFConst{
   // val multiIssue = true
   val instUnitWidth = 16 //bit
-  val ibufBitSize = 256 //bit
+  val ibufBitSize = 128 //256 //bit
   val ibufSize = ibufBitSize / instUnitWidth
 }
 

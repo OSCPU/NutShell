@@ -30,6 +30,7 @@ trait HasNutCoreParameter {
   val EnableSuperScalarExec = Settings.get("EnableSuperScalarExec")
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
+  val EnablePerfCnt = false
 }
 
 trait HasNutCoreConst extends HasNutCoreParameter {
@@ -82,7 +83,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
   val idu  = Module(new IDU)
 
   pipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
-  PipelineVector2Connect(new CtrlFlowIO, ibf.io.out(0), ibf.io.out(1), idu.io.in(0), idu.io.in(1), ifu.io.flushVec(1), 8)
+  PipelineVector2Connect(new CtrlFlowIO, ibf.io.out(0), ibf.io.out(1), idu.io.in(0), idu.io.in(1), ifu.io.flushVec(1), if (EnableOutOfOrderExec) 8 else 4)
   ibf.io.flush := ifu.io.flushVec(1)
   idu.io.flush := ifu.io.flushVec(1)
   
@@ -141,7 +142,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
   }else{
     val backend = Module(new Backend_seq)
 
-    PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 16)
+    PipelineVector2Connect(new DecodeIO, idu.io.out(0), idu.io.out(1), backend.io.in(0), backend.io.in(1), ifu.io.flushVec(1), 4)
 
     val mmioXbar = Module(new SimpleBusCrossbarNto1(2))
     val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
