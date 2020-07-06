@@ -3,7 +3,6 @@ package top
 import nutcore.NutCoreConfig
 import system.NutShell
 import device.{AXI4VGA}
-import gpu._
 import sim.NutShellSimTop
 
 import chisel3._
@@ -13,7 +12,7 @@ class Top extends Module {
   val nutshell = Module(new NutShell()(NutCoreConfig()))
   val vga = Module(new AXI4VGA)
 
-  nutcore.io := DontCare
+  nutshell.io := DontCare
   vga.io := DontCare
   dontTouch(nutshell.io)
   dontTouch(vga.io)
