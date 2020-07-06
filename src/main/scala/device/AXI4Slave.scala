@@ -3,12 +3,12 @@ package device
 import chisel3._
 import chisel3.util._
 
-import noop.HasNOOPParameter
+import nutcore.HasNutCoreParameter
 import bus.axi4._
 import utils._
 
 abstract class AXI4SlaveModule[T <: AXI4Lite, B <: Data](_type :T = new AXI4, _extra: B = null)
-  extends Module with HasNOOPParameter {
+  extends Module with HasNutCoreParameter {
   val io = IO(new Bundle{
     val in = Flipped(_type)
     val extra = if (_extra != null) Some(Flipped(Flipped(_extra))) else None

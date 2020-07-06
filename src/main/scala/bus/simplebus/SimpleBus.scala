@@ -3,12 +3,12 @@ package bus.simplebus
 import chisel3._
 import chisel3.util._
 
-import noop.HasNOOPParameter
+import nutcore.HasNutCoreParameter
 import utils._
 import bus.axi4._
 import bus.memport._
 
-sealed abstract class SimpleBusBundle extends Bundle with HasNOOPParameter
+sealed abstract class SimpleBusBundle extends Bundle with HasNutCoreParameter
 
 object SimpleBusCmd {
   // req
@@ -86,8 +86,8 @@ class SimpleBusUC(val userBits: Int = 0, val addrBits: Int = 32, val idBits: Int
 
   def isWrite() = req.valid && req.bits.isWrite()
   def isRead()  = req.valid && req.bits.isRead()
-  def toAXI4Lite() = SimpleBus2AXI4Converter(this, new AXI4Lite)
-  def toAXI4() = SimpleBus2AXI4Converter(this, new AXI4)
+  def toAXI4Lite() = SimpleBus2AXI4Converter(this, new AXI4Lite, false)
+  def toAXI4(isFromCache: Boolean = false) = SimpleBus2AXI4Converter(this, new AXI4, isFromCache)
   def toMemPort() = SimpleBus2MemPortConverter(this, new MemPortIo(32))
 
   def dump(name: String) = {
@@ -122,6 +122,5 @@ class SimpleBusC(val userBits: Int = 0) extends SimpleBusBundle {
   val mem = new SimpleBusUC(userBits)
   val coh = Flipped(new SimpleBusUC(userBits))
 
-  def memtoAXI4() = this.mem.toAXI4
   def memtoMemPort() = this.mem.toMemPort
 }

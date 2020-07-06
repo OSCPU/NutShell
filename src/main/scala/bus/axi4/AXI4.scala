@@ -5,9 +5,10 @@ package bus.axi4
 import chisel3._
 import chisel3.util._
 
-import noop.HasNOOPParameter
+import nutcore.HasNutCoreParameter
+import utils._
 
-object AXI4Parameters extends HasNOOPParameter {
+object AXI4Parameters extends HasNutCoreParameter {
   // These are all fixed by the AXI4 standard:
   val lenBits   = 8
   val sizeBits  = 3
@@ -97,12 +98,20 @@ class AXI4BundleA(override val idBits: Int) extends AXI4LiteBundleA with AXI4Has
   val cache = Output(UInt(AXI4Parameters.cacheBits.W))
   val qos   = Output(UInt(AXI4Parameters.qosBits.W))  // 0=no QoS, bigger = higher priority
   // val region = UInt(width = 4) // optional
+
+  override def toPrintable: Printable = p"addr = 0x${Hexadecimal(addr)}, id = ${id}, len = ${len}, size = ${size}"
 }
 
 // id ... removed in AXI4
-class AXI4BundleW(override val dataBits: Int) extends AXI4LiteBundleW(dataBits) with AXI4HasLast
-class AXI4BundleB(override val idBits: Int) extends AXI4LiteBundleB with AXI4HasId with AXI4HasUser
-class AXI4BundleR(override val dataBits: Int, override val idBits: Int) extends AXI4LiteBundleR(dataBits) with AXI4HasLast with AXI4HasId with AXI4HasUser
+class AXI4BundleW(override val dataBits: Int) extends AXI4LiteBundleW(dataBits) with AXI4HasLast {
+  override def toPrintable: Printable = p"data = ${Hexadecimal(data)}, wmask = 0x${strb}, last = ${last}"
+}
+class AXI4BundleB(override val idBits: Int) extends AXI4LiteBundleB with AXI4HasId with AXI4HasUser {
+  override def toPrintable: Printable = p"resp = ${resp}, id = ${id}"
+}
+class AXI4BundleR(override val dataBits: Int, override val idBits: Int) extends AXI4LiteBundleR(dataBits) with AXI4HasLast with AXI4HasId with AXI4HasUser {
+  override def toPrintable: Printable = p"resp = ${resp}, id = ${id}, data = ${Hexadecimal(data)}, last = ${last}"
+}
 
 
 class AXI4(val dataBits: Int = AXI4Parameters.dataBits, val idBits: Int = AXI4Parameters.idBits) extends AXI4Lite {
@@ -111,4 +120,12 @@ class AXI4(val dataBits: Int = AXI4Parameters.dataBits, val idBits: Int = AXI4Pa
   override val b  = Flipped(Decoupled(new AXI4BundleB(idBits)))
   override val ar = Decoupled(new AXI4BundleA(idBits))
   override val r  = Flipped(Decoupled(new AXI4BundleR(dataBits, idBits)))
+
+  def dump(name: String) = {
+    when (aw.fire()) { printf(p"${GTimer()},[${name}.aw] ${aw.bits}\n") }
+    when (w.fire()) { printf(p"${GTimer()},[${name}.w] ${w.bits}\n") }
+    when (b.fire()) { printf(p"${GTimer()},[${name}.b] ${b.bits}\n") }
+    when (ar.fire()) { printf(p"${GTimer()},[${name}.ar] ${ar.bits}\n") }
+    when (r.fire()) { printf(p"${GTimer()},[${name}.r] ${r.bits}\n") }
+  }
 }

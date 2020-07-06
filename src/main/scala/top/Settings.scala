@@ -1,59 +1,91 @@
 package top
 
-trait Common {
-  val EnableILA = true
-  val VAddrBits = 39
-  val EnableDebug = false
-  val HasMMIO = true
-  val FPGAmode = "pynq"   // Can be set "pynq" or "axu3cg"
+object DefaultSettings {
+  def apply() = Map(
+    "MemMapBase" -> 0x0000000000000000L,
+    "MemMapRegionBits" -> 0,
+    "MMIOBase" -> 0x0000000040000000L,
+    "MMIOSize" -> 0x0000000040000000L,
+    "ResetVector" -> 0x80000000L,
+    "NrExtIntr" -> 1,
 
-  // simulation perf
-  val DisablePerfCnt = true
+    "HasL2cache" -> true,
+    "HasPrefetch" -> true,
+    "EnableMultiIssue" -> false,
+    "EnableSuperScalarExec" -> false,
+    "EnableOutOfOrderExec" -> false,
+    "HasDTLB" -> true,
+    "HasITLB" -> true,
+    "HasDcache" -> true,
+    "HasIcache" -> true,
+    "MmodeOnly" -> false,
+    "IsRV32" -> false,
+
+    "EnableILA" -> true,
+    "EnableDebug" -> false
+  )
 }
 
-trait OoOCore {
-  val HasL2cache = true
-  val HasPrefetch = true
-  val EnableMultiIssue = true
-  val EnableSuperScalarExec = true
-  val EnableOutOfOrderExec = true
-  val HasDTLB = true
-  val HasITLB = true
-  val HasDcache = true
-  val HasIcache = true
-  val MmodeOnly = false
-  val IsRV32 = false
+object PynqSettings {
+  def apply() = Map(
+    "NrExtIntr" -> 3,
+    "ResetVector" -> 0x60000000L,
+    "MemMapBase" -> 0x0000000010000000L,
+    "MemMapRegionBits" -> 28,
+    "MMIOBase" -> 0x00000000e0000000L,
+    "MMIOSize" -> 0x0000000020000000L
+  )
 }
 
-trait SeqCore {
-  val HasL2cache = true
-  val HasPrefetch = true
-  val EnableMultiIssue = false
-  val EnableSuperScalarExec = false
-  val EnableOutOfOrderExec = false
-  val HasDTLB = true
-  val HasITLB = true
-  val HasDcache = true
-  val HasIcache = true
-  val MmodeOnly = false
-  val IsRV32 = false
+object Axu3cgSettings {
+  def apply() = Map(
+    "NrExtIntr" -> 2
+  )
 }
 
-trait SmallCore {
-  val HasL2cache = false
-  val HasPrefetch = false
-  val EnableMultiIssue = false
-  val EnableSuperScalarExec = false
-  val EnableOutOfOrderExec = false
-  val HasDTLB = false
-  val HasITLB = false
-  val HasDcache = false
-  val HasIcache = false
-  val MmodeOnly = true
-  val IsRV32 = true
+object PXIeSettings {
+  def apply() = Map(
+    "NrExtIntr" -> 5
+  )
 }
 
-object Settings extends Common with SeqCore {}
+object OOOSettings {
+  def apply() = Map(
+    "EnableMultiIssue" -> true,
+    "EnableSuperScalarExec" -> true,
+    "EnableOutOfOrderExec" -> true
+  )
+}
+
+object InOrderSettings {
+  def apply() = Map()
+}
+
+object EmbededSettings {
+  def apply() = Map(
+    "HasL2cache" -> false,
+    "HasPrefetch" -> false,
+    "HasDTLB" -> false,
+    "HasITLB" -> false,
+    "HasDcache" -> false,
+    "HasIcache" -> false,
+    "MmodeOnly" -> true,
+    "IsRV32" -> true
+  )
+}
+
+object Settings {
+  var settings: Map[String, AnyVal] = DefaultSettings()
+  def get(field: String) = {
+    settings(field).asInstanceOf[Boolean]
+  }
+  def getLong(field: String) = {
+    settings(field).asInstanceOf[Long]
+  }
+  def getInt(field: String) = {
+    settings(field).asInstanceOf[Int]
+  }
+}
 
 //****************************************
 // Generate RV32 core

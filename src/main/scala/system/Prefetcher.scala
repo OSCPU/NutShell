@@ -1,6 +1,6 @@
 package system
 
-import noop.{NOOP, NOOPConfig, HasNOOPParameter, Cache, CacheConfig}
+import nutcore.{NutCore, NutCoreConfig, HasNutCoreParameter, Cache, CacheConfig}
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import utils._
@@ -9,7 +9,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
-trait HasPrefetcherParameter extends HasNOOPParameter {
+trait HasPrefetcherParameter extends HasNutCoreParameter {
   val supportPrefetch = HasDcache
 }
 
