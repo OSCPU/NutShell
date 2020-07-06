@@ -81,7 +81,7 @@ $(EMU_MK): $(SIM_TOP_V) | $(EMU_DEPS)
 	verilator --cc --exe $(VERILATOR_FLAGS) \
 		-o $(abspath $(EMU)) -Mdir $(@D) $^ $(EMU_DEPS)
 
-REF_SO := $(NEMU_HOME)/build/riscv$(DATAWIDTH)-nemu-interpreter-so
+REF_SO := ./ready-to-run/riscv$(DATAWIDTH)-nemu-interpreter-so
 $(REF_SO):
 	$(MAKE) -C $(NEMU_HOME) ISA=riscv$(DATAWIDTH) SHARE=1
 
