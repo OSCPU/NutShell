@@ -344,7 +344,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val priviledgeMode = RegInit(UInt(2.W), ModeM)
 
   // perfcnt
-  val hasPerfCnt = if (EnablePerfCnt) true else !p.FPGAPlatform
+  val hasPerfCnt = EnablePerfCnt && !p.FPGAPlatform
   val nrPerfCnts = if (hasPerfCnt) 0x80 else 0x3
   val perfCnts = List.fill(nrPerfCnts)(RegInit(0.U(64.W)))
   val perfCntsLoMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb00 + i, perfCnts(i)) }
@@ -878,25 +878,27 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   BoringUtils.addSink(nutcoretrap, "nutcoretrap")
   def readWithScala(addr: Int): UInt = mapping(addr)._1
 
-  if (hasPerfCnt && !p.FPGAPlatform) {
+  if (!p.FPGAPlatform) {
     // to monitor
     BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
     BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
 
-    // display all perfcnt when nutcoretrap is executed
-    val PrintPerfCntToCSV = true
-    when (nutcoretrap) {
-      printf("======== PerfCnt =========\n")
-      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
-        printf("%d <- " + name + "\n", readWithScala(addr)) }
-      if(PrintPerfCntToCSV){
-      printf("======== PerfCntCSV =========\n\n")
-      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
-        printf(name + ", ")}
-      printf("\n\n\n")
-      perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
-        printf("%d, ", readWithScala(addr)) }
-      printf("\n\n\n")
+    if (hasPerfCnt) {
+      // display all perfcnt when nutcoretrap is executed
+      val PrintPerfCntToCSV = true
+      when (nutcoretrap) {
+        printf("======== PerfCnt =========\n")
+        perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+          printf("%d <- " + name + "\n", readWithScala(addr)) }
+        if(PrintPerfCntToCSV){
+        printf("======== PerfCntCSV =========\n\n")
+        perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+          printf(name + ", ")}
+        printf("\n\n\n")
+        perfCntList.toSeq.sortBy(_._2._1).map { case (name, (addr, boringId)) =>
+          printf("%d, ", readWithScala(addr)) }
+        printf("\n\n\n")
+        }
       }
     }
 
