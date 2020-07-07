@@ -6,8 +6,10 @@ SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 MEM_GEN = ./scripts/vlsi_mem_gen
 
+USE_READY_TO_RUN_NEMU = true
+
 SIMTOP = top.TopMain
-IMAGE ?= temp
+IMAGE ?= ready-to-run/linux.bin
 
 DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu4cg
@@ -81,9 +83,13 @@ $(EMU_MK): $(SIM_TOP_V) | $(EMU_DEPS)
 	verilator --cc --exe $(VERILATOR_FLAGS) \
 		-o $(abspath $(EMU)) -Mdir $(@D) $^ $(EMU_DEPS)
 
+ifeq ($(USE_READY_TO_RUN_NEMU),true)
+REF_SO := ./ready-to-run/riscv$(DATAWIDTH)-nemu-interpreter-so
+else
 REF_SO := $(NEMU_HOME)/build/riscv$(DATAWIDTH)-nemu-interpreter-so
 $(REF_SO):
 	$(MAKE) -C $(NEMU_HOME) ISA=riscv$(DATAWIDTH) SHARE=1
+endif
 
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS) $(REF_SO)
 	CPPFLAGS=-DREF_SO=\\\"$(REF_SO)\\\" $(MAKE) -C $(dir $(EMU_MK)) -f $(abspath $(EMU_MK))

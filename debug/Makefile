@@ -1,4 +1,4 @@
-ARCH = ARCH=riscv64-noop
+ARCH = ARCH=riscv64-nutshell
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
 SINGLETEST = ALL=recursion
 RVTEST_TARGET = towers
@@ -76,25 +76,25 @@ xjnemu:
 	$(MAKE) -C $(NANOS_HOME) ARCH=riscv64-nemu run
 
 rttos:
-	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-noop run
+	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-nutshell run
 
 rttos-debug:
-	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-noop run 2>&1 | tee > rttos.log
+	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-nutshell run 2>&1 | tee > rttos.log
 
 freertos:
-	$(MAKE) -C $(FREERTOS_HOME)/Demo/riscv64-noop noop_run
+	$(MAKE) -C $(FREERTOS_HOME)/Demo/riscv64-nutshell nutshell_run
 
 xv6:
-	$(MAKE) -C $(XV6_HOME) noop
+	$(MAKE) -C $(XV6_HOME) nutshell
 
 xv6-debug:
-	$(MAKE) -C $(XV6_HOME) noop 2>&1 | tee > xv6.log
+	$(MAKE) -C $(XV6_HOME) nutshell 2>&1 | tee > xv6.log
 
 linux:
-	$(MAKE) -C $(BBL_LINUX_HOME) noop
+	$(MAKE) -C $(BBL_LINUX_HOME) nutshell
 
 linux-debug:
-	$(MAKE) -C $(BBL_LINUX_HOME) noop 2>&1 | tee > linux.log
+	$(MAKE) -C $(BBL_LINUX_HOME) nutshell 2>&1 | tee > linux.log
 
 # ------------------------------------------------------------------
 # test set
@@ -114,10 +114,10 @@ perf-test: smoke-test microbench-train coremark
 # ------------------------------------------------------------------
 
 disassemble-rttos:
-	cp $(RTTOS_HOME)/bsp/riscv64-noop/build/code.txt ./d-rttos.log
+	cp $(RTTOS_HOME)/bsp/riscv64-nutshell/build/code.txt ./d-rttos.log
 
 disassemble-freertos:
-	cp $(FREERTOS_HOME)/Demo/riscv64-noop/build/FreeRTOS-simple.elf.txt ./d-freertos.log
+	cp $(FREERTOS_HOME)/Demo/riscv64-nutshell/build/FreeRTOS-simple.elf.txt ./d-freertos.log
 
 disassemble-xv6:
 	cp $(XV6_HOME)/build/code.txt ./d-xv6.log
