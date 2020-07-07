@@ -7,6 +7,7 @@ import top.Settings
 
 object Priviledged extends HasInstrType {
   def ECALL   = BitPat("b000000000000_00000_000_00000_1110011")
+  def EBREAK  = BitPat("b000000000001_00000_000_00000_1110011")
   def MRET    = BitPat("b001100000010_00000_000_00000_1110011")
   def SRET    = BitPat("b000100000010_00000_000_00000_1110011")
   def SFANCE_VMA = BitPat("b0001001_?????_?????_000_00000_1110011")
@@ -20,6 +21,7 @@ object Priviledged extends HasInstrType {
 
   val table = Array(
     ECALL          -> List(InstrI, FuType.csr, CSROpType.jmp),
+    EBREAK         -> List(InstrI, FuType.csr, CSROpType.jmp),
     MRET           -> List(InstrI, FuType.csr, CSROpType.jmp),
     FENCE          -> List(InstrS, FuType.alu, ALUOpType.add), // nop    InstrS -> !wen
     WFI            -> List(InstrI, FuType.alu, ALUOpType.add) // nop

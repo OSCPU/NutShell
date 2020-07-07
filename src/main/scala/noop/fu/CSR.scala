@@ -96,10 +96,11 @@ trait HasCSRConst {
   // Debug/Trace Registers (shared with Debug Mode) (not implemented)
   // Debug Mode Registers (not implemented)
 
-  def privEcall = 0x000.U
-  def privMret  = 0x302.U
-  def privSret  = 0x102.U
-  def privUret  = 0x002.U
+  def privEcall  = 0x000.U
+  def privEbreak = 0x001.U
+  def privMret   = 0x302.U
+  def privSret   = 0x102.U
+  def privUret   = 0x002.U
 
   def ModeM     = 0x3.U
   def ModeH     = 0x2.U
@@ -458,6 +459,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
 
   // CSR inst decode
   val ret = Wire(Bool())
+  val isEbreak = addr === privEbreak && func === CSROpType.jmp && !io.isBackendException
   val isEcall = addr === privEcall && func === CSROpType.jmp && !io.isBackendException
   val isMret = addr === privMret   && func === CSROpType.jmp && !io.isBackendException
   val isSret = addr === privSret   && func === CSROpType.jmp && !io.isBackendException
@@ -587,6 +589,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   // TODO: merge iduExceptionVec, csrExceptionVec as raiseExceptionVec
   val csrExceptionVec = Wire(Vec(16, Bool()))
   csrExceptionVec.map(_ := false.B)
+  csrExceptionVec(breakPoint) := io.in.valid && isEbreak
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
