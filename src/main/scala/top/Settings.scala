@@ -3,7 +3,7 @@ package top
 trait Common {
   val EnableILA = true
   val VAddrBits = 39
-  val EnableDebug = false
+  val EnableDebug = true
   val HasMMIO = true
   val FPGAmode = "pynq"   // Can be set "pynq" or "axu3cg"
 }

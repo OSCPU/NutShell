@@ -90,9 +90,9 @@ class NOOPSimTop extends Module {
 
   // make firrtl happy :)
   val log_begin_sink, log_end_sink, log_level_sink = WireInit(0.U(64.W))
-  BoringUtils.addSink(log_begin_sink, "DISPLAY_LOG_START")
-  BoringUtils.addSink(log_end_sink, "DISPLAY_LOG_END")
-  BoringUtils.addSink(log_level_sink, "DISPLAY_LOG_LEVEL")
+  // BoringUtils.addSink(log_begin_sink, "DISPLAY_LOG_START")
+  // BoringUtils.addSink(log_end_sink, "DISPLAY_LOG_END")
+  // BoringUtils.addSink(log_level_sink, "DISPLAY_LOG_LEVEL")
   io.difftestCtrl <> mmio.io.difftestCtrl
 }
 
