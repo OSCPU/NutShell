@@ -37,7 +37,7 @@ trait HasNOOPParameter {
 
 trait HasNOOPConst {
   val CacheReadWidth = 8
-  val ICacheUserBundleWidth = Settings.VAddrBits*2 + 9 // TODO: this const depends on VAddrBits
+  val ICacheUserBundleWidth = Settings.VAddrBits*2 + 9
   val DCacheUserBundleWidth = 16
   val IndependentBru = if (Settings.EnableOutOfOrderExec) true else false
 }

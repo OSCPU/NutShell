@@ -201,6 +201,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
       ){
         rmtValid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
       }
+      // update checkpoint
       when(
         decode(ringBufferTail)(i).ctrl.rfWen && 
         valid(ringBufferTail)(i)
@@ -355,7 +356,7 @@ class ROB(implicit val p: NOOPConfig) extends NOOPModule with HasInstrType with 
     io.wb(i).rfDest := decode(ringBufferTail)(i).ctrl.rfDest
     io.wb(i).rfData := prf(Cat(ringBufferTail, i.U))
   }
-  
+
   // fix wen
   val instRedirect = (0 until RetireWidth).map(i => redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i))
   (1 until RetireWidth).map(i => {
