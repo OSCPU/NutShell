@@ -40,7 +40,11 @@ object TopMain extends App {
   } )
   s.map{Settings.settings += _} // add and overwrite DefaultSettings
   println("====== Settings = (" + board + ", " +  core + ") ======")
-  Settings.settings.toList.sortBy(_._1)(Ordering.String).map(s => println(s._1 + " = " + s._2))
+  def para2Hex(x: Any) = x match {
+    case i: Long => i.toHexString
+    case any => any
+  }
+  Settings.settings.toList.sortBy(_._1)(Ordering.String).map(s => println(s._1 + " = " + para2Hex(s._2)))
 
   if (board == "sim") {
     Driver.execute(args, () => new NutShellSimTop)
