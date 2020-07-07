@@ -7,7 +7,7 @@ TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 MEM_GEN = ./scripts/vlsi_mem_gen
 
 SIMTOP = top.TopMain
-IMAGE ?= temp
+IMAGE ?= ready-to-run/linux.bin
 
 DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu4cg
