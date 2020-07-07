@@ -43,7 +43,7 @@ set inc_files [list \
 add_files -norecurse -fileset sources_1 $inc_files
 set_property is_global_include true [get_files $inc_files]
 
-# Add files for noop
+# Add files for nutshell
 lappend src_files "[file normalize "${fpga_dir}/../build/TopMain.v"]"
 
 add_files -norecurse -fileset sources_1 $src_files
@@ -58,8 +58,8 @@ if {${standalone} == "true"} {
   add_files -norecurse -fileset sources_1 $project_dir/$project_name.srcs/sources_1/bd/system_top/hdl/system_top_wrapper.v
   set topmodule system_top_wrapper
 } else {
-  add_bd ${fpga_dir}/noop.tcl
-  add_bd ${bd_dir}/prm.tcl
+  add_bd ${fpga_dir}/NutShell.tcl
+  add_bd ${bd_dir}/arm.tcl
   set topmodule system_top
 }
 

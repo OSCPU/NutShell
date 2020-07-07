@@ -7,11 +7,11 @@ LOG_END ?= -1
 LOG_LEVEL ?= ERROR
 # Valid LOG_LEVELs are: ALL, DEBUG, INFO, WARN, ERROR, OFF
 
-SINGLETEST = recursion
-RVTEST_TARGET = towers
+ARCH = ARCH=riscv64-nutshell
 # ------------------------------------------------------------------
 
-ARCH = ARCH=riscv64-noop
+SINGLETEST = recursion
+RVTEST_TARGET = towers
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
 EMU_ARGS = LOG_BEGIN=$(LOG_BEGIN) LOG_END=$(LOG_END) LOG_LEVEL=$(LOG_LEVEL)
 CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
@@ -87,25 +87,25 @@ xjnemu:
 	$(MAKE) -C $(NANOS_HOME) ARCH=riscv64-nemu run
 
 rttos:
-	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-noop run
+	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-nutshell run
 
 rttos-debug:
-	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-noop run 2>&1 | tee > rttos.log
+	$(MAKE) -C $(RTTOS_HOME)/bsp/riscv64-nutshell run 2>&1 | tee > rttos.log
 
 freertos:
-	$(MAKE) -C $(FREERTOS_HOME)/Demo/riscv64-noop noop_run
+	$(MAKE) -C $(FREERTOS_HOME)/Demo/riscv64-nutshell nutshell_run
 
 xv6:
-	$(MAKE) -C $(XV6_HOME) noop
+	$(MAKE) -C $(XV6_HOME) nutshell
 
 xv6-debug:
-	$(MAKE) -C $(XV6_HOME) noop 2>&1 | tee > xv6.log
+	$(MAKE) -C $(XV6_HOME) nutshell 2>&1 | tee > xv6.log
 
 linux:
-	$(MAKE) -C $(BBL_LINUX_HOME) noop
+	$(MAKE) -C $(BBL_LINUX_HOME) nutshell
 
 linux-debug:
-	$(MAKE) -C $(BBL_LINUX_HOME) noop 2>&1 | tee > linux.log
+	$(MAKE) -C $(BBL_LINUX_HOME) nutshell 2>&1 | tee > linux.log
 
 # ------------------------------------------------------------------
 # test set
@@ -128,10 +128,10 @@ disassemble-unittest:
 	cp $(AM_HOME)/tests/cputest/build/$(SINGLETEST)-riscv64-noop.txt ./d-unittest.log
 
 disassemble-rttos:
-	cp $(RTTOS_HOME)/bsp/riscv64-noop/build/code.txt ./d-rttos.log
+	cp $(RTTOS_HOME)/bsp/riscv64-nutshell/build/code.txt ./d-rttos.log
 
 disassemble-freertos:
-	cp $(FREERTOS_HOME)/Demo/riscv64-noop/build/FreeRTOS-simple.elf.txt ./d-freertos.log
+	cp $(FREERTOS_HOME)/Demo/riscv64-nutshell/build/FreeRTOS-simple.elf.txt ./d-freertos.log
 
 disassemble-xv6:
 	cp $(XV6_HOME)/build/code.txt ./d-xv6.log

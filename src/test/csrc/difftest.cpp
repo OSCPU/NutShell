@@ -160,7 +160,7 @@ int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
   if (isCSRMip) {
     // We can not handle NEMU.mip.mtip since it is driven by CLINT,
     // which is not accessed in NEMU due to MMIO.
-    // Just sync the state of NEMU from NOOP.
+    // Just sync the state of NEMU from NutCore.
     reg_scala[DIFFTEST_THIS_PC] = next_pc;
     nemu_this_pc = next_pc;
     ref_difftest_setregs(reg_scala);
