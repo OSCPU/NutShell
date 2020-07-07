@@ -48,7 +48,7 @@ class NLP extends NOOPModule {
     val brIdx = Output(Vec(4, Bool()))
     val target = Output(Vec(4, UInt(VAddrBits.W)))
     // val instValid = Output(UInt(4.W)) // now instValid is generated in IFU
-    val lateJump = Output(Bool())
+    val crosslineJump = Output(Bool())
   })
 
   val flush = BoolStopWatch(io.flush, io.in.pc.valid, startHighPriority = true)
@@ -60,7 +60,7 @@ class NLP extends NOOPModule {
     val tag = UInt(btbAddr.tagBits.W)
     val _type = UInt(2.W)
     val target = UInt(VAddrBits.W)
-    val lateJump = Bool()
+    val crosslineJump = Bool()
     val valid = Bool()
   }
 
@@ -90,10 +90,10 @@ class NLP extends NOOPModule {
   val btbHit = Wire(Vec(4, Bool()))
   (0 to 3).map(i => btbHit(i) := btbRead(i).valid && btbRead(i).tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb(i).io.r.req.fire(), init = false.B))
   // btbHit will ignore pc(2,0). pc(2,0) is used to build brIdx
-  val lateJump = btbRead(3).lateJump && btbHit(3) && !io.brIdx(0) && !io.brIdx(1) && !io.brIdx(2)
-  io.lateJump := lateJump
-  // val lateJumpLatch = RegNext(lateJump)
-  // val lateJumpTarget = RegEnable(btbRead.target, lateJump)
+  val crosslineJump = btbRead(3).crosslineJump && btbHit(3) && !io.brIdx(0) && !io.brIdx(1) && !io.brIdx(2)
+  io.crosslineJump := crosslineJump
+  // val crosslineJumpLatch = RegNext(crosslineJump)
+  // val crosslineJumpTarget = RegEnable(btbRead.target, crosslineJump)
   
   // PHT
   val pht = List.fill(4)(Mem(NRbtb >> 2, UInt(2.W)))
@@ -114,7 +114,7 @@ class NLP extends NOOPModule {
   btbWrite.tag := btbAddr.getTag(req.pc)
   btbWrite.target := req.actualTarget
   btbWrite._type := req.btbType
-  btbWrite.lateJump := req.pc(2,1)==="h3".U && !req.isRVC // ((pc_offset % 8) == 6) && inst is 32bit in length
+  btbWrite.crosslineJump := req.pc(2,1)==="h3".U && !req.isRVC // ((pc_offset % 8) == 6) && inst is 32bit in length
   btbWrite.valid := true.B 
   // NOTE: We only update BTB at a miss prediction.
   // If a miss prediction is found, the pipeline will be flushed
@@ -171,11 +171,11 @@ class NLP extends NOOPModule {
     }
   }
 
-  // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump || lateJumpLatch && !flush && !lateJump
+  // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !crosslineJump || crosslineJumpLatch && !flush && !crosslineJump
   // Note: 
-  // btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !lateJump : normal branch predict
-  // lateJumpLatch && !flush && !lateJump : cross line branch predict, bpu will require imem to fetch the next 16bit of current inst in next instline
-  // `&& !lateJump` is used to make sure this logic will run correctly when imem stalls (pcUpdate === false)
+  // btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !crosslineJump : normal branch predict
+  // crosslineJumpLatch && !flush && !crosslineJump : cross line branch predict, bpu will require imem to fetch the next 16bit of current inst in next instline
+  // `&& !crosslineJump` is used to make sure this logic will run correctly when imem stalls (pcUpdate === false)
   // by using `instline`, we mean a 64 bit instfetch result from imem
   // ROCKET uses a 32 bit instline, and its IDU logic is more simple than this implentation.
 }

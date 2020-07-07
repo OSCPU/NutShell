@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import top.Settings
 
 object CSROpType {
   def jmp  = "b000".U
@@ -95,10 +96,11 @@ trait HasCSRConst {
   // Debug/Trace Registers (shared with Debug Mode) (not implemented)
   // Debug Mode Registers (not implemented)
 
-  def privEcall = 0x000.U
-  def privMret  = 0x302.U
-  def privSret  = 0x102.U
-  def privUret  = 0x002.U
+  def privEcall  = 0x000.U
+  def privEbreak = 0x001.U
+  def privMret   = 0x302.U
+  def privSret   = 0x102.U
+  def privUret   = 0x002.U
 
   def ModeM     = 0x3.U
   def ModeH     = 0x2.U
@@ -117,11 +119,11 @@ trait HasCSRConst {
   def IRQ_SSIP  = 9 
   def IRQ_MSIP  = 11 
 
- val IntPriority = Seq(
+  val IntPriority = Seq(
     IRQ_MEIP, IRQ_MSIP, IRQ_MTIP,
     IRQ_SEIP, IRQ_SSIP, IRQ_STIP,
     IRQ_UEIP, IRQ_USIP, IRQ_UTIP
- )
+  )
 }
 
 trait HasExceptionNO {
@@ -195,10 +197,12 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
    
   class MstatusStruct extends Bundle {
     val sd = Output(UInt(1.W))
-    val pad1 = Output(UInt(37.W))
-    val sxl = Output(UInt(2.W))
-    val uxl = Output(UInt(2.W))
-    val pad0 = Output(UInt(9.W))
+
+    val pad1 = if (XLEN == 64) Output(UInt(27.W)) else null
+    val sxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+    val uxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+    val pad0 = if (XLEN == 64) Output(UInt(9.W))  else Output(UInt(8.W))
+
     val tsr = Output(UInt(1.W))
     val tw = Output(UInt(1.W))
     val tvm = Output(UInt(1.W))
@@ -312,7 +316,10 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val stval = Reg(UInt(XLEN.W))
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
-  BoringUtils.addSource(satp, "CSRSATP")
+
+  if (Settings.HasDTLB) {
+    BoringUtils.addSource(satp, "CSRSATP")
+  }
 
   // User-Level CSRs
   val uepc = Reg(UInt(XLEN.W))
@@ -340,7 +347,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   // perfcnt
   val hasPerfCnt = !p.FPGAPlatform
   val nrPerfCnts = if (hasPerfCnt) 0x80 else 0x3
-  val perfCnts = List.fill(nrPerfCnts)(RegInit(0.U(XLEN.W)))
+  val perfCnts = List.fill(nrPerfCnts)(RegInit(0.U(64.W)))
   val perfCntsLoMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb00 + i, perfCnts(i)) }
   val perfCntsHiMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb80 + i, perfCnts(i)(63, 32)) }
 
@@ -421,7 +428,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     MaskedRegMap(PmpaddrBase + 2, pmpaddr2),
     MaskedRegMap(PmpaddrBase + 3, pmpaddr3)
 
-  ) ++ perfCntsLoMapping ++ (if (XLEN == 32) perfCntsHiMapping else Nil)
+  ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
   val addr = src2(11, 0)
   val rdata = Wire(UInt(XLEN.W))
@@ -452,6 +459,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
 
   // CSR inst decode
   val ret = Wire(Bool())
+  val isEbreak = addr === privEbreak && func === CSROpType.jmp && !io.isBackendException
   val isEcall = addr === privEcall && func === CSROpType.jmp && !io.isBackendException
   val isMret = addr === privMret   && func === CSROpType.jmp && !io.isBackendException
   val isSret = addr === privSret   && func === CSROpType.jmp && !io.isBackendException
@@ -526,7 +534,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   }
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
-    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt(io.cfIn.pc + 2.U, XLEN), SignExt(io.cfIn.pc, XLEN)), SignExt(dmemPagefaultAddr, XLEN))
+    val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(NVAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(NVAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
     when(priviledgeMode === ModeM){
       mtval := tval
     }.otherwise{
@@ -548,20 +556,6 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   // Exception and Intr
 
   // interrupts
-  
-  val ideleg =  (mideleg & mip.asUInt)
-  def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
-                                   ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
-
-  val intrVecEnable = Wire(Vec(12, Bool()))
-  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
-  val intrVec = mie(11,0) & mip.asUInt & intrVecEnable.asUInt
-  BoringUtils.addSource(intrVec, "intrVecIDU")
-  // val intrNO = PriorityEncoder(intrVec)
-  
-  val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
-  // val intrNO = PriorityEncoder(io.cfIn.intrVec)
-  val raiseIntr = io.cfIn.intrVec.asUInt.orR
 
   val mtip = WireInit(false.B)
   val meip = WireInit(false.B)
@@ -569,12 +563,33 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   BoringUtils.addSink(meip, "meip")
   mipWire.t.m := mtip
   mipWire.e.m := meip
+  
+  // SEIP from PLIC is only used to raise interrupt,
+  // but it is not stored in the CSR
+  val seip = meip    // FIXME: PLIC should generate SEIP different from MEIP
+  val mipRaiseIntr = WireInit(mip)
+  mipRaiseIntr.e.s := mip.e.s | seip
+
+  val ideleg =  (mideleg & mipRaiseIntr.asUInt)
+  def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
+                                   ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
+
+  val intrVecEnable = Wire(Vec(12, Bool()))
+  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
+  val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
+  BoringUtils.addSource(intrVec, "intrVecIDU")
+  // val intrNO = PriorityEncoder(intrVec)
+  
+  val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
+  // val intrNO = PriorityEncoder(io.cfIn.intrVec)
+  val raiseIntr = io.cfIn.intrVec.asUInt.orR
 
   // exceptions
 
   // TODO: merge iduExceptionVec, csrExceptionVec as raiseExceptionVec
   val csrExceptionVec = Wire(Vec(16, Bool()))
   csrExceptionVec.map(_ := false.B)
+  csrExceptionVec(breakPoint) := io.in.valid && isEbreak
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
@@ -637,7 +652,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
   val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in noop-riscv64, no exception will come together with PF
 
   ret := isMret || isSret || isUret
-  trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
+  trapTarget := Mux(delegS, stvec, mtvec)(NVAddrBits-1, 0)
   retTarget := DontCare
   // TODO redirect target
   // val illegalEret = TODO
@@ -652,7 +667,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     mstatusNew.mpp := ModeU
     mstatus := mstatusNew.asUInt
     lr := false.B
-    retTarget := mepc(VAddrBits-1, 0)
+    retTarget := mepc(NVAddrBits-1, 0)
   }
 
   when (valid && isSret) {
@@ -665,7 +680,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     mstatusNew.spp := ModeU
     mstatus := mstatusNew.asUInt
     lr := false.B
-    retTarget := sepc(VAddrBits-1, 0)
+    retTarget := sepc(NVAddrBits-1, 0)
   }
 
   when (valid && isUret) {
@@ -676,7 +691,7 @@ class CSR(implicit val p: NOOPConfig) extends NOOPModule with HasCSRConst{
     priviledgeMode := ModeU
     mstatusNew.pie.u := true.B
     mstatus := mstatusNew.asUInt
-    retTarget := uepc(VAddrBits-1, 0)
+    retTarget := uepc(NVAddrBits-1, 0)
   }
 
   when (raiseExceptionIntr) {

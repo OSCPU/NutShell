@@ -7,8 +7,9 @@ import bus.axi4._
 import utils._
 
 class AXI42SimpleBusConverter() extends Module {
+  val idBits = 18
   val io = IO(new Bundle {
-    val in = Flipped(new AXI4(idBits = 18))
+    val in = Flipped(new AXI4(idBits = idBits))
     val out = new SimpleBusUC()
   })
 
@@ -72,7 +73,7 @@ class AXI42SimpleBusConverter() extends Module {
   }
 
   // Write Path
-  val aw_reg = Reg(new AXI4BundleA(AXI4Parameters.idBits))
+  val aw_reg = Reg(new AXI4BundleA(idBits))
   val bresp_en = RegInit(false.B)
 
   when (axi.aw.valid && !axi.ar.valid) {
@@ -83,12 +84,13 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
+  val aw_bypass = Mux(axi.aw.valid, aw, aw_reg)
   when (axi.w.valid) {
     mem.req.valid := true.B
-    req.cmd := Mux(aw_reg.len === 0.U, SimpleBusCmd.write,
+    req.cmd := Mux(aw_bypass.len === 0.U, SimpleBusCmd.write,
       Mux(w.last, SimpleBusCmd.writeLast, SimpleBusCmd.writeBurst))
-    req.addr := aw_reg.addr
-    req.size := aw_reg.size
+    req.addr := aw_bypass.addr
+    req.size := aw_bypass.size
     req.wmask := w.strb
     req.wdata := w.data
     req.user.foreach(_ := aw.user)

@@ -5,6 +5,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import top.Settings
 
 class UnpipeLSUIO extends FunctionUnitIO {
   val wdata = Input(UInt(XLEN.W))
@@ -37,6 +38,9 @@ class UnpipelinedLSU extends NOOPModule with HasLSUConst {
     val amoReq   = valid & LSUOpType.isAMO(func)
     val lrReq   = valid & LSUOpType.isLR(func)
     val scReq   = valid & LSUOpType.isSC(func)
+    if (Settings.HasDTLB) {
+      BoringUtils.addSource(amoReq, "ISAMO")
+    }
     BoringUtils.addSource(amoReq, "ISAMO2")
 
     val aq = io.instr(26)
@@ -296,6 +300,21 @@ class LSExecUnit extends NOOPModule {
     ))
   }
 
+  def genWmask32(addr: UInt, sizeEncode: UInt): UInt = {
+    LookupTree(sizeEncode, List(
+      "b00".U -> 0x1.U, //0001 << addr(1:0)
+      "b01".U -> 0x3.U, //0011
+      "b10".U -> 0xf.U  //1111
+    )) << addr(1, 0)
+  }
+  def genWdata32(data: UInt, sizeEncode: UInt): UInt = {
+    LookupTree(sizeEncode, List(
+      "b00".U -> Fill(4, data(7, 0)),
+      "b01".U -> Fill(2, data(15, 0)),
+      "b10".U -> data
+    ))
+  }
+
   val dmem = io.dmem
   val addrLatch = RegNext(addr)
   val isStore = valid && LSUOpType.isStore(func)
@@ -307,9 +326,11 @@ class LSExecUnit extends NOOPModule {
   val dtlbFinish = WireInit(false.B)
   val dtlbPF = WireInit(false.B)
   val dtlbEnable = WireInit(false.B)
-  BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
-  BoringUtils.addSink(dtlbPF, "DTLBPF")
-  BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+  if (Settings.HasDTLB) {
+    BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
+    BoringUtils.addSink(dtlbPF, "DTLBPF")
+    BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+  }
 
   io.dtlbPF := dtlbPF
 
@@ -338,8 +359,15 @@ class LSExecUnit extends NOOPModule {
   }
 
   val size = func(1,0)
-  dmem.req.bits.apply(addr = addr(VAddrBits-1, 0), size = size, wdata = genWdata(io.wdata, size),
-    wmask = genWmask(addr, size), cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
+  val reqAddr  = if (XLEN == 32) SignExt(addr, VAddrBits) else addr(VAddrBits-1,0)
+  val reqWdata = if (XLEN == 32) genWdata32(io.wdata, size) else genWdata(io.wdata, size)
+  val reqWmask = if (XLEN == 32) genWmask32(addr, size) else genWmask(addr, size)
+  dmem.req.bits.apply(
+    addr = reqAddr, 
+    size = size, 
+    wdata = reqWdata,
+    wmask = reqWmask,
+    cmd = Mux(isStore, SimpleBusCmd.write, SimpleBusCmd.read))
   dmem.req.valid := valid && (state === s_idle) && !io.loadAddrMisaligned && !io.storeAddrMisaligned
   dmem.resp.ready := true.B
 
@@ -352,7 +380,7 @@ class LSExecUnit extends NOOPModule {
 
   val rdata = dmem.resp.bits.rdata
   val rdataLatch = RegNext(rdata)
-  val rdataSel = LookupTree(addrLatch(2, 0), List(
+  val rdataSel64 = LookupTree(addrLatch(2, 0), List(
     "b000".U -> rdataLatch(63, 0),
     "b001".U -> rdataLatch(63, 8),
     "b010".U -> rdataLatch(63, 16),
@@ -362,6 +390,13 @@ class LSExecUnit extends NOOPModule {
     "b110".U -> rdataLatch(63, 48),
     "b111".U -> rdataLatch(63, 56)
   ))
+  val rdataSel32 = LookupTree(addrLatch(1, 0), List(
+    "b00".U -> rdataLatch(31, 0),
+    "b01".U -> rdataLatch(31, 8),
+    "b10".U -> rdataLatch(31, 16),
+    "b11".U -> rdataLatch(31, 24)
+  ))
+  val rdataSel = if (XLEN == 32) rdataSel32 else rdataSel64
   val rdataPartialLoad = LookupTree(func, List(
       LSUOpType.lb   -> SignExt(rdataSel(7, 0) , XLEN),
       LSUOpType.lh   -> SignExt(rdataSel(15, 0), XLEN),
@@ -377,7 +412,7 @@ class LSExecUnit extends NOOPModule {
     "b11".U   -> (addr(2,0) === 0.U)  //d
   ))
 
-  io.out.bits := Mux(partialLoad, rdataPartialLoad, rdata)
+  io.out.bits := Mux(partialLoad, rdataPartialLoad, rdata(XLEN-1,0))
 
   io.isMMIO := DontCare
 
@@ -396,9 +431,4 @@ class LSExecUnit extends NOOPModule {
   BoringUtils.addSource(BoolStopWatch(dmem.isRead(), dmem.resp.fire()), "perfCntCondMloadStall")
   BoringUtils.addSource(BoolStopWatch(dmem.isWrite(), dmem.resp.fire()), "perfCntCondMstoreStall")
   BoringUtils.addSource(io.isMMIO, "perfCntCondMmmioInstr")
-  Debug() {
-    when (dmem.req.fire() && (addr === "h800027a4".U || genWdata(io.wdata, size)(31,0) === "h80000218".U)){
-      //printf("[LSUBP] time %d, addr %x, size %x, wdata_raw %x, wdata %x, isStore %x \n", GTimer(), addr, func(1,0), io.wdata, genWdata(io.wdata, size), isStore)
-    }
-  }
 }

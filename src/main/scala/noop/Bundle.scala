@@ -31,8 +31,14 @@ class RedirectIO extends NOOPBundle {
   val valid = Output(Bool())
 }
 
+class MisPredictionRecIO extends NOOPBundle {
+  val redirect = new RedirectIO
+  val valid = Output(Bool())
+  val checkpoint = Output(UInt(brTagWidth.W))
+}
+
 class CtrlFlowIO extends NOOPBundle {
-  val instr = Output(UInt(64.W))
+  val instr = Output(UInt(32.W))
   val pc = Output(UInt(VAddrBits.W))
   val pnpc = Output(UInt(VAddrBits.W))
   val redirect = new RedirectIO
@@ -70,6 +76,7 @@ class OOCommitIO extends NOOPBundle with HasBackendConst{
   val commits = Output(UInt(XLEN.W))
   val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
   val exception = Output(Bool())
+  val store = Output(Bool())
 }
 
 class FunctionUnitIO extends NOOPBundle {

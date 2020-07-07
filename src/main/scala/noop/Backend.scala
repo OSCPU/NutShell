@@ -9,10 +9,11 @@ import bus.simplebus._
 
 trait HasBackendConst{
   // val multiIssue = true
-  val robSize = 16
+  val robSize = 8
   val robWidth = 2
   val robInstCapacity = robSize * robWidth
   val checkpointSize = 4 // register map checkpoint size
+  val brTagWidth = log2Up(checkpointSize)
   val prfAddrWidth = log2Up(robSize) + log2Up(robWidth) // physical rf addr width
 
   val DispatchWidth = 2
@@ -59,6 +60,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
+  val mispredictRec = Wire(new MisPredictionRecIO)
   val flushBackend = if(enableCheckpoint){
     io.flush 
   } else {
@@ -68,6 +70,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   io.redirect := Mux(rob.io.redirect.valid && rob.io.redirect.rtype === 0.U, rob.io.redirect, bruRedirect)
 
   rob.io.cdb <> cdb
+  rob.io.mispredictRec := mispredictRec
   rob.io.flush := flushBackend
   when (rob.io.wb(0).rfWen) { rf.write(rob.io.wb(0).rfDest, rob.io.wb(0).rfData) }
   when (rob.io.wb(1).rfWen) { rf.write(rob.io.wb(1).rfDest, rob.io.wb(1).rfData) }
@@ -251,21 +254,21 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   val mduInst  = Mux(inst(0).decode.ctrl.fuType === FuType.mdu, 0.U, Mux(inst(1).decode.ctrl.fuType === FuType.mdu, 1.U, noInst))
 
   def updateBrMask(brMask: UInt) = {
-    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(cdb(i).bits.prfidx) & Fill(robInstCapacity, cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+    brMask & ~ (UIntToOH(mispredictRec.checkpoint) & Fill(checkpointSize, mispredictRec.valid))
   }
 
-  val brMaskReg = RegInit(0.U(robInstCapacity.W))
-  val brMaskGen = updateBrMask(brMaskReg & ~rob.io.brMaskClearVec)
-  val brMask = Wire(Vec(robWidth+2, UInt(robInstCapacity.W)))
+  val brMaskReg = RegInit(0.U(checkpointSize.W))
+  val brMaskGen = updateBrMask(brMaskReg)
+  val brMask = Wire(Vec(robWidth+2, UInt(checkpointSize.W)))
   val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.bru)
   brMask(0) := brMaskGen
-  brMask(1) := brMaskGen | (UIntToOH(inst(0).prfDest) & Fill(robInstCapacity, io.in(0).fire() && isBranch(0)))
+  brMask(1) := brMaskGen | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(0).fire() && isBranch(0)))
   brMask(2) := DontCare
-  brMask(3) := brMask(1) | (UIntToOH(inst(1).prfDest) & Fill(robInstCapacity, io.in(1).fire() && isBranch(1)))
+  brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire() && isBranch(1)))
   brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bruDelayer.io.brMaskOut), brMask(3)))
 
   Debug(){
-    printf("[brMAsk] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
+    printf("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
   }
 
   brurs.io.in.valid  := instCango(bruInst) 
@@ -309,6 +312,13 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsurs.io.cdb  <> cdb
   mdurs.io.cdb  <> cdb
 
+  brurs.io.mispredictRec  := mispredictRec
+  alu1rs.io.mispredictRec := mispredictRec
+  alu2rs.io.mispredictRec := mispredictRec
+  csrrs.io.mispredictRec  := mispredictRec
+  lsurs.io.mispredictRec  := mispredictRec
+  mdurs.io.mispredictRec  := mispredictRec
+
   List.tabulate(DispatchWidth)(i => {
     rob.io.in(i).valid := instCango(i)
     rob.io.in(i).bits := inst(i).decode
@@ -350,7 +360,10 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   brucommit.prfidx := brurs.io.out.bits.prfDest
   brucommit.decode.cf.redirect := bru.io.redirect
   // commit redirect
-  bruRedirect :=  bruDelayer.io.out.bits.decode.cf.redirect
+  bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
+  mispredictRec.valid := bruDelayer.io.out.fire()
+  mispredictRec.checkpoint := bruDelayer.io.freeCheckpoint.get.bits
+  mispredictRec.redirect := bruRedirect
   if(enableBranchEarlyRedirect){
     brucommit.decode.cf.redirect := bru.io.redirect
     brucommit.exception := false.B
@@ -362,10 +375,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     brucommit.exception := false.B
     bruRedirect.valid := false.B
   }
+  brucommit.store := false.B
   bruDelayer.io.in.bits := brucommit
   bruDelayer.io.in.valid := bru.io.out.valid
   bruDelayer.io.out.ready := bruWritebackReady
-  bruDelayer.io.cdb := cdb
+  bruDelayer.io.mispredictRec := mispredictRec
   bruDelayer.io.brMaskIn := brurs.io.brMaskOut
   bruDelayer.io.flush := io.flush
   bruDelayer.io.checkpointIn.get := brurs.io.recoverCheckpoint.get.bits
@@ -391,6 +405,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1commit.decode.cf.redirect.valid := false.B
   alu1commit.decode.cf.redirect.rtype := DontCare
   alu1commit.exception := false.B
+  alu1commit.store := false.B
 
   // def isBru(func: UInt) = func(4)
   val alu2 = Module(new ALU)
@@ -413,6 +428,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu2commit.decode.cf.redirect.valid := false.B
   alu2commit.decode.cf.redirect.rtype := DontCare
   alu2commit.exception := false.B
+  alu2commit.store := false.B
 
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)
@@ -432,7 +448,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsu.io.stMaskIn := lsurs.io.stMaskOut.get
   lsu.io.robAllocate.valid := io.in(0).fire()
   lsu.io.robAllocate.bits := rob.io.index
-  lsu.io.cdb := cdb
+  lsu.io.mispredictRec := mispredictRec
   lsu.io.scommit := rob.io.scommit
   haveUnfinishedStore := lsu.io.haveUnfinishedStore
   lsu.io.flush := flushBackend
@@ -448,6 +464,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsucommit.commits := lsuOut
   lsucommit.prfidx := lsu.io.uopOut.prfDest
   lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
+  lsucommit.store := lsu.io.commitStoreToCDB
   // fix exceptionVec
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
@@ -476,13 +493,14 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   mducommit.decode.cf.redirect.valid := false.B
   mducommit.decode.cf.redirect.rtype := DontCare
   mducommit.exception := false.B
+  mducommit.store := false.B
   mdurs.io.commit.get := mdu.io.out.valid
 
   // assert(!(mdu.io.out.valid && !mduDelayer.io.in.ready))
   mduDelayer.io.in.bits := mducommit
   mduDelayer.io.in.valid := mdu.io.out.valid && mdurs.io.out.valid
   mduDelayer.io.out.ready := mduWritebackReady
-  mduDelayer.io.cdb := cdb
+  mduDelayer.io.mispredictRec := mispredictRec
   mduDelayer.io.brMaskIn := mdurs.io.brMaskOut
   mduDelayer.io.flush := io.flush
   mducommitdelayed := mduDelayer.io.out.bits
@@ -511,6 +529,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   csrcommit.prfidx := csrUop.prfDest
   csrcommit.decode.cf.redirect := csr.io.redirect
   csrcommit.exception := false.B
+  csrcommit.store := false.B
   // fix wen
   when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
 
@@ -541,6 +560,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   moucommit.prfidx := csrrs.io.out.bits.prfDest
   moucommit.decode.cf.redirect := mou.io.redirect
   moucommit.exception := false.B
+  moucommit.store := false.B
 
   // ------------------------------------------------
   // Backend stage 3+
@@ -708,4 +728,36 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     BoringUtils.addSource(nooptrap, "nooptrap")
   }
   
+}
+
+class Backend_seq(implicit val p: NOOPConfig) extends NOOPModule {
+  val io = IO(new Bundle {
+    val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
+    val flush = Input(UInt(2.W))
+    val dmem = new SimpleBusUC(addrBits = VAddrBits)
+    val memMMU = Flipped(new MemMMUIO)
+
+    val redirect = new RedirectIO
+  })
+
+  val isu  = Module(new ISU)
+  val exu  = Module(new EXU)
+  val wbu  = Module(new WBU)
+
+  PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire(), io.flush(0))
+  PipelineConnect(exu.io.out, wbu.io.in, true.B, io.flush(1))
+
+  isu.io.in <> io.in
+  
+  isu.io.flush := io.flush(0)
+  exu.io.flush := io.flush(1)
+
+  isu.io.wb <> wbu.io.wb
+  io.redirect <> wbu.io.redirect
+  // forward
+  isu.io.forward <> exu.io.forward  
+
+  io.memMMU.imem <> exu.io.memMMU.imem
+  io.memMMU.dmem <> exu.io.memMMU.dmem
+  io.dmem <> exu.io.dmem
 }

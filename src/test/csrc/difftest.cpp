@@ -8,8 +8,6 @@
 # error Please define REF_SO to the path of NEMU shared object file
 #endif
 
-#define printCSR(x) printf(""#x": 0x%016lx    ", x)
-
 void (*ref_difftest_memcpy_from_dut)(paddr_t dest, void *src, size_t n) = NULL;
 void (*ref_difftest_getregs)(void *c) = NULL;
 void (*ref_difftest_setregs)(const void *c) = NULL;
@@ -36,7 +34,7 @@ void difftest_skip_dut() {
   is_skip_dut = true;
 }
 
-void init_difftest(uint64_t *reg) {
+void init_difftest(rtlreg_t *reg) {
   void *handle;
   handle = dlopen(REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
   assert(handle);
@@ -74,12 +72,14 @@ static const char *reg_name[DIFFTEST_NR_REG] = {
   "s0", "s1", "a0", "a1", "a2", "a3", "a4", "a5",
   "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7",
   "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6",
-  "this_pc",
-  "mstatus", "mcause", "mepc",
+  "this_pc"
+#ifndef __RV32__
+  ,"mstatus", "mcause", "mepc",
   "sstatus", "scause", "sepc"
+#endif
 };
 
-int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
+int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
   int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, 
   int isMultiCommit
   ) {
@@ -92,12 +92,12 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
 
   #define DEBUG_RETIRE_TRACE_SIZE 16
 
-  uint64_t ref_r[DIFFTEST_NR_REG];
-  uint64_t this_pc = reg_scala[DIFFTEST_THIS_PC];
+  rtlreg_t ref_r[DIFFTEST_NR_REG];
+  rtlreg_t this_pc = reg_scala[DIFFTEST_THIS_PC];
   // ref_difftest_getregs() will get the next pc,
   // therefore we must keep track this one
-  static uint64_t nemu_this_pc = 0x80000000;
-  static uint64_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+  static rtlreg_t nemu_this_pc = 0x80000000;
+  static rtlreg_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t multi_commit_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
   static uint32_t skip_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
@@ -148,7 +148,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
 
   ref_difftest_getregs(&ref_r);
 
-  uint64_t next_pc = ref_r[32];
+  rtlreg_t next_pc = ref_r[32];
   pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
   pc_retire_queue[pc_retire_pointer] = this_pc;
   inst_retire_queue[pc_retire_pointer] = this_inst;
@@ -171,6 +171,8 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
   ref_r[DIFFTEST_THIS_PC] = nemu_this_pc;
   nemu_this_pc = next_pc;
 
+  ref_r[0] = 0;
+
   if (memcmp(reg_scala, ref_r, sizeof(ref_r)) != 0) {
     printf("\n==============Retire Trace==============\n");
     int j;
@@ -185,7 +187,7 @@ int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
     }
     printf("\n==============  Reg Diff  ==============\n");
     ref_isa_reg_display();
-    printCSR(priviledgeMode);
+    printf("priviledgeMode = %d\n", priviledgeMode);
     puts("");
     int i;
     for (i = 0; i < DIFFTEST_NR_REG; i ++) {

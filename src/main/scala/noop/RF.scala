@@ -13,7 +13,7 @@ trait HasRegFileParameter {
 class RegFile extends HasRegFileParameter with HasNOOPParameter {
   val rf = Mem(NRReg, UInt(XLEN.W))
   def read(addr: UInt) : UInt = Mux(addr === 0.U, 0.U, rf(addr))
-  def write(addr: UInt, data: UInt) = { rf(addr) := data }
+  def write(addr: UInt, data: UInt) = { rf(addr) := data(XLEN-1,0) }
 } 
 
 class ScoreBoard extends HasRegFileParameter {

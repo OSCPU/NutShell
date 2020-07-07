@@ -5,6 +5,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import top.Settings
 
 // Out Of Order Load/Store Unit
 
@@ -80,8 +81,8 @@ class LSUIO extends FunctionUnitIO {
   // val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr // TODO
   val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
   val dtlb = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
-  val cdb = Vec(robWidth, Flipped(Valid(new OOCommitIO)))
-  val brMaskIn = Input(UInt(robInstCapacity.W))
+  val mispredictRec = Flipped(new MisPredictionRecIO)
+  val brMaskIn = Input(UInt(checkpointSize.W))
   val stMaskIn = Input(UInt(robSize.W))
   val robAllocate = Input(Valid(UInt(log2Up(robSize).W)))
   val uopIn = Input(new RenamedDecodeIO)
@@ -89,7 +90,7 @@ class LSUIO extends FunctionUnitIO {
   val isMMIO = Output(Bool())
   val exceptionVec = Output(Vec(16, Bool()))
   val scommit = Input(Bool())
-  val atomData = Output(UInt(XLEN.W))
+  val commitStoreToCDB = Output(Bool())
   val haveUnfinishedStore = Output(Bool())
   val flush = Input(Bool())
 }
@@ -97,7 +98,7 @@ class LSUIO extends FunctionUnitIO {
 class StoreQueueEntry extends NOOPBundle{
   val pc       = UInt(VAddrBits.W)
   val prfidx   = UInt(prfAddrWidth.W) // for debug
-  val brMask   = UInt(robInstCapacity.W)
+  val brMask   = UInt(checkpointSize.W)
   val wmask    = UInt((XLEN/8).W) // for store queue forwarding
   val vaddr    = UInt(VAddrBits.W)
   val paddr    = UInt(PAddrBits.W)
@@ -113,7 +114,7 @@ class moqEntry extends NOOPBundle{
   val pc       = UInt(VAddrBits.W)
   val isRVC    = Bool()
   val prfidx   = UInt(prfAddrWidth.W)
-  val brMask   = UInt(robInstCapacity.W)
+  val brMask   = UInt(checkpointSize.W)
   val stMask   = UInt(robSize.W)
   val vaddr    = UInt(VAddrBits.W) // for debug
   val paddr    = UInt(PAddrBits.W)
@@ -183,7 +184,7 @@ class AtomALU extends NOOPModule {
     LSUOpType.amomaxu -> Mux(sltu(0), src2, src1)
   ))
 
-  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res)
+  io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res(XLEN-1,0))
 }
 
 // Out Of Order Load/Store Unit
@@ -199,11 +200,11 @@ class LSU extends NOOPModule with HasLSUConst {
   }
 
   def needMispredictionRecovery(brMask: UInt) = {
-    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
+    io.mispredictRec.valid && io.mispredictRec.redirect.valid && brMask(io.mispredictRec.checkpoint)
   }
 
   def updateBrMask(brMask: UInt) = {
-    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+    brMask & ~ (UIntToOH(io.mispredictRec.checkpoint) & Fill(checkpointSize, io.mispredictRec.valid))
   }
 
   val dmem = io.dmem
@@ -213,14 +214,6 @@ class LSU extends NOOPModule with HasLSUConst {
   val opResp = dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val opReq = dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op
   val moqidxResp = dmemUserOut.moqidx
-  val branchIndex = Mux(
-    io.cdb(0).valid && io.cdb(0).bits.decode.cf.redirect.valid && io.cdb(0).bits.decode.cf.redirect.rtype === 1.U,
-    io.cdb(0).bits.prfidx,
-    io.cdb(1).bits.prfidx
-  )
-  val bruFlush = List.tabulate(CommitWidth)(i => 
-    io.cdb(i).bits.decode.cf.redirect.valid && io.cdb(i).bits.decode.cf.redirect.rtype === 1.U
-  ).reduce(_ | _)
 
   // Decode
   val instr    = io.uopIn.decode.cf.instr
@@ -341,7 +334,7 @@ class LSU extends NOOPModule with HasLSUConst {
 
   // when branch, invalidate insts in wrong branch direction
   List.tabulate(moqSize)(i => {
-    when(moq(i).brMask(branchIndex) && bruFlush){
+    when(needMispredictionRecovery(moq(i).brMask)){
       moq(i).valid := false.B
     }
     moq(i).brMask := updateBrMask(moq(i).brMask) // fixit, AS WELL AS STORE BRMASK !!!!!
@@ -427,6 +420,7 @@ class LSU extends NOOPModule with HasLSUConst {
   val haveUnfinishedStore = 0.U =/= storeHeadPtr
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
   io.haveUnfinishedStore := haveUnfinishedStore
+  assert(storeCmtPtr <= storeHeadPtr, "retired store should be less than valid store")
 
   // alloc a slot when a store tlb request is sent
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
@@ -451,6 +445,7 @@ class LSU extends NOOPModule with HasLSUConst {
     List.tabulate(storeQueueSize - 1)(i => {
       storeQueue(i) := storeQueue(i+1)
     })
+    storeQueue(storeQueueSize-1).valid := false.B
   }
 
   // move storeCmtPtr ptr
@@ -468,12 +463,12 @@ class LSU extends NOOPModule with HasLSUConst {
   // when branch, invalidate insts in wrong branch direction
   List.tabulate(storeQueueSize)(i => {
     when(storeQueueDequeue){
-      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+      when(needMispredictionRecovery(storeQueue(i).brMask)){
         if(i != 0){ storeQueue(i-1).valid := false.B }
       }
       if(i != 0){ storeQueue(i-1).brMask := updateBrMask(storeQueue(i).brMask) }
     }.otherwise{
-      when(storeQueue(i).brMask(branchIndex) && bruFlush){
+      when(needMispredictionRecovery(storeQueue(i).brMask)){
         storeQueue(i).valid := false.B
       }
       storeQueue(i).brMask := updateBrMask(storeQueue(i).brMask)
@@ -496,8 +491,13 @@ class LSU extends NOOPModule with HasLSUConst {
     storeQueue(storeQueueEnqPtr).op := moq(storeQueueEnqSrcPick).op
     storeQueue(storeQueueEnqPtr).data := moq(storeQueueEnqSrcPick).data
     storeQueue(storeQueueEnqPtr).isMMIO := Mux(havePendingStqEnq, moq(moqDmemPtr).isMMIO, paddrIsMMIO)
-    storeQueue(storeQueueEnqPtr).valid := true.B && !(moq(storeQueueEnqSrcPick).brMask(branchIndex) && bruFlush)
+    storeQueue(storeQueueEnqPtr).valid := true.B && !(needMispredictionRecovery(moq(storeQueueEnqSrcPick).brMask))
   }
+
+  // detect unfinished uncache store
+  // When EnableOutOfOrderMemAccess, ignore uncached mem access seq,
+  // as current oo-mem-arch does not support maintain program order and idempotency for uncached mem access.
+  val haveUnfinishedUCStore = if(EnableOutOfOrderMemAccess){ false.B } else { VecInit(storeQueue.map(i => i.isMMIO && i.valid)).asUInt.orR }
 
   // For debug
   val storeTBCV = io.dmem.req.fire() && io.dmem.req.bits.cmd === SimpleBusCmd.write
@@ -651,13 +651,16 @@ class LSU extends NOOPModule with HasLSUConst {
     //!loadPF && !storePF && !moq(tlbRespmoqidx).loadAddrMisaligned && !moq(tlbRespmoqidx).storeAddrMisaligned &&
     //!bruFlush && moq(tlbRespmoqidx).valid && tlbRespmoqidx === moqDmemPtr
   val loadSideUserBundle = Wire(new DCacheUserBundle)
+
+  val atomData = Wire(UInt(XLEN.W))
+  
   loadSideUserBundle.moqidx := loadDMemReqSrcPick
   loadSideUserBundle.op := moq(loadDMemReqSrcPick).op
 
   loadDMemReq.addr := Mux(havePendingDmemReq, moq(moqDmemPtr).paddr, io.dtlb.resp.bits.rdata)
   loadDMemReq.size := moq(loadDMemReqSrcPick).size
   loadDMemReq.wdata := moq(loadDMemReqSrcPick).data
-  loadDMemReq.valid := havePendingDmemReq || loadDTlbRespReqValid
+  loadDMemReq.valid := (havePendingDmemReq || loadDTlbRespReqValid) && !haveUnfinishedUCStore //FIXME: only work for seq mem asscess
   loadDMemReq.wmask := genWmask(loadDMemReq.addr, loadDMemReq.size)
   loadDMemReq.cmd := SimpleBusCmd.read
   loadDMemReq.user := loadSideUserBundle
@@ -675,7 +678,7 @@ class LSU extends NOOPModule with HasLSUConst {
   storeDMemReq.user := storeSideUserBundle
   storeDMemReq.valid := haveUnrequiredStore
   when(LSUOpType.isAMO(storeQueue(0.U).func)){
-    storeDMemReq.wdata := io.atomData
+    storeDMemReq.wdata := atomData
   }
 
   // noDMemReq
@@ -849,7 +852,7 @@ class LSU extends NOOPModule with HasLSUConst {
   // When an atom inst reaches here, store its result to store buffer,
   // then commit it to CDB, set atom-on-the-fly to false
   val atomDataReg = RegEnable(genWdata(atomALU.io.result, moq(moqidxResp).size), io.out.fire() && LSUOpType.isAMO(moq(moqidxResp).func))
-  io.atomData := atomDataReg
+  atomData := atomDataReg
 
   // Commit to CDB
   io.out.bits := MuxCase(
@@ -878,6 +881,7 @@ class LSU extends NOOPModule with HasLSUConst {
   io.uopOut.decode.cf.redirect.valid := moq(writebackSelect).rollback
   io.uopOut.decode.cf.redirect.target := moq(writebackSelect).pc + Mux(moq(writebackSelect).isRVC, 2.U, 4.U)
   io.uopOut.decode.cf.redirect.rtype := 0.U // do not redirect until that inst is being commited
+  io.commitStoreToCDB := MEMOpID.needStore(moq(writebackSelect).op)
 
   io.in.ready := !moqFull
   io.out.valid := havePendingCDBCmt || haveLoadResp

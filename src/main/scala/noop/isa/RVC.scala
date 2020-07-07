@@ -37,6 +37,7 @@ trait HasRVCConst {
   def ImmADDI    = "b01100".U
   def ImmADDI16SP = "b01101".U
   def ImmADD4SPN = "b01110".U
+  def ImmCBREAK  = "b01111".U
 
   // REG src
   def DtCare     = "b0000".U // reg x0
@@ -153,7 +154,7 @@ object RVCInstr extends HasInstrType with HasRVCConst {
     C_LDSP       -> List(InstrI, FuType.lsu, LSUOpType.ld),
     C_JR         -> List(InstrI, FuType.bru, ALUOpType.jalr),
     C_MV         -> List(InstrR, FuType.alu, ALUOpType.add),
-    C_EBREAK     -> List(InstrI, FuType.alu, ALUOpType.add),
+    C_EBREAK     -> List(InstrI, FuType.csr, CSROpType.jmp),
     C_JALR       -> List(InstrI, FuType.bru, ALUOpType.jalr),
     C_ADD        -> List(InstrR, FuType.alu, ALUOpType.add),
     // C_FSDSP      -> List(InstrI, FuType.alu, ALUOpType.add),
@@ -197,7 +198,7 @@ object RVCInstr extends HasInstrType with HasRVCConst {
     C_LDSP       -> List(ImmLDSP, REGx2, DtCare, REGrd),
     C_JR         -> List(ImmNone, REGrs1, DtCare, DtCare),
     C_MV         -> List(ImmNone, REGrs2, DtCare, REGrd),
-    C_EBREAK     -> List(ImmNone, DtCare, DtCare, DtCare), //not implemented
+    C_EBREAK     -> List(ImmCBREAK, DtCare, DtCare, DtCare), //not implemented
     C_JALR       -> List(ImmNone, REGrs1, DtCare, REGx1),
     C_ADD        -> List(ImmNone, REGrd, REGrs2, REGrd),
     // C_FSDSP      -> List(),

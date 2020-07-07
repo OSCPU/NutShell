@@ -6,11 +6,20 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import top.Settings
 
 trait HasResetVector{
   val resetFromSpiFlash = false
   val resetVector = if(resetFromSpiFlash){0x40000000L}else{0x80000000L}
 }
+
+class ICacheUserBundle extends NOOPBundle {
+    val pc = UInt(VAddrBits.W)
+    val brIdx = UInt(4.W) // mark if an inst is predicted to branch
+    val pnpc = UInt(VAddrBits.W)
+    val instValid = UInt(4.W) // mark which part of this inst line is valid
+}
+// Note: update ICacheUserBundleWidth when change ICacheUserBundle
 
 class IFU extends NOOPModule with HasResetVector {
   val io = IO(new Bundle {
@@ -37,10 +46,32 @@ class IFU extends NOOPModule with HasResetVector {
   // Next-line branch predictor
   val nlp = Module(new NLP)
 
-  // cross instline inst branch predict logic "lateJump"
+  // nlpxxx_latch is used for the situation when I$ is disabled
+  val nlpvalidreg = RegInit(false.B)
+  val nlpvalid_latch = nlpvalidreg & !io.redirect.valid
+  val nlpbridx_latch = RegInit(0.U(4.W))
+  val nlptarget_latch = RegInit(0.U(VAddrBits.W))
+
+  when (nlp.io.out.valid) {
+    nlpvalidreg := true.B
+    nlpbridx_latch := nlp.io.brIdx.asUInt
+    nlptarget_latch := nlp.io.out.target
+  }
+
+  when (io.imem.req.fire() || io.redirect.valid) {
+    nlpvalidreg := false.B
+    nlpbridx_latch := 0.U
+    nlptarget_latch := 0.U
+  }
+
+  val bpuValid = if (Settings.HasIcache) nlp.io.out.valid else nlpvalid_latch
+  val bpuTarget = if (Settings.HasIcache) nlp.io.out.target else nlptarget_latch
+  val bpuBrIdx = if (Settings.HasIcache) nlp.io.brIdx.asUInt else nlpbridx_latch
+
+  // cross instline inst branch predict logic "crosslineJump"
   // 
-  // if "lateJump", icache will need to fetch next instline, then fetch redirect addr
-  // "latejump" mechanism is used to speed up such code:
+  // if "crosslineJump", icache will need to fetch next instline, then fetch redirect addr
+  // "crosslineJump" mechanism is used to speed up such code:
   // ```
   // 000c BranchCondition (32 bit inst)
   // ```
@@ -48,20 +79,30 @@ class IFU extends NOOPModule with HasResetVector {
   // so we need to fetch the next inst line to get the higher bits of a 32bit branch inst
   // but in order to use BP result to avoid pipeline flush,
   // the next inst provided by icache should be predicted npc, instead of sequential npc
-  val lateJump = nlp.io.lateJump
-  val lateJumpLatch = RegInit(false.B) 
-  when(pcUpdate || nlp.io.flush) {
-    lateJumpLatch := Mux(nlp.io.flush, false.B, lateJump && !lateJumpLatch)
+  //
+  // There is another way: BPU uses "high 16 bit half" pc to index not-compressed crossline branch insts.
+
+  val crosslineJump = nlp.io.crosslineJump
+  val s_idle :: s_crosslineJump :: Nil = Enum(2)
+  val state = RegInit(s_idle) 
+  switch(state){
+    is(s_idle){
+      when(pcUpdate && crosslineJump && !io.redirect.valid){ state := s_crosslineJump }
+    }
+    is(s_crosslineJump){
+      when(pcUpdate){ state := s_idle }
+      when(io.redirect.valid){ state := s_idle }
+    }
   }
-  val lateJumpTarget = RegEnable(nlp.io.out.target, lateJump && pcUpdate) // ???
+  val crosslineJumpTarget = RegEnable(nlp.io.out.target, crosslineJump && pcUpdate)
 
   // predicted next pc
-  val pnpc = Mux(lateJump, snpc, nlp.io.out.target)
+  val pnpc = Mux(crosslineJump, snpc, bpuTarget)
  
   // next pc
   val npc = Wire(UInt(VAddrBits.W))
-  npc := Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(nlp.io.out.valid, pnpc, snpc)))
-  // val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(nlp.io.out.valid, false.B, true.B)))) //for debug only
+  npc := Mux(io.redirect.valid, io.redirect.target, Mux(state === s_crosslineJump, crosslineJumpTarget, Mux(bpuValid, pnpc, snpc)))
+  // val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(state === s_crosslineJump, false.B, Mux(crosslineJump, true.B, Mux(nlp.io.out.valid, false.B, true.B)))) //for debug only
 
   // instValid: which part of an instline contains an valid inst
   // e.g. 1100 means inst(s) in instline(63,32) is/are valid
@@ -72,20 +113,14 @@ class IFU extends NOOPModule with HasResetVector {
     "b10".U -> "b1100".U,
     "b11".U -> "b1000".U
   ))
-  npcInstValid := Mux(lateJump && !lateJumpLatch && !io.redirect.valid, "b0001".U, genInstValid(npc))
+  npcInstValid := Mux(crosslineJump && !(state === s_crosslineJump) && !io.redirect.valid, "b0001".U, genInstValid(npc))
 
   // branch position index, 4 bit vector
   // e.g. brIdx 0010 means a branch is predicted/assigned at pc (offset 2)
   val brIdx = Wire(UInt(4.W))
   // predicted branch position index, 4 bit vector
-  val pbrIdx = nlp.io.brIdx.asUInt | (lateJump << 3)
-  def genBrIdx(pc: UInt) = LookupTree(pc(2,1), List(
-  "b00".U -> "b0001".U,
-  "b01".U -> "b0010".U,
-  "b10".U -> "b0100".U,
-  "b11".U -> "b1000".U
-))
-  brIdx := Mux(io.redirect.valid, 0.U, Mux(lateJumpLatch, 0.U, pbrIdx))
+  val pbrIdx = bpuBrIdx | (crosslineJump << 3)
+  brIdx := Mux(io.redirect.valid, 0.U, Mux(state === s_crosslineJump, 0.U, pbrIdx))
   
   // BP will be disabled shortly after a redirect request
   nlp.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
@@ -98,14 +133,14 @@ class IFU extends NOOPModule with HasResetVector {
   mcp.io.in.pc.valid := io.imem.req.fire()
   mcp.io.in.pc.bits := pc
   mcp.io.flush := io.redirect.valid
-  mcp.io.ignore := lateJumpLatch
+  mcp.io.ignore := state === s_crosslineJump
 
   class MCPResult extends NOOPBundle{
     val redirect = new RedirectIO
     val brIdx = Output(Vec(4, Bool()))
   }
   val mcpResultQueue = Module(new FlushableQueue(new MCPResult, entries = 4, pipe = true, flow = true))
-  mcpResultQueue.io.flush := io.redirect.valid
+  mcpResultQueue.io.flush := io.redirect.valid || io.bpFlush
   mcpResultQueue.io.enq.valid := mcp.io.valid
   mcpResultQueue.io.enq.bits.redirect := mcp.io.out
   mcpResultQueue.io.enq.bits.brIdx := mcp.io.brIdx
@@ -113,10 +148,7 @@ class IFU extends NOOPModule with HasResetVector {
 
   val validMCPRedirect = 
     mcpResultQueue.io.deq.bits.redirect.valid && //mcp predicts branch
-    (
-      mcpResultQueue.io.deq.bits.redirect.target =/= io.imem.resp.bits.user.get(VAddrBits*2-1,VAddrBits) || //npc is different
-      mcpResultQueue.io.deq.bits.brIdx.asUInt =/= io.imem.resp.bits.user.get(VAddrBits*2 + 3, VAddrBits*2) //brIdx is different
-    ) &&
+    mcpResultQueue.io.deq.bits.brIdx.asUInt =/= io.imem.resp.bits.user.get(VAddrBits*2 + 3, VAddrBits*2) //brIdx is different
     (mcpResultQueue.io.deq.bits.brIdx.asUInt & io.imem.resp.bits.user.get(VAddrBits*2 + 7, VAddrBits*2 + 4)).orR //mcp reports a valid branch
 
 
@@ -133,7 +165,10 @@ class IFU extends NOOPModule with HasResetVector {
 
   Debug(){
     when(pcUpdate) {
-      printf("[IFUIN] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpc:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,nlp.io.out.valid,nlp.io.out.target)
+      printf("[IFUIN] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpc:%x \n",
+        pc, pcUpdate, npc, io.redirect.valid, io.redirect.target,state === s_crosslineJump, crosslineJumpTarget, 
+        crosslineJump,snpc,nlp.io.out.valid,nlp.io.out.target
+      )
       //printf(p"[IFUIN] redirect: ${io.redirect} \n")
     }
   }
@@ -141,8 +176,14 @@ class IFU extends NOOPModule with HasResetVector {
   io.flushVec := Mux(io.redirect.valid, Mux(io.redirect.rtype === 0.U, "b1111".U, "b0011".U), 0.U)
   io.bpFlush := false.B
 
+  val icacheUserGen = Wire(new ICacheUserBundle)
+  icacheUserGen.pc := pc
+  icacheUserGen.pnpc := Mux(crosslineJump, nlp.io.out.target, npc)
+  icacheUserGen.brIdx := brIdx & pcInstValid
+  icacheUserGen.instValid := pcInstValid
+
   io.imem.req.bits.apply(addr = Cat(pc(VAddrBits-1,1),0.U(1.W)), //cache will treat it as Cat(pc(63,3),0.U(3.W))
-    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = Cat(pcInstValid, brIdx & pcInstValid, Mux(lateJump, nlp.io.out.target, npc), pc))
+    size = "b11".U, cmd = SimpleBusCmd.read, wdata = 0.U, wmask = 0.U, user = icacheUserGen.asUInt)
   io.imem.req.valid := io.out.ready
   //TODO: add ctrlFlow.exceptionVec
   io.imem.resp.ready := io.out.ready || io.flushVec(0)
@@ -162,12 +203,11 @@ class IFU extends NOOPModule with HasResetVector {
   // io.out.bits.instr := (if (XLEN == 64) io.imem.resp.bits.rdata.asTypeOf(Vec(2, UInt(32.W)))(io.out.bits.pc(2))
                       //  else io.imem.resp.bits.rdata)
   io.out.bits.instr := io.imem.resp.bits.rdata
-  io.imem.resp.bits.user.map{ case x =>
-    io.out.bits.pc := x(VAddrBits-1,0)
-    io.out.bits.pnpc := x(VAddrBits*2-1,VAddrBits)
-    io.out.bits.brIdx := x(VAddrBits*2 + 3, VAddrBits*2)
-    io.out.bits.instValid := x(VAddrBits*2 + 7, VAddrBits*2 + 4)
-  }
+  io.out.bits.pc := io.imem.resp.bits.user.get.asTypeOf(new ICacheUserBundle).pc
+  io.out.bits.pnpc := io.imem.resp.bits.user.get.asTypeOf(new ICacheUserBundle).pnpc
+  io.out.bits.brIdx := io.imem.resp.bits.user.get.asTypeOf(new ICacheUserBundle).brIdx
+  io.out.bits.instValid := io.imem.resp.bits.user.get.asTypeOf(new ICacheUserBundle).instValid
+
   io.out.bits.icachePF := io.ipf
   // assert(!io.out.bits.icachePF)
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
@@ -178,7 +218,7 @@ class IFU extends NOOPModule with HasResetVector {
       io.out.bits.brIdx := mcpResultQueue.io.deq.bits.brIdx.asUInt
       npc := mcpResultQueue.io.deq.bits.redirect.target
       pcUpdate := true.B
-      lateJumpLatch := false.B  // reset crossline fetch fsm
+      state := s_idle
       io.bpFlush := true.B      // flush imem
     }
   }

@@ -40,6 +40,7 @@ class NOOPSimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
     val logCtrl = new LogCtrlIO
+    val difftestCtrl = new DiffTestCtrlIO
   })
 
   lazy val config = NOOPConfig(FPGAPlatform = false)
@@ -50,15 +51,14 @@ class NOOPSimTop extends Module {
   val memdelay = Module(new AXI4Delayer(0))
   val mmio = Module(new SimMMIO)
 
-  soc.io.frontend := DontCare
+  soc.io.frontend <> mmio.io.dma
 
   memdelay.io.in <> soc.io.mem
   mem.io.in <> memdelay.io.out
 
   mmio.io.rw <> soc.io.mmio
 
-  // soc.io.meip := Counter(true.B, 9973)._2  // use prime here to not overlapped by mtip
-  soc.io.meip := false.B  // use prime here to not overlapped by mtip
+  soc.io.meip := mmio.io.meip
 
   val difftest = WireInit(0.U.asTypeOf(new DiffTestIO))
   BoringUtils.addSink(difftest.commit, "difftestCommit")
@@ -93,6 +93,7 @@ class NOOPSimTop extends Module {
   BoringUtils.addSink(log_begin_sink, "DISPLAY_LOG_START")
   BoringUtils.addSink(log_end_sink, "DISPLAY_LOG_END")
   BoringUtils.addSink(log_level_sink, "DISPLAY_LOG_LEVEL")
+  io.difftestCtrl <> mmio.io.difftestCtrl
 }
 
 object TestMain extends App {
