@@ -29,7 +29,6 @@ class Frontend(implicit val p: NutCoreConfig) extends NutCoreModule {
   pipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
   PipelineVector2Connect(new CtrlFlowIO, ibf.io.out(0), ibf.io.out(1), idu.io.in(0), idu.io.in(1), ifu.io.flushVec(1), if (EnableOutOfOrderExec) 8 else 4)
   ibf.io.flush := ifu.io.flushVec(1)
-  idu.io.flush := ifu.io.flushVec(1)
 
   io.out <> idu.io.out
   io.redirect <> ifu.io.redirect
