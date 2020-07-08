@@ -271,53 +271,16 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     printf("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
   }
 
-  brurs.io.in.valid  := instCango(bruInst) 
-  alu1rs.io.in.valid := instCango(alu1Inst) 
-  alu2rs.io.in.valid := instCango(alu2Inst) 
-  csrrs.io.in.valid  := instCango(csrInst)
-  lsurs.io.in.valid  := instCango(lsuInst)
-  mdurs.io.in.valid  := instCango(mduInst)
-
-  brurs.io.in.bits  := inst(bruInst) 
-  alu1rs.io.in.bits := inst(alu1Inst) 
-  alu2rs.io.in.bits := inst(alu2Inst) 
-  csrrs.io.in.bits  := inst(csrInst)
-  lsurs.io.in.bits  := inst(lsuInst)
-  mdurs.io.in.bits  := inst(mduInst)
-
-  // val rs = List(alu1rs, alu2rs, csrrs, lsurs, mdurs)
-  // List.tabulate(5)(i => {
-  //   rs(i).io.commit.valid := cdb.valid
-  //   rs(i).io.commit.bits := cdb.bits
-  // )}
-
-  brurs.io.flush  := flushBackend
-  alu1rs.io.flush := flushBackend
-  alu2rs.io.flush := flushBackend
-  csrrs.io.flush  := flushBackend
-  lsurs.io.flush  := flushBackend
-  mdurs.io.flush  := flushBackend
-
-  brurs.io.brMaskIn  := brMask(bruInst)
-  alu1rs.io.brMaskIn := brMask(alu1Inst)
-  alu2rs.io.brMaskIn := brMask(alu2Inst)
-  csrrs.io.brMaskIn  := brMask(csrInst)
-  lsurs.io.brMaskIn  := brMask(lsuInst)
-  mdurs.io.brMaskIn  := brMask(mduInst)
-
-  brurs.io.cdb  <> cdb
-  alu1rs.io.cdb <> cdb
-  alu2rs.io.cdb <> cdb
-  csrrs.io.cdb  <> cdb
-  lsurs.io.cdb  <> cdb
-  mdurs.io.cdb  <> cdb
-
-  brurs.io.mispredictRec  := mispredictRec
-  alu1rs.io.mispredictRec := mispredictRec
-  alu2rs.io.mispredictRec := mispredictRec
-  csrrs.io.mispredictRec  := mispredictRec
-  lsurs.io.mispredictRec  := mispredictRec
-  mdurs.io.mispredictRec  := mispredictRec
+  val rs = List(brurs, alu1rs, alu2rs, csrrs, lsurs, mdurs)
+  val rsInstSel = List(bruInst, alu1Inst, alu2Inst, csrInst, lsuInst, mduInst)
+  List.tabulate(rs.length)(i => {
+    rs(i).io.in.valid := instCango(rsInstSel(i))
+    rs(i).io.in.bits := inst(rsInstSel(i)) 
+    rs(i).io.brMaskIn := brMask(rsInstSel(i))
+    rs(i).io.cdb <> cdb
+    rs(i).io.flush := flushBackend
+    rs(i).io.mispredictRec := mispredictRec
+  })
 
   List.tabulate(DispatchWidth)(i => {
     rob.io.in(i).valid := instCango(i)
@@ -591,6 +554,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     srcNone
   )
 
+  // select 2 CDB commit request with highest priority
   val commitPriority = VecInit(WritebackPriority.map(i => commit(i)))
   val commitValidPriority = VecInit(WritebackPriority.map(i => commitValid(i)))
   // val secondValidMask = VecInit((0 until WritebackPriority.size).map(i => WritebackPriority(0 until i).map(j => commitValid(j)).reduceLeft(_ ^ _)))
@@ -633,10 +597,10 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   cdb(1).bits := cdbSrc2
   // cdb(1).ready := true.B
 
-  mduWritebackReady  := commitValidVec(3)
-  bruWritebackReady  := commitValidVec(4)
-  alu1WritebackReady := commitValidVec(5)
-  alu2WritebackReady := commitValidVec(6)
+  mduWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcMDU))
+  bruWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcBRU))
+  alu1WritebackReady := commitValidVec(WritebackPriority.indexOf(srcALU1))
+  alu2WritebackReady := commitValidVec(WritebackPriority.indexOf(srcALU2))
 
   brurs.io.out.ready  := bru.io.in.ready
   alu1rs.io.out.ready := alu1.io.in.ready

@@ -18,7 +18,6 @@ trait HasNutCoreParameter {
   val HasDcache = Settings.get("HasDcache")
   val HasITLB = Settings.get("HasITLB")
   val HasDTLB = Settings.get("HasDTLB")
-  val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
   val VAddrBits = if (Settings.get("IsRV32")) 32 else 39 // VAddrBits is Virtual Memory addr bits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
