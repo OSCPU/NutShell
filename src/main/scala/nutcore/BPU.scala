@@ -201,6 +201,14 @@ class BPU2 extends NutCoreModule {
   val default = List(immB, false.B)
   val offset :: predict :: Nil = ListLookup(instr, default, table)
 
+  val flushBTB = WireInit(false.B)
+  val flushTLB = WireInit(false.B)
+  BoringUtils.addSink(flushBTB, "MOUFlushICache")
+  BoringUtils.addSink(flushTLB, "MOUFlushTLB")
+
+  val req = WireInit(0.U.asTypeOf(new BPUUpdateReq))
+  BoringUtils.addSink(req, "bpuUpdateReq")
+
   io.out.target := io.in.bits.pc + offset
   io.out.valid := io.in.valid && predict(0)
   io.out.rtype := 0.U

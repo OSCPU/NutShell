@@ -49,3 +49,42 @@ class Frontend(implicit val p: NutCoreConfig) extends NutCoreModule {
   }
 
 }
+
+class Frontend_dummy(implicit val p: NutCoreConfig) extends NutCoreModule {
+  val io = IO(new Bundle {
+    val out = Vec(2, Decoupled(new DecodeIO))
+    val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
+    val flushVec = Output(UInt(4.W))
+    val bpFlush = Output(Bool())
+    val ipf = Input(Bool())
+    val redirect = Flipped(new RedirectIO)
+  })
+
+  val ifu  = Module(new IFU_dummy)
+  val idu  = Module(new IDU)
+
+  def pipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
+    isFlush: Bool, entries: Int = 2, pipe: Boolean = false) = {
+    right <> FlushableQueue(left, isFlush,  entries = entries, pipe = pipe)
+  }
+
+  pipelineConnect2(ifu.io.out, idu.io.in(0), ifu.io.flushVec(0))
+  idu.io.in(1) := DontCare
+
+  io.out <> idu.io.out
+  io.redirect <> ifu.io.redirect
+  io.flushVec <> ifu.io.flushVec
+  io.bpFlush <> ifu.io.bpFlush
+  io.ipf <> ifu.io.ipf
+  io.imem <> ifu.io.imem
+
+
+
+  Debug() {
+    printf("------------------------ FRONTEND: %d ------------------------\n", GTimer())
+    printf("flush = %b, ifu:(%d,%d), idu:(%d,%d)\n",
+      ifu.io.flushVec.asUInt, ifu.io.out.valid, ifu.io.out.ready, idu.io.in(0).valid, idu.io.in(0).ready)
+    when (ifu.io.out.valid) { printf("IFU: pc = 0x%x, instr = 0x%x\n", ifu.io.out.bits.pc, ifu.io.out.bits.instr)} ; 
+    when (idu.io.in(0).valid) { printf("IDU1: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in(0).bits.pc, idu.io.in(0).bits.instr, idu.io.in(0).bits.pnpc) }
+  }
+}
