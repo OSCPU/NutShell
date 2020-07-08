@@ -31,6 +31,7 @@ trait HasNutCoreParameter {
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = false
+  val EnableRVC = Settings.get("EnableRVC")
 }
 
 trait HasNutCoreConst extends HasNutCoreParameter {
@@ -111,7 +112,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     dmemXbar.io.in(0) <> expender.io.out
 
     io.mmio <> mmioXbar.io.out
-    
+
   } else {
     val backend = Module(new Backend_seq)
 

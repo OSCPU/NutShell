@@ -22,7 +22,8 @@ object DefaultSettings {
     "IsRV32" -> false,
 
     "EnableILA" -> true,
-    "EnableDebug" -> false
+    "EnableDebug" -> false,
+    "EnableRVC" -> true
   )
 }
 
@@ -70,7 +71,8 @@ object EmbededSettings {
     "HasDcache" -> false,
     "HasIcache" -> false,
     "MmodeOnly" -> true,
-    "IsRV32" -> true
+    "IsRV32" -> true,
+    "EnableRVC" -> false
   )
 }
 
