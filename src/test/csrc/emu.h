@@ -132,7 +132,7 @@ class Emulator {
         set_abort();
       }
 
-      if (!hascommit && dut_ptr->io_difftest_thisPC == 0x80000000u) {
+      if (!hascommit && (uint32_t)dut_ptr->io_difftest_thisPC == 0x80000000) {
         hascommit = 1;
         extern void init_difftest(rtlreg_t *reg);
         rtlreg_t reg[DIFFTEST_NR_REG];
