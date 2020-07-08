@@ -1,3 +1,5 @@
+// NutShell/Argo Out Of Order Execution Backend
+
 package nutcore
 
 import chisel3._
@@ -94,12 +96,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // Backend stage 1
   // Dispatch
   // ------------------------------------------------
-
-  // Common Data Bus
-  // Function Units are divided into 2 groups.
-  // For each group, only one inst can be commited to ROB in a single cycle.
-  // Group 1: ALU1(BRU) CSR MOU LSU
-  // Group 2: ALU2 MDU
 
   // Choose inst to be dispatched
   // Check structural hazard
@@ -532,8 +528,15 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   // ------------------------------------------------
   // Backend final stage
-  // Commit to CDB
+  // Commit to CDB (i.e. Writeback)
   // ------------------------------------------------
+
+  // Common Data Bus
+  // 
+  // Currently, FUs can commit to any CDB socket.
+  //  
+  // Alternatively, FUs can be divided into different groups.
+  // For each group, only one inst can be commited to ROB in a single cycle.
 
   val nullCommit = Wire(new OOCommitIO)
   nullCommit := DontCare
