@@ -274,14 +274,14 @@ class IFU_dummy extends NutCoreModule with HasResetVector {
   }
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
 
-  // Debug(true){
+  Debug(){
     when(io.imem.req.fire()){
       printf("[IFI] pc=%x user=%x redirect %x npc %x pc %x pnpc %x\n", io.imem.req.bits.addr, io.imem.req.bits.user.getOrElse(0.U), io.redirect.valid, npc, pc, bpu.io.out.target)
     }
     when (io.out.fire()) {
       printf("[IFO] pc=%x user=%x inst=%x npc=%x ipf %x\n", io.out.bits.pc, io.imem.resp.bits.user.get, io.out.bits.instr, io.out.bits.pnpc, io.ipf)
     }
-  // }
+  }
 
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire()), "perfCntCondMimemStall")
   BoringUtils.addSource(io.flushVec.orR, "perfCntCondMifuFlush")

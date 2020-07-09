@@ -791,11 +791,65 @@ class Cache_fake_joint(implicit val cacheConfig: CacheConfig) extends CacheModul
   io.out.coh := DontCare
 }
 
+class Cache_dummy(implicit val cacheConfig: CacheConfig) extends CacheModule {
+  val io = IO(new Bundle {
+    val in = Flipped(new SimpleBusUC(userBits = userBits))
+    val flush = Input(UInt(2.W))
+    val out = new SimpleBusC
+    val mmio = new SimpleBusUC
+    val empty = Output(Bool())
+  })
+
+  val needFlush = RegInit(false.B)
+  when (io.flush(0)) {
+    needFlush := true.B
+  }
+  when (io.in.req.fire() && !io.flush(0)) {
+    needFlush := false.B
+  }
+
+  io.in.req.ready := io.out.mem.req.ready
+  io.in.resp.valid := (io.out.mem.resp.valid && !needFlush) || io.flush(0)
+
+  io.in.resp.bits.rdata := io.out.mem.resp.bits.rdata
+  io.in.resp.bits.cmd := io.out.mem.resp.bits.cmd
+  val memuser = RegEnable(io.in.req.bits.user.getOrElse(0.U), io.in.req.fire())
+  io.in.resp.bits.user.zip(if (userBits > 0) Some(memuser) else None).map { case (o,i) => o := i }
+
+  io.out.mem.req.bits.apply( 
+    addr = io.in.req.bits.addr,
+    cmd = io.in.req.bits.cmd,
+    size = io.in.req.bits.size,
+    wdata = io.in.req.bits.wdata,
+    wmask = io.in.req.bits.wmask
+  )
+  io.out.mem.req.valid := io.in.req.valid
+  io.out.mem.resp.ready := io.in.resp.ready
+
+  io.empty := false.B
+  io.mmio := DontCare
+  io.out.coh := DontCare
+
+    // when (io.in.req.fire()) {
+    //   printf(p"${GTimer()}: in.req: ${io.in.req.bits}\n")
+    // }
+    // when (io.out.mem.req.fire()) {
+    //   printf(p"${GTimer()}: out.mem.req: ${io.out.mem.req.bits}\n")
+    // }
+    // when (io.out.mem.resp.fire()) {
+    //   printf(p"${GTimer()}: out.mem.resp: ${io.out.mem.resp.bits}\n")
+    // }
+    // when (io.in.resp.fire()) {
+    //   printf(p"${GTimer()}: in.resp: ${io.in.resp.bits}\n")
+    // }
+    // printf(p"${GTimer()}: out.mem.req.ready: ${io.out.mem.req.ready}; needFlush: ${needFlush}\n")
+}
+
 object Cache {
   def apply(in: SimpleBusUC, mmio: Seq[SimpleBusUC], flush: UInt, empty: Bool, enable: Boolean = true)(implicit cacheConfig: CacheConfig) = {
     val cache = if (enable) Module(new Cache) 
                 else (if (Settings.get("IsRV32")) 
-                        (if (cacheConfig.name == "dcache") Module(new Cache_fake) else Module(new Cache_fake_joint)) 
+                        (if (cacheConfig.name == "dcache") Module(new Cache_fake) else Module(new Cache_dummy)) 
                       else 
                         (Module(new Cache_fake)))
     cache.io.flush := flush

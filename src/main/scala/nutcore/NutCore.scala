@@ -30,7 +30,7 @@ trait HasNutCoreParameter {
   val EnableSuperScalarExec = Settings.get("EnableSuperScalarExec")
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
-  val EnablePerfCnt = false
+  val EnablePerfCnt = true
   val EnableRVC = Settings.get("EnableRVC")
 }
 
@@ -73,7 +73,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
   })
 
   // Frontend
-  val frontend = Module(new Frontend)
+  val frontend = Module(new Frontend_dummy)
   
   // Backend
   if (EnableOutOfOrderExec) {

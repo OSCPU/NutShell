@@ -6,14 +6,14 @@ SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 MEM_GEN = ./scripts/vlsi_mem_gen
 
-USE_READY_TO_RUN_NEMU = true
+USE_READY_TO_RUN_NEMU = false
 
 SIMTOP = top.TopMain
 IMAGE ?= ready-to-run/linux.bin
 
-DATAWIDTH ?= 64
+DATAWIDTH ?= 32
 BOARD ?= sim  # sim  pynq  axu4cg
-CORE  ?= seq  # seq  ooo  small
+CORE  ?= small  # seq  ooo  small
 
 .DEFAULT_GOAL = verilog
 
