@@ -12,6 +12,15 @@ Currently it supports riscv64/32.
 
 ## Run programs by simulation
 
+You can either use our ready-to-run image for simulation or build image yourself.
+
+To use ready-to run image (recommended) :
+
+* Run `make emu` to launch simulation. Default image is linux kernel.
+* Run `make IMAGE=yourimage.bin emu` to specify your image file. We have provided some in ./ready-to-run.
+
+To build image yourself:
+
 * Set a new environment variable `NEMU_HOME` to the **absolute path** of the NEMU project.
 * Set a new environment variable `NUTSHELL_HOME` to the **absolute path** of the NutShell project.
 * Clone the [AM project](https://github.com/NJU-ProjectN/nexus-am.git).
