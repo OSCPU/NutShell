@@ -63,12 +63,7 @@ class Frontend_dummy(implicit val p: NutCoreConfig) extends NutCoreModule {
   val ifu  = Module(new IFU_dummy)
   val idu  = Module(new IDU)
 
-  def pipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
-    isFlush: Bool, entries: Int = 2, pipe: Boolean = false) = {
-    right <> FlushableQueue(left, isFlush,  entries = entries, pipe = pipe)
-  }
-
-  pipelineConnect2(ifu.io.out, idu.io.in(0), ifu.io.flushVec(0))
+  PipelineConnect(ifu.io.out, idu.io.in(0), idu.io.out(0).fire(), ifu.io.flushVec(0))
   idu.io.in(1) := DontCare
 
   io.out <> idu.io.out
@@ -77,8 +72,6 @@ class Frontend_dummy(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.bpFlush <> ifu.io.bpFlush
   io.ipf <> ifu.io.ipf
   io.imem <> ifu.io.imem
-
-
 
   Debug() {
     printf("------------------------ FRONTEND: %d ------------------------\n", GTimer())
