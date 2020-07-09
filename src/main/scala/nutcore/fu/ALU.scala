@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import top.Settings
 
 object ALUOpType {
   def add  = "b1000000".U
@@ -101,8 +102,8 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   // val pcPlus2 = ALUOpType.pcPlus2(func)
   val taken = LookupTree(ALUOpType.getBranchType(func), branchOpTable) ^ ALUOpType.isBranchInvert(func)
   val target = Mux(isBranch, io.cfIn.pc + io.offset, adderRes)(VAddrBits-1,0)
-  val predictWrong = Mux(!taken && isBranch, io.cfIn.brIdx, !io.cfIn.brIdx || (io.redirect.target =/= io.cfIn.pnpc))
-  // val predictWrong = (io.redirect.target =/= io.cfIn.pnpc)
+  val predictWrong = if (Settings.get("EnableRVC")) Mux(!taken && isBranch, io.cfIn.brIdx, !io.cfIn.brIdx || (io.redirect.target =/= io.cfIn.pnpc))
+                     else io.redirect.target =/= io.cfIn.pnpc
   val isRVC = io.cfIn.isRVC
   // when(!(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)){
   //   printf("[ERROR] io.cfIn.instr %x\n", io.cfIn.instr)
