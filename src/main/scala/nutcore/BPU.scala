@@ -209,7 +209,6 @@ class BPU1 extends Module {
   // since there is one cycle latency to read SyncReadMem,
   // we should latch the input pc for one cycle
   val pcLatch = RegEnable(io.in.pc.bits, io.in.pc.valid)
-  // printf("%d, three bools: %d, %d, %d\n", GTimer(), btbRead.tag === btbAddr.getTag(pcLatch), !flush, RegNext(btb.io.r.req.ready, init = false.B))
   val btbHit = btbRead.tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb.io.r.req.ready, init = false.B)
 
   // PHT
@@ -226,10 +225,6 @@ class BPU1 extends Module {
   val req = WireInit(0.U.asTypeOf(new BPUUpdateReq))
   val btbWrite = WireInit(0.U.asTypeOf(btbEntry()))
   BoringUtils.addSink(req, "bpuUpdateReq")
-
-  // when (req.isMissPredict && req.valid) {
-  //   printf("[][] Update BPU, pc: %x actualTarget: %x\n", req.pc, req.actualTarget)
-  // }
 
   btbWrite.tag := btbAddr.getTag(req.pc)
   btbWrite.target := req.actualTarget

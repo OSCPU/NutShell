@@ -707,20 +707,6 @@ class Cache_dummy(implicit val cacheConfig: CacheConfig) extends CacheModule {
   io.empty := false.B
   io.mmio := DontCare
   io.out.coh := DontCare
-
-    // when (io.in.req.fire()) {
-    //   printf(p"${GTimer()}: in.req: ${io.in.req.bits}\n")
-    // }
-    // when (io.out.mem.req.fire()) {
-    //   printf(p"${GTimer()}: out.mem.req: ${io.out.mem.req.bits}\n")
-    // }
-    // when (io.out.mem.resp.fire()) {
-    //   printf(p"${GTimer()}: out.mem.resp: ${io.out.mem.resp.bits}\n")
-    // }
-    // when (io.in.resp.fire()) {
-    //   printf(p"${GTimer()}: in.resp: ${io.in.resp.bits}\n")
-    // }
-    // printf(p"${GTimer()}: out.mem.req.ready: ${io.out.mem.req.ready}; needFlush: ${needFlush}\n")
 }
 
 object Cache {

@@ -248,11 +248,7 @@ class IFU_dummy extends NutCoreModule with HasResetVector {
   // predicted next pc
   val pnpc = bpu.io.out.target
   val npc = Mux(io.redirect.valid, io.redirect.target, Mux(bpu.io.out.valid, pnpc, snpc))
-
-  // bpu.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
-  // bpu.io.in.pc.bits := npc  // predict one cycle early
-  // bpu.io.flush := io.redirect.valid
-
+  
   bpu.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
   bpu.io.in.pc.bits := npc  // predict one cycle early
   bpu.io.flush := io.redirect.valid
