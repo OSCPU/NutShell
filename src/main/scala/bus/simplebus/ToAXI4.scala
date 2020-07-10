@@ -109,7 +109,7 @@ class AXI42SimpleBusConverter() extends Module {
   // Arbitration
   // Slave's ready maybe generated according to valid signal, so let valid signals go through.
   mem.req.valid := (!isInflight() && axi.ar.valid) || (isState(axi_write) && axi.w.valid)
-  mem.resp.ready := true.B || (isState(axi_read) && axi.r.ready) || (isState(axi_write) && axi.b.ready)
+  mem.resp.ready := !isInflight() || (isState(axi_read) && axi.r.ready) || (isState(axi_write) && axi.b.ready)
   axi.ar.ready := !isInflight() && mem.req.ready
   axi.r.valid := isState(axi_read) && mem.resp.valid
   // AW should be buffered so no ready is considered.
