@@ -48,8 +48,6 @@ class NLP extends NutCoreModule {
     val out = new RedirectIO 
     val flush = Input(Bool())
     val brIdx = Output(Vec(4, Bool()))
-    val target = Output(Vec(4, UInt(VAddrBits.W)))
-    // val instValid = Output(UInt(4.W)) // now instValid is generated in IFU
     val lateJump = Output(Bool())
   })
 
@@ -161,9 +159,10 @@ class NLP extends NutCoreModule {
 
   val pcLatchValid = genInstValid(pcLatch)
 
-  (0 to 3).map(i => io.target(i) := Mux(btbRead(i)._type === BTBtype.R, rasTarget, btbRead(i).target))
+  val target = Vec(4, UInt(VAddrBits.W))
+  (0 to 3).map(i => target(i) := Mux(btbRead(i)._type === BTBtype.R, rasTarget, btbRead(i).target))
   (0 to 3).map(i => io.brIdx(i) := btbHit(i) && pcLatchValid(i).asBool && Mux(btbRead(i)._type === BTBtype.B, phtTaken(i), true.B) && btbRead(i).valid)
-  io.out.target := PriorityMux(io.brIdx, io.target)
+  io.out.target := PriorityMux(io.brIdx, target)
   io.out.valid := io.brIdx.asUInt.orR
   io.out.rtype := 0.U
   Debug()
