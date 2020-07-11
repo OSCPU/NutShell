@@ -125,19 +125,19 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   io.out.bits.ctrl.src2Type := src2Type
 
   val NoSpecList = Seq(
-    FuType.csr,
-    FuType.mou
+    FuType.csr
   )
 
   val BlockList = Seq(
+    FuType.mou
   )
 
   io.out.bits.ctrl.isNutCoreTrap := (instr(31,0) === NutCoreTrap.TRAP) && io.in.valid
-  io.out.bits.ctrl.noSpecExec := NoSpecList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
+  io.out.bits.ctrl.noSpecExec := NoSpecList.map(j => io.out.bits.ctrl.fuType === j).reduce(_ || _)
   io.out.bits.ctrl.isBlocked :=
   (
     io.out.bits.ctrl.fuType === FuType.lsu && LSUOpType.isAtom(io.out.bits.ctrl.fuOpType) ||
-    BlockList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
+    BlockList.map(j => io.out.bits.ctrl.fuType === j).reduce(_ || _)
   )
 
   //output signals

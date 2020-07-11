@@ -23,7 +23,7 @@ object Priviledged extends HasInstrType {
     ECALL          -> List(InstrI, FuType.csr, CSROpType.jmp),
     EBREAK         -> List(InstrI, FuType.csr, CSROpType.jmp),
     MRET           -> List(InstrI, FuType.csr, CSROpType.jmp),
-    FENCE          -> List(InstrS, FuType.alu, ALUOpType.add), // nop    InstrS -> !wen
+    FENCE          -> List(InstrS, FuType.mou, MOUOpType.fence), // nop    InstrS -> !wen
     WFI            -> List(InstrI, FuType.alu, ALUOpType.add) // nop
     // FENCE          -> List(InstrB, FuType.mou, MOUOpType.fencei)
   ) ++ (if (!Settings.get("MmodeOnly")) table_s else Nil)
