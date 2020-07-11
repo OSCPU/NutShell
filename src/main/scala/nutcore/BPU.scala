@@ -159,7 +159,7 @@ class NLP extends NutCoreModule {
 
   val pcLatchValid = genInstValid(pcLatch)
 
-  val target = Vec(4, UInt(VAddrBits.W))
+  val target = Wire(Vec(4, UInt(VAddrBits.W)))
   (0 to 3).map(i => target(i) := Mux(btbRead(i)._type === BTBtype.R, rasTarget, btbRead(i).target))
   (0 to 3).map(i => io.brIdx(i) := btbHit(i) && pcLatchValid(i).asBool && Mux(btbRead(i)._type === BTBtype.B, phtTaken(i), true.B) && btbRead(i).valid)
   io.out.target := PriorityMux(io.brIdx, target)
