@@ -62,8 +62,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val brMask = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(0.U(checkpointSize.W))))))
   val valid = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
   val store = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
-  val commited = Reg(Vec(robSize, Vec(robWidth, Bool())))
-  val canceled = Reg(Vec(robSize, Vec(robWidth, Bool())))
+  val commited = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Commited to CDB (i.e. writebacked)
+  val canceled = Reg(Vec(robSize, Vec(robWidth, Bool()))) // for debug
   val redirect = Reg(Vec(robSize, Vec(robWidth, new RedirectIO)))
   val exception = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Backend exception
   val isMMIO = Reg(Vec(robSize, Vec(robWidth, Bool())))
@@ -109,8 +109,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     io.rprf(2*i+1)      := prf(io.aprf(2*i+1))
     io.rvalid(2*i)      := rmtValid(io.in(i).bits.ctrl.rfSrc1)
     io.rvalid(2*i+1)    := rmtValid(io.in(i).bits.ctrl.rfSrc2)
-    io.rcommited(2*i)   := commited(io.aprf(2*i)>>1)(io.aprf(2*i)(0)) && !canceled(io.aprf(2*i)>>1)(io.aprf(2*i)(0))
-    io.rcommited(2*i+1) := commited(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0)) && !canceled(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0))
+    io.rcommited(2*i)   := commited(io.aprf(2*i)>>1)(io.aprf(2*i)(0)) && valid(io.aprf(2*i)>>1)(io.aprf(2*i)(0))
+    io.rcommited(2*i+1) := commited(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0)) && valid(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0))
   })
 
   //---------------------------------------------------------
