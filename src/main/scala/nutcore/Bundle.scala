@@ -35,6 +35,7 @@ class MisPredictionRecIO extends NutCoreBundle {
   val redirect = new RedirectIO
   val valid = Output(Bool())
   val checkpoint = Output(UInt(brTagWidth.W))
+  val prfidx = Output(UInt(prfAddrWidth.W))
 }
 
 class CtrlFlowIO extends NutCoreBundle {

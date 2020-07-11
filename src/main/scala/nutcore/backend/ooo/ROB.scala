@@ -420,12 +420,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   BoringUtils.addSource(robStoreInstVec, "ROBStoreInstVec")
 
   // reset headptr when mis-prediction recovery is triggered
-  val mispredictionRedirect = (0 until CommitWidth).map(i => io.cdb(i).valid && io.cdb(i).bits.decode.cf.redirect.valid && io.cdb(i).bits.decode.cf.redirect.rtype === 1.U).reduce(_ | _)
-  when(mispredictionRedirect){
-    ringBufferHead := PriorityMux(
-      (0 until CommitWidth).map(i => io.cdb(i).valid && io.cdb(i).bits.decode.cf.redirect.valid && io.cdb(i).bits.decode.cf.redirect.rtype === 1.U),
-      (0 until CommitWidth).map(i => io.cdb(i).bits.prfidx(prfAddrWidth-1, 1))
-    ) + 1.U
+  when(io.mispredictRec.valid && io.mispredictRec.redirect.valid){
+    ringBufferHead := io.mispredictRec.prfidx(prfAddrWidth-1, 1) + 1.U
   }
 
   // flush control

@@ -322,6 +322,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
   mispredictRec.valid := bruDelayer.io.out.fire()
   mispredictRec.checkpoint := bruDelayer.io.freeCheckpoint.get.bits
+  mispredictRec.prfidx := bruDelayer.io.out.bits.prfidx
   mispredictRec.redirect := bruRedirect
   if(enableBranchEarlyRedirect){
     brucommit.decode.cf.redirect := bru.io.redirect
