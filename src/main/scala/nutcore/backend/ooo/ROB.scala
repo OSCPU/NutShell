@@ -58,10 +58,10 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     brMask & ~ (UIntToOH(io.mispredictRec.checkpoint) & Fill(checkpointSize, io.mispredictRec.valid))
   }
 
+  // ROB entry
   val decode = Reg(Vec(robSize, Vec(robWidth, new DecodeIO)))
   val brMask = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(0.U(checkpointSize.W))))))
   val valid = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
-  val store = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
   val commited = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Commited to CDB (i.e. writebacked)
   val canceled = Reg(Vec(robSize, Vec(robWidth, Bool()))) // for debug
   val redirect = Reg(Vec(robSize, Vec(robWidth, new RedirectIO)))
@@ -69,6 +69,11 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val isMMIO = Reg(Vec(robSize, Vec(robWidth, Bool())))
   val intrNO = Reg(Vec(robSize, Vec(robWidth, UInt(XLEN.W))))
   val prf = Mem(robSize * robWidth, UInt(XLEN.W))
+
+  // lsroq 
+  // Currently, ROB is also used as lsroq when out of order store is enabled
+  val load = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
+  val store = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
 
   // Almost all int/exceptions can be detected at decode stage, excepting for load/store related exception.
   // In NutCore-Argo's backend, non-l/s int/exc will be sent dircetly to CSR when dispatch,
@@ -379,7 +384,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       decode(ringBufferHead)(i) := io.in(i).bits
       brMask(ringBufferHead)(i) := io.brMaskIn(i)
       valid(ringBufferHead)(i) := io.in(i).valid
-      store(ringBufferHead)(i) := false.B // not necessary
+      load(ringBufferHead)(i) := io.in(i).bits.ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(io.in(i).bits.ctrl.fuOpType)
+      store(ringBufferHead)(i) := io.in(i).bits.ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(io.in(i).bits.ctrl.fuOpType)
       commited(ringBufferHead)(i) := false.B
       canceled(ringBufferHead)(i) := false.B
       redirect(ringBufferHead)(i).valid := false.B
@@ -404,12 +410,10 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
 
   // Send robInstValid signal to LSU for "backward"
   val robLoadInstVec = WireInit(VecInit((0 until robSize).map(i => {
-    valid(i)(0) && decode(i)(0).ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(decode(i)(0).ctrl.fuOpType) ||
-    valid(i)(1) && decode(i)(1).ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(decode(i)(1).ctrl.fuOpType)
+    (0 until robWidth).map(j => valid(i)(j) && load(i)(j)).reduce(_ || _)
   })).asUInt) 
   val robStoreInstVec = WireInit(VecInit((0 until robSize).map(i => {
-    valid(i)(0) && decode(i)(0).ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(decode(i)(0).ctrl.fuOpType) ||
-    valid(i)(1) && decode(i)(1).ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(decode(i)(1).ctrl.fuOpType)
+    (0 until robWidth).map(j => valid(i)(j) && store(i)(j)).reduce(_ || _)
   })).asUInt) 
   // TODO: use a single bit in rob misc field to save "isload"
   BoringUtils.addSource(robLoadInstVec, "ROBLoadInstVec")
