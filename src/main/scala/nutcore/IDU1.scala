@@ -165,7 +165,7 @@ class IDU1 extends NutCoreModule with HasInstrType with HasExceptionNO {
   io.out.bits.pc := pcOut
   io.out.bits.pnpc := pnpcOut
   io.out.bits.instr := instr
-  io.out.bits.brIdx := io.in.bits.brIdx
+  io.out.bits.brIdx := Mux((pnpcOut === pcOut+4.U && !isRVC) || (pnpcOut === pcOut+2.U && isRVC), false.B, true.B)
 
   io.out.valid := io.in.valid && canGo
   io.in.ready := (!io.in.valid || (io.out.fire() && canIn) || loadNextInstline)

@@ -100,7 +100,7 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   io.out(0).bits := DontCare
   io.out(0).bits.redirect.valid := false.B
   io.out(0).bits.pc := pcRingMeta(ringBufferTail)
-  io.out(0).bits.pnpc := Mux(io.out(0).bits.brIdx(0), npcRingMeta(ringBufferTail), io.out(0).bits.pc + Mux(dequeueIsRVC(0), 2.U, 4.U))
+  io.out(0).bits.pnpc := npcRingMeta(ringBufferTail)
   io.out(0).bits.instr := Cat(ringInstBuffer(ringBufferTail+1.U), ringInstBuffer(ringBufferTail))
   io.out(0).bits.brIdx := branchRingMeta(ringBufferTail)
   io.out(0).bits.isRVC := dequeueIsRVC(0)
@@ -120,7 +120,7 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   io.out(1).bits := DontCare
   io.out(1).bits.redirect.valid := false.B
   io.out(1).bits.pc := pcRingMeta(inst2_StartIndex)
-  io.out(1).bits.pnpc := Mux(io.out(1).bits.brIdx(0), npcRingMeta(inst2_StartIndex), io.out(1).bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
+  io.out(1).bits.pnpc := npcRingMeta(inst2_StartIndex)
   // io.out(1).bits.pnpc := npcRingMeta(inst2_StartIndex)
   io.out(1).bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out(1).bits.brIdx := branchRingMeta(inst2_StartIndex)
