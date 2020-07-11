@@ -11,7 +11,6 @@ class IDU1 extends NutCoreModule with HasInstrType with HasExceptionNO {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new CtrlFlowIO)
     val flush = Input(Bool())
-    val redirect = new RedirectIO
   })
 
   val instr = Wire(UInt(32.W))
@@ -77,10 +76,6 @@ class IDU1 extends NutCoreModule with HasInstrType with HasExceptionNO {
     "b100".U -> instIn(63,32),
     "b110".U -> instIn(63+16,32+16)
   )))
-
-  io.redirect.target := redirectPC
-  io.redirect.valid := flushIFU
-  io.redirect.rtype := 0.U
 
   when(!io.flush){
     switch(state){
@@ -155,18 +150,6 @@ class IDU1 extends NutCoreModule with HasInstrType with HasExceptionNO {
           state := s_idle
         }
       }
-      // is(s_readnext){//npc right, get next 64 inst bits, flush pipeline is not needed 
-      //   //ignore bp result, use pc+4 instead
-      //   pcOut := specialPCR
-      //   pnpcOut := specialPCR + 4.U
-      //   // pnpcOut := Mux(rvcFinish, io.in.bits.pnpc, Mux(isRVC, pcOut+2.U, pcOut+4.U))
-      //   canGo := io.in.valid
-      //   canIn := false.B
-      //   when(io.out.fire()){
-      //     state := s_extra
-      //     pcOffsetR := "b010".U
-      //   }
-      // }
     }
   }.otherwise{
     state := s_idle

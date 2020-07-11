@@ -332,12 +332,12 @@ class IFU_inorder extends NutCoreModule with HasResetVector {
   bp1.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
   bp1.io.in.pc.bits := npc  // predict one cycle early
 
-  when (bp1.io.in.pc.valid) {
-    printf(p"${GTimer()} pc: ${Hexadecimal(pc)} npc: ${Hexadecimal(npc)}\n")
-  }
-  when (bp1.io.out.valid) {
-    printf(p"${GTimer()} valid!!\n")
-  }
+  // when (bp1.io.in.pc.valid) {
+  //   printf(p"${GTimer()} pc: ${Hexadecimal(pc)} npc: ${Hexadecimal(npc)}\n")
+  // }
+  // when (bp1.io.out.valid) {
+  //   printf(p"${GTimer()} valid!!\n")
+  // }
 
   bp1.io.flush := io.redirect.valid
 

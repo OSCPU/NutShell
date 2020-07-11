@@ -359,7 +359,7 @@ class BPU3 extends NutCoreModule {
   // since there is one cycle latency to read SyncReadMem,
   // we should latch the input pc for one cycle
   val pcLatch = RegEnable(io.in.pc.bits, io.in.pc.valid)
-  val btbHit = btbRead.valid && btbRead.tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb.io.r.req.fire(), init = false.B) //&& !(pcLatch(1) && btbRead.brIdx(0))
+  val btbHit = btbRead.valid && btbRead.tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb.io.r.req.fire(), init = false.B) && !(pcLatch(1) && btbRead.brIdx(0))
   // btbHit will ignore pc(1,0). pc(1,0) is used to build brIdx
   // !(pcLatch(1) && btbRead.brIdx(0)) is used to deal with the following case:
   // -------------------------------------------------
@@ -397,11 +397,11 @@ class BPU3 extends NutCoreModule {
   val btbWrite = WireInit(0.U.asTypeOf(btbEntry()))
   BoringUtils.addSink(req, "bpuUpdateReq")
 
-  // Debug(false){
+  Debug(false){
     when(req.valid){
         printf("[BTBUP] pc=%x tag=%x index=%x bridx=%x tgt=%x type=%x\n", req.pc, btbAddr.getTag(req.pc), btbAddr.getIdx(req.pc), Cat(req.pc(1), ~req.pc(1)), req.actualTarget, req.btbType)
       }
-  // }
+  }
 
     //val fflag = req.btbType===3.U && btb.io.w.req.valid && btb.io.w.req.bits.setIdx==="hc9".U
     //when(fflag && GTimer()>2888000.U) {
