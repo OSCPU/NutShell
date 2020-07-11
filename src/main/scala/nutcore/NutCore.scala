@@ -73,7 +73,11 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
   })
 
   // Frontend
-  val frontend = if (Settings.get("IsRV32")) Module(new Frontend_dummy) else Module(new Frontend)
+  val frontend = (Settings.get("IsRV32"), Settings.get("EnableOutOfOrderExec")) match {
+    case (true, _)      => Module(new Frontend_dummy)
+    case (false, true)  => Module(new Frontend)
+    case (false, false) => Module(new Frontend_inorder)
+  }
   
   // Backend
   if (EnableOutOfOrderExec) {
