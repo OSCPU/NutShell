@@ -54,8 +54,13 @@ sealed abstract class LogHelper(val logLevel: LogLevel) {
   def apply(pable: Printable)(implicit m: Module): Any = LogUtil(logLevel)(true.B, pable)
 
   // NOOP/NutShell style debug
-  def apply(flag: Boolean = NutCoreConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any =
-    if(flag) { when (logLevel.id.U >= LogUtil.LogLevel && cond && LogUtil.displayLog) { body } }
+  def apply(flag: Boolean = NutCoreConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any = {
+    if(NutCoreConfig().EnhancedLog){
+      if(flag) { when (logLevel.id.U >= LogUtil.LogLevel && cond && LogUtil.displayLog) { body } }
+    } else {
+      if(flag) { when (cond) { body } }
+    }
+  }
 }
 
 object Debug extends LogHelper(LogLevel.DEBUG)

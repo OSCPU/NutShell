@@ -89,9 +89,9 @@ class NutShellSimTop extends Module {
   BoringUtils.addSource(log_level, "DISPLAY_LOG_LEVEL")
 
   // make firrtl happy :)
-  // val log_begin_sink, log_end_sink, log_level_sink = WireInit(0.U(64.W))
-  // BoringUtils.addSink(log_begin_sink, "DISPLAY_LOG_START")
-  // BoringUtils.addSink(log_end_sink, "DISPLAY_LOG_END")
-  // BoringUtils.addSink(log_level_sink, "DISPLAY_LOG_LEVEL")
+  val log_begin_sink, log_end_sink, log_level_sink = WireInit(0.U(64.W))
+  BoringUtils.addSink(log_begin_sink, "DISPLAY_LOG_START")
+  BoringUtils.addSink(log_end_sink, "DISPLAY_LOG_END")
+  BoringUtils.addSink(log_level_sink, "DISPLAY_LOG_LEVEL")
   io.difftestCtrl <> mmio.io.difftestCtrl
 }
