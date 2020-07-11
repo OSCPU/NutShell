@@ -100,10 +100,9 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   val isBru = ALUOpType.isBru(func)
   val taken = LookupTree(ALUOpType.getBranchType(func), branchOpTable) ^ ALUOpType.isBranchInvert(func)
   val target = Mux(isBranch, io.cfIn.pc + io.offset, adderRes)(VAddrBits-1,0)
-  val predictWrong = if (Settings.get("EnableRVC")) Mux(!taken && isBranch, io.cfIn.brIdx, !io.cfIn.brIdx || (io.redirect.target =/= io.cfIn.pnpc))
-                     else io.redirect.target =/= io.cfIn.pnpc
-  val isRVC = io.cfIn.isRVC
-  assert(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)
+  val predictWrong = (io.redirect.target =/= io.cfIn.pnpc)
+  val isRVC = (io.cfIn.instr(1,0) =/= "b11".U)
+  assert(io.cfIn.instr(1,0) === "b11".U || isRVC || !valid)
   when(valid){
     when((io.cfIn.instr(1,0) === "b11".U) =/= !isRVC){
       printf("[ERROR] pc %x inst %x rvc %x\n",io.cfIn.pc, io.cfIn.instr, isRVC)
