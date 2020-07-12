@@ -345,50 +345,15 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   bruDelayer.io.checkpointIn.get := brurs.io.recoverCheckpoint.get.bits
   brucommitdelayed := bruDelayer.io.out.bits
 
-  val alu1 = Module(new ALU())
-  val alu1commit = Wire(new OOCommitIO)
-  val aluOut = alu1.access(
-    valid = alu1rs.io.out.valid, 
-    src1 = alu1rs.io.out.bits.decode.data.src1, 
-    src2 = alu1rs.io.out.bits.decode.data.src2, 
-    func = alu1rs.io.out.bits.decode.ctrl.fuOpType
-  )
-  val alu1WritebackReady = Wire(Bool())
-  alu1.io.cfIn := alu1rs.io.out.bits.decode.cf
-  alu1.io.offset := alu1rs.io.out.bits.decode.data.imm
-  alu1.io.out.ready := alu1WritebackReady
-  alu1commit.decode := alu1rs.io.out.bits.decode
-  alu1commit.isMMIO := false.B
-  alu1commit.intrNO := 0.U
-  alu1commit.commits := aluOut
-  alu1commit.prfidx := alu1rs.io.out.bits.prfDest
-  alu1commit.decode.cf.redirect.valid := false.B
-  alu1commit.decode.cf.redirect.rtype := DontCare
-  alu1commit.exception := false.B
-  alu1commit.store := false.B
+  val alu1 = Module(new ALUEP())
+  alu1rs.io.out <> alu1.io.in
+  alu1.io.flush := io.flush
+  alu1.io.mispredictRec := mispredictRec
 
-  // def isBru(func: UInt) = func(4)
-  val alu2 = Module(new ALU)
-  val alu2commit = Wire(new OOCommitIO)
-  val alu2Out = alu2.access(
-    valid = alu2rs.io.out.valid, 
-    src1 = alu2rs.io.out.bits.decode.data.src1, 
-    src2 = alu2rs.io.out.bits.decode.data.src2, 
-    func = alu2rs.io.out.bits.decode.ctrl.fuOpType
-  )
-  val alu2WritebackReady = Wire(Bool())
-  alu2.io.cfIn :=  alu2rs.io.out.bits.decode.cf
-  alu2.io.offset := alu2rs.io.out.bits.decode.data.imm
-  alu2.io.out.ready := alu2WritebackReady
-  alu2commit.decode := alu2rs.io.out.bits.decode
-  alu2commit.isMMIO := false.B
-  alu2commit.intrNO := 0.U
-  alu2commit.commits := alu2Out
-  alu2commit.prfidx := alu2rs.io.out.bits.prfDest
-  alu2commit.decode.cf.redirect.valid := false.B
-  alu2commit.decode.cf.redirect.rtype := DontCare
-  alu2commit.exception := false.B
-  alu2commit.store := false.B
+  val alu2 = Module(new ALUEP())
+  alu2rs.io.out <> alu2.io.in
+  alu2.io.flush := io.flush
+  alu2.io.mispredictRec := mispredictRec
 
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)
@@ -544,7 +509,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   // CDB arbit
   val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU, srcNone) = (0, 1, 2, 3, 4, 5, 6, 7)
-  val commit = List(brucommitdelayed, alu1commit, alu2commit, lsucommit, mducommitdelayed, csrcommit, moucommit, nullCommit)
+  val commit = List(brucommitdelayed, alu1.io.out.bits, alu2.io.out.bits, lsucommit, mducommitdelayed, csrcommit, moucommit, nullCommit)
   val commitValid = List(bruDelayer.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mduDelayer.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
 
   val WritebackPriority = Seq(
@@ -603,8 +568,8 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   mduWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcMDU))
   bruWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcBRU))
-  alu1WritebackReady := commitValidVec(WritebackPriority.indexOf(srcALU1))
-  alu2WritebackReady := commitValidVec(WritebackPriority.indexOf(srcALU2))
+  alu1.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU1))
+  alu2.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU2))
 
   brurs.io.out.ready  := bru.io.in.ready
   alu1rs.io.out.ready := alu1.io.in.ready
@@ -618,8 +583,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   // Performance Counter
 
-  val isBru = ALUOpType.isBru(alu1commit.decode.ctrl.fuOpType)
-  // assert(!(isBru && alu1.io.out.fire()))
   BoringUtils.addSource(alu1.io.out.fire(), "perfCntCondMaluInstr")
   BoringUtils.addSource(bru.io.out.fire(), "perfCntCondMbruInstr")
   BoringUtils.addSource(lsu.io.out.fire(), "perfCntCondMlsuInstr")
