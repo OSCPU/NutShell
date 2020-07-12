@@ -4,7 +4,7 @@
 
 LOG_BEGIN ?= 0
 LOG_END ?= -1
-LOG_LEVEL ?= ERROR
+LOG_LEVEL ?= OFF
 # Valid LOG_LEVELs are: ALL, DEBUG, INFO, WARN, ERROR, OFF
 
 ARCH = ARCH=riscv64-nutshell
@@ -39,6 +39,16 @@ else
 	@echo $(CPU_TEST_RESULT)
 	@echo "simple CPU test failed"
 endif
+
+rvtest-ui:
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64ui ENV=p
+
+rvtest:
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64ui ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64um ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64uc ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64si ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64mi ENV=p
 
 bputest:
 	$(MAKE) -C $(AM_HOME)/tests/bputest $(ARCH) $(EMU_ARGS) ALL=forcall2 run 2>&1 | tee > bpu.log
@@ -76,10 +86,6 @@ dhrystone:
 	$(MAKE) -C $(AM_HOME)/apps/dhrystone $(ARCH) $(EMU_ARGS) mainargs=test run 2>&1 | tee > dhrystone.log
 	cat dhrystone.log | grep IPC
 
-rvtest:
-	$(MAKE) -C $(AM_HOME)/tests/riscv-test/benchmarks/$(RVTEST_TARGET) $(ARCH) $(EMU_ARGS) run
-	# usage: make rvtest RVTEST_TARGET=dhrystone
-
 xj:
 	$(MAKE) -C $(NANOS_HOME) $(ARCH) $(EMU_ARGS) run
 
@@ -111,13 +117,13 @@ linux-debug:
 # test set
 # ------------------------------------------------------------------
 
-smoke-test: cpu cputest microbench
+smoke-test: cpu cputest microbench coremark
 	@echo "Smoke Test Passed"
 
-regression-test: smoke-test linux
+regression-test: smoke-test coremark linux
 	@echo "Regression Test Passed"
 
-perf-test: smoke-test microbench-train coremark
+perf-test: smoke-test microbench-train
 	@echo "Perf Test Finished"
 
 # ------------------------------------------------------------------
