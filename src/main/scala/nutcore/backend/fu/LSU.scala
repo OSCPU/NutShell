@@ -82,7 +82,6 @@ class LSUIO extends FunctionUnitIO {
   val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
   val dtlb = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
   val mispredictRec = Flipped(new MisPredictionRecIO)
-  val brMaskIn = Input(UInt(checkpointSize.W))
   val stMaskIn = Input(UInt(robSize.W))
   val robAllocate = Input(Valid(UInt(log2Up(robSize).W)))
   val uopIn = Input(new RenamedDecodeIO)
@@ -192,7 +191,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   val io = IO(new LSUIO)
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt, dtlbPF: Bool): UInt = {
-    this.valid := valid && !needMispredictionRecovery(io.brMaskIn)
+    this.valid := valid && !needMispredictionRecovery(io.uopIn.brMask)
     this.src1 := src1
     this.src2 := src2
     this.func := func
@@ -348,7 +347,7 @@ class LSU extends NutCoreModule with HasLSUConst {
     moq(moqHeadPtr).pc := io.uopIn.decode.cf.pc
     moq(moqHeadPtr).isRVC := io.uopIn.decode.cf.isRVC
     moq(moqHeadPtr).prfidx := io.uopIn.prfDest
-    moq(moqHeadPtr).brMask := updateBrMask(io.brMaskIn)
+    moq(moqHeadPtr).brMask := updateBrMask(io.uopIn.brMask)
     moq(moqHeadPtr).stMask := io.stMaskIn
     moq(moqHeadPtr).vaddr := addr
     moq(moqHeadPtr).paddr := addr

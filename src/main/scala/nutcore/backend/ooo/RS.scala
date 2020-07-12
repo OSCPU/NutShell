@@ -18,8 +18,6 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
-    val brMaskIn = Input(UInt(checkpointSize.W))
-    val brMaskOut = Output(UInt(checkpointSize.W))
     val cdb = Vec(rsCommitWidth, Flipped(Valid(new OOCommitIO)))
     val mispredictRec = Flipped(new MisPredictionRecIO)
     val flush = Input(Bool())
@@ -102,7 +100,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     src2Rdy(enqueueSelect) := io.in.bits.src2Rdy
     src1(enqueueSelect) := io.in.bits.decode.data.src1
     src2(enqueueSelect) := io.in.bits.decode.data.src2
-    brMask(enqueueSelect) := io.brMaskIn
+    brMask(enqueueSelect) := io.in.bits.brMask
   }
 
   // RS dequeue
@@ -116,7 +114,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
 
   io.out.valid := rsReadygo // && validNext(dequeueSelect)
   io.out.bits := decode(dequeueSelect)
-  io.brMaskOut := brMask(dequeueSelect)
+  io.out.bits.brMask := brMask(dequeueSelect)
   io.out.bits.decode.data.src1 := src1(dequeueSelect)
   io.out.bits.decode.data.src2 := src2(dequeueSelect)
 
@@ -159,7 +157,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     when(io.commit.get){ fuFlushReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
-    io.brMaskOut := brMaskPReg
+    io.out.bits.brMask := brMaskPReg
     Debug(){
       printf("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire())
     }

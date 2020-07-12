@@ -144,6 +144,7 @@ class InstFetchIO extends NutCoreBundle {
   val instr = Output(UInt(64.W))
 }
 
+// Micro OP
 class RenamedDecodeIO extends NutCoreBundle with HasBackendConst {
   val decode = new DecodeIO
   val prfDest = Output(UInt(prfAddrWidth.W))
@@ -151,4 +152,5 @@ class RenamedDecodeIO extends NutCoreBundle with HasBackendConst {
   val prfSrc2 = Output(UInt(prfAddrWidth.W))
   val src1Rdy = Output(Bool())
   val src2Rdy = Output(Bool())
+  val brMask = Output(UInt(checkpointSize.W))
 }

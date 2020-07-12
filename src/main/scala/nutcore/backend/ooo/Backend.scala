@@ -129,6 +129,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     inst(i).prfSrc2 := rob.io.aprf(2*i+1)
     inst(i).src1Rdy := !rob.io.rvalid(2*i) || rob.io.rcommited(2*i)
     inst(i).src2Rdy := !rob.io.rvalid(2*i+1) || rob.io.rcommited(2*i+1)
+    inst(i).brMask := DontCare
     // read rf, update src
     inst(i).decode.data.src1 := rf.read(rfSrc(2*i)) 
     when(rob.io.rvalid(2*i) && rob.io.rcommited(2*i)){inst(i).decode.data.src1 := rob.io.rprf(2*i)}
@@ -272,7 +273,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   List.tabulate(rs.length)(i => {
     rs(i).io.in.valid := instCango(rsInstSel(i))
     rs(i).io.in.bits := inst(rsInstSel(i)) 
-    rs(i).io.brMaskIn := brMask(rsInstSel(i))
+    rs(i).io.in.bits.brMask := brMask(rsInstSel(i))
     rs(i).io.cdb <> cdb
     rs(i).io.flush := flushBackend
     rs(i).io.mispredictRec := mispredictRec
@@ -340,7 +341,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   bruDelayer.io.in.valid := bru.io.out.valid
   bruDelayer.io.out.ready := bruWritebackReady
   bruDelayer.io.mispredictRec := mispredictRec
-  bruDelayer.io.brMaskIn := brurs.io.brMaskOut
+  bruDelayer.io.brMaskIn := brurs.io.out.bits.brMask
   bruDelayer.io.flush := io.flush
   bruDelayer.io.checkpointIn.get := brurs.io.recoverCheckpoint.get.bits
   brucommitdelayed := bruDelayer.io.out.bits
@@ -369,7 +370,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     dtlbPF = lsuTlbPF
   )
   lsu.io.uopIn := lsuUop
-  lsu.io.brMaskIn := lsurs.io.brMaskOut
   lsu.io.stMaskIn := lsurs.io.stMaskOut.get
   lsu.io.robAllocate.valid := io.in(0).fire()
   lsu.io.robAllocate.bits := rob.io.index
@@ -426,7 +426,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   mduDelayer.io.in.valid := mdu.io.out.valid && mdurs.io.out.valid
   mduDelayer.io.out.ready := mduWritebackReady
   mduDelayer.io.mispredictRec := mispredictRec
-  mduDelayer.io.brMaskIn := mdurs.io.brMaskOut
+  mduDelayer.io.brMaskIn := mdurs.io.out.bits.brMask
   mduDelayer.io.flush := io.flush
   mducommitdelayed := mduDelayer.io.out.bits
 
