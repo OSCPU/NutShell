@@ -22,7 +22,6 @@ trait HasBackendConst{
   val CommitWidth = 2
   val RetireWidth = 2
 
-  val enableBranchEarlyRedirect = true
   val enableCheckpoint = true
 }
 
@@ -298,7 +297,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   commitBackendException := rob.io.exception
 
   // Function Units
-  // TODO: FU template
 
   val bru = Module(new ALU(hasBru = true))
   val brucommit = Wire(new OOCommitIO)
@@ -320,24 +318,9 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   brucommit.prfidx := brurs.io.out.bits.prfDest
   brucommit.brMask := brurs.io.out.bits.brMask
   brucommit.decode.cf.redirect := bru.io.redirect
-  // commit redirect
-  bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
-  mispredictRec.valid := bruDelayer.io.out.fire()
-  mispredictRec.checkpoint := bruDelayer.io.freeCheckpoint.get.bits
-  mispredictRec.prfidx := bruDelayer.io.out.bits.prfidx
-  mispredictRec.redirect := bruRedirect
-  if(enableBranchEarlyRedirect){
-    brucommit.decode.cf.redirect := bru.io.redirect
-    brucommit.exception := false.B
-    // bruRedirect.valid := bru.io.redirect.valid && brurs.io.out.fire()
-    bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire()
-  } else {
-    brucommit.decode.cf.redirect := bru.io.redirect
-    brucommit.decode.cf.redirect.rtype := 0.U // force set rtype to 0
-    brucommit.exception := false.B
-    bruRedirect.valid := false.B
-  }
+  brucommit.exception := false.B
   brucommit.store := false.B
+
   bruDelayer.io.in.bits := brucommit
   bruDelayer.io.in.valid := bru.io.out.valid
   bruDelayer.io.out.ready := bruWritebackReady
@@ -345,6 +328,14 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   bruDelayer.io.flush := io.flush
   bruDelayer.io.checkpointIn.get := brurs.io.recoverCheckpoint.get.bits
   brucommitdelayed := bruDelayer.io.out.bits
+
+  // commit redirect
+  bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
+  bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire()
+  mispredictRec.valid := bruDelayer.io.out.fire()
+  mispredictRec.checkpoint := bruDelayer.io.freeCheckpoint.get.bits
+  mispredictRec.prfidx := bruDelayer.io.out.bits.prfidx
+  mispredictRec.redirect := bruRedirect
 
   val alu1 = Module(new ALUEP())
   alu1rs.io.out <> alu1.io.in
@@ -400,6 +391,8 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // when ROB.exception(x) === 1, intrNO(x) represents backend exception vec for this inst
   lsucommit.intrNO := lsucommit.decode.cf.exceptionVec.asUInt
 
+  // NutShell MDU is not pipelined, we can not wrap it into "Execution Pipeline"
+  // TODO: update MDU
   val mdu = Module(new MDU)
   val mducommit = Wire(new OOCommitIO)
   val mducommitdelayed = Wire(new OOCommitIO)
@@ -431,13 +424,13 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   mduDelayer.io.flush := io.flush
   mducommitdelayed := mduDelayer.io.out.bits
 
+  val csr = Module(new CSR)
   assert(!(csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr && commitBackendException))
   val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr || commitBackendException
   val csrUop = WireInit(csrrs.io.out.bits)
   when(commitBackendException){
     csrUop := rob.io.beUop
   }
-  val csr = Module(new CSR)
   val csrcommit = Wire(new OOCommitIO)
   val csrOut = csr.access(
     valid = csrVaild, 
