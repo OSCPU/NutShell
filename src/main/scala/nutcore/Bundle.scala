@@ -78,6 +78,7 @@ class OOCommitIO extends NutCoreBundle with HasBackendConst{
   val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
   val exception = Output(Bool())
   val store = Output(Bool())
+  val brMask = Output(UInt(checkpointSize.W))
 }
 
 class FunctionUnitIO extends NutCoreBundle {

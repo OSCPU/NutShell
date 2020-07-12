@@ -21,6 +21,9 @@ class ExecutionPipeline extends NutCoreModule {
     this.io.in := uop
     io.out
   }
+  def updateBrMask(brMask: UInt) = {
+    brMask & ~ (UIntToOH(io.mispredictRec.checkpoint) & Fill(checkpointSize, io.mispredictRec.valid))
+  }
   io.out.bits.isMMIO := false.B
   io.out.bits.intrNO := 0.U
   io.out.bits.exception := false.B
@@ -42,6 +45,7 @@ class ALUEP extends ExecutionPipeline {
   io.out.bits.decode.cf.redirect.rtype := DontCare
   io.out.bits.commits := alu.io.out.bits
   io.out.bits.prfidx := io.in.bits.prfDest
+  io.out.bits.brMask := io.in.bits.brMask
 
   io.in.ready := alu.io.in.ready
   io.out.valid := alu.io.out.valid

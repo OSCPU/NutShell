@@ -262,7 +262,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   brMask(1) := brMaskGen | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(0).fire() && isBranch(0)))
   brMask(2) := DontCare
   brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire() && isBranch(1)))
-  brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bruDelayer.io.brMaskOut), brMask(3)))
+  brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bruDelayer.io.out.bits.brMask), brMask(3)))
 
   Debug(){
     printf("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
@@ -318,6 +318,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   brucommit.intrNO := 0.U
   brucommit.commits := bruOut
   brucommit.prfidx := brurs.io.out.bits.prfDest
+  brucommit.brMask := brurs.io.out.bits.brMask
   brucommit.decode.cf.redirect := bru.io.redirect
   // commit redirect
   bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
@@ -341,7 +342,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   bruDelayer.io.in.valid := bru.io.out.valid
   bruDelayer.io.out.ready := bruWritebackReady
   bruDelayer.io.mispredictRec := mispredictRec
-  bruDelayer.io.brMaskIn := brurs.io.out.bits.brMask
   bruDelayer.io.flush := io.flush
   bruDelayer.io.checkpointIn.get := brurs.io.recoverCheckpoint.get.bits
   brucommitdelayed := bruDelayer.io.out.bits
@@ -390,6 +390,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   lsucommit.prfidx := lsu.io.uopOut.prfDest
   lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
   lsucommit.store := lsu.io.commitStoreToCDB
+  lsucommit.brMask := DontCare // FIXIT: gen lsucommit in LSU
   // fix exceptionVec
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
@@ -419,6 +420,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   mducommit.decode.cf.redirect.rtype := DontCare
   mducommit.exception := false.B
   mducommit.store := false.B
+  mducommit.brMask := mdurs.io.out.bits.brMask
   mdurs.io.commit.get := mdu.io.out.valid
 
   // assert(!(mdu.io.out.valid && !mduDelayer.io.in.ready))
@@ -426,10 +428,10 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   mduDelayer.io.in.valid := mdu.io.out.valid && mdurs.io.out.valid
   mduDelayer.io.out.ready := mduWritebackReady
   mduDelayer.io.mispredictRec := mispredictRec
-  mduDelayer.io.brMaskIn := mdurs.io.out.bits.brMask
   mduDelayer.io.flush := io.flush
   mducommitdelayed := mduDelayer.io.out.bits
 
+  assert(!(csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr && commitBackendException))
   val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr || commitBackendException
   val csrUop = WireInit(csrrs.io.out.bits)
   when(commitBackendException){
@@ -455,6 +457,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   csrcommit.decode.cf.redirect := csr.io.redirect
   csrcommit.exception := false.B
   csrcommit.store := false.B
+  csrcommit.brMask := DontCare //FIXIT
   // fix wen
   when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
 
@@ -486,6 +489,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   moucommit.decode.cf.redirect := mou.io.redirect
   moucommit.exception := false.B
   moucommit.store := false.B
+  moucommit.brMask := DontCare //FIXIT
 
   // ------------------------------------------------
   // Backend stage 3+
