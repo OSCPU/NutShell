@@ -1,7 +1,10 @@
-# NutShell
+# NutShell (果壳)
 
-NutShell is a processor belonging to OSCPU (Open Source Chip Project by University). <br>
+NutShell is a processor developed by the OSCPU (Open Source Chip Project by University) team.
+
 Currently it supports riscv64/32.
+
+See [the History and Naming section](#history) for naming issue.
 
 ## Compile chisel code
 
@@ -23,7 +26,7 @@ To build image yourself:
 
 * Set a new environment variable `NEMU_HOME` to the **absolute path** of the NEMU project.
 * Set a new environment variable `NUTSHELL_HOME` to the **absolute path** of the NutShell project.
-* Clone the [AM project](https://github.com/NJU-ProjectN/nexus-am.git).
+* Clone the [AM project](https://github.com/OSCPU/nexus-am.git).
 * Set a new environment variable `AM_HOME` to the **absolute path** of the AM project.
 * Add a new AM `riscv64-nutshell` in the AM project if it is not provided.
 * Run the application in the AM project by `make ARCH=riscv64-nutshell run`.
@@ -93,3 +96,41 @@ minicom -D /dev/ttyUL1
 ./ddr-loader axu3cg bin-file
 ```
 * To shutdown the board, first run `poweroff` in PS.
+
+## <a name="history"></a> History and Naming
+
+**Is NutShell developed from scratch?**
+
+No.
+NutShell is originally based on the NOOP project, an educational RV32 SoC designed by Nanjing University (NJU).
+At 2019/08/27, the OSCPU team decided to start a new project based on a fork of NOOP.
+
+**Why was there only one contributor in this repo before 2019/08/27?**
+
+NOOP was maintained by [sashimi-yzh](https://github.com/sashimi-yzh) on behalf of NJU before 2019/08/27.
+
+**What is the different between NutShell and NOOP?**
+
+Undergraduate students in the OSCPU team planned to enhance the educational SoC to a fully functional RV64 SoC,
+on behalf of University of Chinese Academy of Sciences (UCAS, 中国科学院大学).
+The goal was to boot Linux + Debian and tapeout the chip.
+Students have put a lot of effort into achieving such a goal.
+
+**Why can I still find the name NOOP in the code as well as the commit logs after 2019/08/27?**
+
+During the development, the OSCPU team has not yet thought of a good name for the SoC.
+Before this repo is available to the public, they finally decide to name the SoC NutShell.
+In Chinese, NutShell (果壳) and the nickname of UCAS (国科大) are similar in pronunciation.
+The name NutShell is welcomed by every student in UCAS.
+
+**I found a name Argo in the code as well as the commit logs. What is it?**
+
+Argo is the name of a dual-issued OoO core designed by [AugustusWillisWang](https://github.com/AugustusWillisWang).
+AugustusWillisWang is one of the students who develop NutShell.
+Argo is designed based on NutShell, and they share the same SoC architecture.
+
+**I found a name COOSCA in the commit logs. What is it?**
+
+COOSCA is an internal name of the SoC.
+Students in the team want a better name, so there comes NutShell.
+The name COOSCA should be rarely presented in the repo.
