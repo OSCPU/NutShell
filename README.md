@@ -17,7 +17,7 @@ See [the History and Naming section](#history) for naming issue.
 
 * Set a new environment variable `NEMU_HOME` to the **absolute path** of the NEMU project.
 * Set a new environment variable `NUTSHELL_HOME` to the **absolute path** of the NutShell project.
-* Clone the [AM project](https://github.com/NJU-ProjectN/nexus-am.git).
+* Clone the [AM project](https://github.com/OSCPU/nexus-am.git).
 * Set a new environment variable `AM_HOME` to the **absolute path** of the AM project.
 * Add a new AM `riscv64-nutshell` in the AM project if it is not provided.
 * Run the application in the AM project by `make ARCH=riscv64-nutshell run`.
