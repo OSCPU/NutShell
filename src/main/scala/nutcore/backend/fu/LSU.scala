@@ -419,7 +419,11 @@ class LSU extends NutCoreModule with HasLSUConst {
   val haveUnfinishedStore = 0.U =/= storeHeadPtr
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
   io.haveUnfinishedStore := haveUnfinishedStore
-  assert(storeCmtPtr <= storeHeadPtr, "retired store should be less than valid store")
+  when(storeCmtPtr > storeHeadPtr){
+    printf("%d retired store should be less than valid store\n", GTimer())
+  }
+    
+  // assert(storeCmtPtr <= storeHeadPtr, "retired store should be less than valid store")
 
   // alloc a slot when a store tlb request is sent
   // val storeQueueAlloc = dmem.req.fire() && MEMOpID.commitToCDB(opReq) && MEMOpID.needStore(opReq)
@@ -456,7 +460,14 @@ class LSU extends NutCoreModule with HasLSUConst {
   // move storeHeadPtr ptr
   when(storeQueueDequeue && !(storeQueueEnqueue || storeQueueAMOEnqueue)){storeHeadPtr := storeHeadPtr - 1.U}
   when(!storeQueueDequeue && (storeQueueEnqueue || storeQueueAMOEnqueue)){storeHeadPtr := storeHeadPtr + 1.U}
-  when(io.flush){storeHeadPtr := nextStoreCmtPtr}
+  val flushStoreHeadPtr = PriorityMux(
+    (nextStoreCmtPtr === 0.U) +: (0 until storeQueueSize).map(i => {
+      PopCount(VecInit((0 to i).map(j => storeQueue(j).valid))) === nextStoreCmtPtr
+    }),
+    (0 to storeQueueSize).map(i => i.U)
+  )
+  when(io.flush){storeHeadPtr := flushStoreHeadPtr}
+
   assert(!(storeQueueEnqueue && storeQueueAMOEnqueue))
 
   // when branch, invalidate insts in wrong branch direction
@@ -892,6 +903,12 @@ class LSU extends NutCoreModule with HasLSUConst {
     for(i <- 0 to (moqSize - 1)){
       moq(i).valid := false.B
       moq(i).tlbfin := false.B
+    }
+  }
+
+  Debug(){
+    when(io.out.fire() && io.uopOut.decode.cf.redirect.valid){
+      printf("[LSU] rollback at pc %x\n", moq(writebackSelect).pc)
     }
   }
 
