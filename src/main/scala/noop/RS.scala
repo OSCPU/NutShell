@@ -26,8 +26,19 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     val freeCheckpoint = if (checkpoint) Some(Input(Valid(UInt(log2Up(size).W)))) else None
     val stMaskOut = if (storeSeq) Some(Output(UInt(robSize.W))) else None
     val commit = if (!pipelined) Some(Input(Bool())) else None
+
+    // val wakeup = Vec(WakeupBusWidth, Flipped(Valid(new WakeupBus)))
+    // val select = Valid(new WakeupBus)
   })
 
+  //                   Argo's Reservation Station
+  //
+  //                   RS Entry         Selected Reg
+  //              -----------------    ------------         
+  //    ENQ   ->  | 0 | 1 | 2 | 3 | -> | selected |  ->  DEQ
+  //              -----------------    ------------         
+  // allocate     wake up / select        issue
+      
   //An inst needs at least 3 cycles to leave RS:
   //cycle 0: inst enters RS
   //cycle 1: generate dequeueSelect
@@ -119,12 +130,21 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
 
   val wakeupReady = Wire(Bool())
   wakeupReady := instRdy.reduce(_||_) && !needMispredictionRecovery(brMask(dequeueSelect))
-  val rsReadygo = RegInit(false.B)
+  val rsReadygo = RegInit(false.B) // i.e. selectedValid
+  val selectedBrMask = Reg(UInt(robInstCapacity.W)) // FIXME
+  val selectedDecode = Reg(new RenamedDecodeIO)
+
   when(io.out.fire() || !rsReadygo){
-    rsReadygo := wakeupReady
-    when(wakeupReady){
-      dequeueSelectReg := dequeueSelect
-      selected(dequeueSelect) := true.B
+    when(!rsReadygo || io.out.fire()){
+      rsReadygo := wakeupReady
+      when(wakeupReady){
+        dequeueSelectReg := dequeueSelect
+        selected(dequeueSelect) := true.B
+        selectedBrMask := updateBrMask(brMask(dequeueSelect))
+        selectedDecode := decode(dequeueSelect)
+        selectedDecode.decode.data.src1 := src1(dequeueSelect) // TODO
+        selectedDecode.decode.data.src2 := src2(dequeueSelect) // TODO
+      }
     }
   }
   when(io.out.fire()){
@@ -134,14 +154,11 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   //When a selected inst is judged to be misprediction:
   //* If that selected inst will stay in RS, invalidate it.
   //* If that inst will be issued this cycle, do nothing.
-  when(needMispredictionRecovery(brMask(dequeueSelectReg)) && rsReadygo && !io.out.fire() || io.flush){ rsReadygo := false.B }
-  assert(!(rsReadygo && !valid(dequeueSelectReg)))
+  when(needMispredictionRecovery(selectedBrMask) && rsReadygo && !io.out.fire() || io.flush){ rsReadygo := false.B }
 
-  io.out.valid := rsReadygo && valid(dequeueSelectReg)
-  io.out.bits := decode(dequeueSelectReg)
-  io.brMaskOut := brMask(dequeueSelectReg)
-  io.out.bits.decode.data.src1 := src1(dequeueSelectReg)
-  io.out.bits.decode.data.src2 := src2(dequeueSelectReg)
+  io.out.valid := rsReadygo
+  io.out.bits := selectedDecode
+  io.brMaskOut := selectedBrMask
 
   when(io.flush){
     List.tabulate(rsSize)(i => {
