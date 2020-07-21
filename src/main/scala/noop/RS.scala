@@ -50,7 +50,11 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val valid   = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src1Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src2Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
-  val brMask  = RegInit(VecInit(Seq.fill(rsSize)(0.U(robInstCapacity.W))))
+  val src1Spec = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
+  val src2Spec = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
+  val src1SpecSrc = Reg(Vec(rsSize, UInt(log2Up(WakeupBusWidth).W)))
+  val src2SpecSrc = Reg(Vec(rsSize, UInt(log2Up(WakeupBusWidth).W)))
+  val brMask  = RegInit(VecInit(Seq.fill(rsSize)(0.U(robInstCapacity.W)))) //TODO: use decode.brMask
   val prfSrc1 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val prfSrc2 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val src1    = Reg(Vec(rsSize, UInt(XLEN.W)))
@@ -58,7 +62,11 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val selected = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
 
   val validNext = WireInit(valid)
-  val instRdy = WireInit(VecInit(List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i) && !selected(i))))
+  val instRdy = WireInit(VecInit(List.tabulate(rsSize)(i => 
+    (src1Rdy(i) || src1Spec(i)) && 
+    (src2Rdy(i) || src2Spec(i)) && 
+    valid(i) && !selected(i)
+  )))
   val rsEmpty = !valid.asUInt.orR
   val rsFull = valid.asUInt.andR
   val rsAllowin = !rsFull
@@ -75,7 +83,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   }
 
   // Listen to Common Data Bus
-  // Here we listen to commit signal chosen by ROB?
+  // Here we listen to commit signal chosen by ROB
   // If prf === src, mark it as `ready`
 
   List.tabulate(rsSize)(i => 
@@ -99,6 +107,25 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     }
   )
 
+  // Listen to Wakeup Bus (Select)
+  // If prf === src, mark it as `specwakeup`
+  List.tabulate(rsSize)(i => 
+    when(valid(i)){
+      List.tabulate(WakeupBusWidth)(j =>
+        when(!src1Rdy(i) && prfSrc1(i) === io.wakeup(j).bits.pdest && io.wakeup(j).valid){
+            src1Spec(i) := true.B
+            src1SpecSrc(i) := j.U
+        }
+      )
+      List.tabulate(WakeupBusWidth)(j =>
+        when(!src2Rdy(i) && prfSrc2(i) === io.wakeup(j).bits.pdest && io.wakeup(j).valid){
+            src2Spec(i) := true.B
+            src2SpecSrc(i) := j.U
+        }
+      )
+    }
+  )
+
   // RS enqueue
   io.in.ready := rsAllowin
   io.empty := rsEmpty
@@ -112,6 +139,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     prfSrc2(enqueueSelect) := io.in.bits.prfSrc2
     src1Rdy(enqueueSelect) := io.in.bits.src1Rdy
     src2Rdy(enqueueSelect) := io.in.bits.src2Rdy
+    src1Spec(enqueueSelect) := false.B // TODO: add judge logic to wake up 1 cycle earlier
+    src2Spec(enqueueSelect) := false.B // TODO: add judge logic to wake up 1 cycle earlier
     src1(enqueueSelect) := io.in.bits.decode.data.src1
     src2(enqueueSelect) := io.in.bits.decode.data.src2
     brMask(enqueueSelect) := io.brMaskIn
@@ -142,8 +171,16 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
         selected(dequeueSelect) := true.B
         selectedBrMask := updateBrMask(brMask(dequeueSelect))
         selectedDecode := decode(dequeueSelect)
-        selectedDecode.decode.data.src1 := src1(dequeueSelect) // TODO
-        selectedDecode.decode.data.src2 := src2(dequeueSelect) // TODO
+        selectedDecode.decode.data.src1 := 
+          Mux(src1Spec(dequeueSelect) && !src1Rdy(dequeueSelect), 
+            io.wakeup(src1SpecSrc(dequeueSelect)).bits.data,
+            src1(dequeueSelect)
+          )
+        selectedDecode.decode.data.src2 := 
+          Mux(src2Spec(dequeueSelect) && !src2Rdy(dequeueSelect), 
+            io.wakeup(src2SpecSrc(dequeueSelect)).bits.data,
+            src2(dequeueSelect)
+          )
       }
     }
   }
