@@ -19,6 +19,8 @@ trait HasBackendConst{
   val CommitWidth = 2
   val RetireWidth = 2
 
+  val WakeupBusWidth = 2
+
   val enableBranchEarlyRedirect = true
   val enableCheckpoint = true
 }
@@ -77,6 +79,7 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     rob.io.in(i).bits := io.in(i).bits
   })
 
+  // checkpoint control
   brurs.io.updateCheckpoint.get <> rob.io.updateCheckpoint
   rob.io.recoverCheckpoint.bits := bruDelayer.io.freeCheckpoint.get.bits
   brurs.io.freeCheckpoint.get <> bruDelayer.io.freeCheckpoint.get
@@ -86,6 +89,11 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
     rob.io.recoverCheckpoint.valid := false.B
     rob.io.updateCheckpoint.valid := false.B
   }
+
+  // select and wakeup
+  val wakeupBus = Wire(Vec(WakeupBusWidth, Flipped(Valid(new WakeupBus))))
+
+  // rslist.foreach(i => i.io.wakeup <> wakeupBus)
 
   // ------------------------------------------------
   // Backend stage 1
@@ -309,6 +317,13 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   lsurs.io.cdb  <> cdb
   mdurs.io.cdb  <> cdb
 
+  brurs.io.wakeup  <> wakeupBus
+  alu1rs.io.wakeup <> wakeupBus
+  alu2rs.io.wakeup <> wakeupBus
+  csrrs.io.wakeup  <> wakeupBus
+  lsurs.io.wakeup  <> wakeupBus
+  mdurs.io.wakeup  <> wakeupBus
+
   List.tabulate(DispatchWidth)(i => {
     rob.io.in(i).valid := instCango(i)
     rob.io.in(i).bits := inst(i).decode
@@ -392,6 +407,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu1commit.decode.cf.redirect.rtype := DontCare
   alu1commit.exception := false.B
 
+  wakeupBus(0) <> alu1rs.io.select
+  wakeupBus(0).bits.data := aluOut
+
   // def isBru(func: UInt) = func(4)
   val alu2 = Module(new ALU)
   val alu2commit = Wire(new OOCommitIO)
@@ -413,6 +431,9 @@ class Backend(implicit val p: NOOPConfig) extends NOOPModule with HasRegFilePara
   alu2commit.decode.cf.redirect.valid := false.B
   alu2commit.decode.cf.redirect.rtype := DontCare
   alu2commit.exception := false.B
+
+  wakeupBus(1) <> alu2rs.io.select
+  wakeupBus(1).bits.data := alu2Out
 
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)

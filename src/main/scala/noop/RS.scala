@@ -27,8 +27,8 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     val stMaskOut = if (storeSeq) Some(Output(UInt(robSize.W))) else None
     val commit = if (!pipelined) Some(Input(Bool())) else None
 
-    // val wakeup = Vec(WakeupBusWidth, Flipped(Valid(new WakeupBus)))
-    // val select = Valid(new WakeupBus)
+    val wakeup = Vec(WakeupBusWidth, Flipped(Valid(new WakeupBus)))
+    val select = Valid(new WakeupBus)
   })
 
   //                   Argo's Reservation Station
@@ -150,6 +150,11 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   when(io.out.fire()){
     // selected(dequeueSelectReg) := false.B
   } 
+
+  // select bus
+  io.select.valid := (!rsReadygo || io.out.fire()) && wakeupReady
+  io.select.bits.pdest := decode(dequeueSelect).prfDest
+  io.select.bits.data := DontCare
 
   //When a selected inst is judged to be misprediction:
   //* If that selected inst will stay in RS, invalidate it.
