@@ -4,6 +4,8 @@ NutShell is a processor developed by the OSCPU (Open Source Chip Project by Univ
 
 Currently it supports riscv64/32.
 
+See [here](https://github.com/OSCPU/NutShell-doc) for the documents.
+
 See [the History and Naming section](#history) for naming issue.
 
 ## Compile chisel code
@@ -24,12 +26,15 @@ To use ready-to run image (recommended) :
 
 To build image yourself:
 
-* Set a new environment variable `NEMU_HOME` to the **absolute path** of the NEMU project.
+* Set a new environment variable `NEMU_HOME` to the **absolute path** of the [NEMU project](https://github.com/OSCPU/nemu.git).
 * Set a new environment variable `NUTSHELL_HOME` to the **absolute path** of the NutShell project.
 * Clone the [AM project](https://github.com/OSCPU/nexus-am.git).
 * Set a new environment variable `AM_HOME` to the **absolute path** of the AM project.
-* Add a new AM `riscv64-nutshell` in the AM project if it is not provided.
 * Run the application in the AM project by `make ARCH=riscv64-nutshell run`.
+```
+cd nexus-am/apps/microbench
+make ARCH=riscv64-nutshell mainargs=test run
+```
 
 ## Run on FPGA
 
@@ -41,7 +46,7 @@ fpga
 ├── lib                # HDL sources shared by different boards
 ├── Makefile
 ├── Makefile.check
-└── NutShell.tcl           # wrapper of NutShell core in the Vivado project
+└── NutShell.tcl       # wrapper of NutShell core in the Vivado project
 ```
 
 ### Build a Vivado project
@@ -115,6 +120,20 @@ Undergraduate students in the OSCPU team planned to enhance the educational SoC 
 on behalf of University of Chinese Academy of Sciences (UCAS, 中国科学院大学).
 The goal was to boot Linux + Debian and tapeout the chip.
 Students have put a lot of effort into achieving such a goal.
+
+**Where can I find the original NOOP repo?**
+
+NOOP is designed as a programming assignment for educational purpose.
+It is still unstable and may be redesigned every year.
+Therefore there is no official release for NOOP yet.
+
+But here are some reference implementations:
+* Code in this NutShell repo before 2019/08/27 can be considered as NOOP designed in 2019.
+* [Here](https://github.com/nju-mips/noop-lo) is an implementation of NOOP designed by students in NJU at 2018.
+This is the CPU design which won the 2nd prize in LoongsonCup18.
+It is designed with Chisel, too.
+But note that the ISA is mips32, since the contest is held by Loongson.
+Also the implementation is very different from the one above.
 
 **Why can I still find the name NOOP in the code as well as the commit logs after 2019/08/27?**
 
