@@ -8,7 +8,7 @@ See [here](https://github.com/OSCPU/NutShell-doc) for the documents.
 
 See [the History and Naming section](#history) for naming issue.
 
-## Demo: Running Debian on FPGA
+## Demo: [Running Debian on FPGA](debian_on_fpga.gif)
 
 ![](debian_on_fpga.gif)
 
