@@ -8,6 +8,10 @@ See [here](https://github.com/OSCPU/NutShell-doc) for the documents.
 
 See [the History and Naming section](#history) for naming issue.
 
+## Demo: Running Debian on FPGA
+
+![](debian_on_fpga.gif)
+
 ## Compile chisel code
 
 * Install `mill`. Refer to [the Manual section in this guide][mill].
