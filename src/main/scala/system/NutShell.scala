@@ -29,7 +29,7 @@ import chisel3.util.experimental.BoringUtils
 trait HasSoCParameter {
   val EnableILA = Settings.get("EnableILA")
   val HasL2cache = Settings.get("HasL2cache")
-  val HasPrefetch = Settings.get("HasL2cache")
+  val HasPrefetch = Settings.get("HasPrefetch")
 }
 
 class ILABundle extends NutCoreBundle {

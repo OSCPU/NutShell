@@ -53,7 +53,7 @@ class Prefetcher extends Module with HasPrefetcherParameter {
     io.out.bits <> prefetchReq
     io.out.valid := !AddressSpace.isMMIO(prefetchReq.addr)
     io.in.ready := false.B
-    getNewReq := !io.out.fire()
+    getNewReq := !(io.out.fire() || AddressSpace.isMMIO(prefetchReq.addr))
   }
   
   Debug() {
