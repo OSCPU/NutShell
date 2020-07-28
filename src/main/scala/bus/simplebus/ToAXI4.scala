@@ -7,8 +7,9 @@ import bus.axi4._
 import utils._
 
 class AXI42SimpleBusConverter() extends Module {
+  val idBits = 18
   val io = IO(new Bundle {
-    val in = Flipped(new AXI4(idBits = 18))
+    val in = Flipped(new AXI4(idBits = idBits))
     val out = new SimpleBusUC()
   })
 
@@ -29,8 +30,11 @@ class AXI42SimpleBusConverter() extends Module {
     inflight_type := axi_na
     inflight_id_reg := 0.U
   }
-  private def is_inflight() = {
-    inflight_type =/= axi_na
+  private def isState(state: UInt) = {
+    inflight_type === state
+  }
+  private def isInflight() = {
+    !isState(axi_na)
   }
 
   // Default
@@ -40,9 +44,8 @@ class AXI42SimpleBusConverter() extends Module {
   r := default_axi.r.bits
   b := default_axi.b.bits
 
-
   // Read Path
-  when (axi.ar.valid) {
+  when (!isInflight() && axi.ar.valid) {
     mem.req.valid := true.B
     req.addr := ar.addr
     req.cmd := Mux(ar.len === 0.U, SimpleBusCmd.read, SimpleBusCmd.readBurst)
@@ -57,7 +60,7 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
-  when (mem.resp.valid) {
+  when (isState(axi_read) && mem.resp.valid) {
     axi.r.valid := true.B
     r.data := resp.rdata
     r.id := inflight_id_reg
@@ -72,10 +75,10 @@ class AXI42SimpleBusConverter() extends Module {
   }
 
   // Write Path
-  val aw_reg = Reg(new AXI4BundleA(AXI4Parameters.idBits))
+  val aw_reg = Reg(new AXI4BundleA(idBits))
   val bresp_en = RegInit(false.B)
 
-  when (axi.aw.valid && !axi.ar.valid) {
+  when (!isInflight() && axi.aw.valid && !axi.ar.valid) {
     aw_reg := aw
 
     when (axi.aw.fire) {
@@ -83,7 +86,7 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
-  when (axi.w.valid) {
+  when (isState(axi_write) && axi.w.fire()) {
     mem.req.valid := true.B
     req.cmd := Mux(aw_reg.len === 0.U, SimpleBusCmd.write,
       Mux(w.last, SimpleBusCmd.writeLast, SimpleBusCmd.writeBurst))
@@ -93,7 +96,7 @@ class AXI42SimpleBusConverter() extends Module {
     req.wdata := w.data
     req.user.foreach(_ := aw.user)
 
-    when (axi.w.fire && w.last) {
+    when (w.last) {
       bresp_en := true.B
     }
   }
@@ -105,19 +108,25 @@ class AXI42SimpleBusConverter() extends Module {
 
   // Arbitration
   // Slave's ready maybe generated according to valid signal, so let valid signals go through.
-  mem.req.valid := axi.ar.valid || axi.w.valid
-  mem.resp.ready := true.B || (inflight_type === axi_read && axi.r.ready) || (inflight_type === axi_write && axi.b.ready)
-  axi.ar.ready := !is_inflight && mem.req.ready
-  axi.r.valid := inflight_type === axi_read && mem.resp.valid
+  mem.req.valid := (!isInflight() && axi.ar.valid) || (isState(axi_write) && axi.w.valid)
+  mem.resp.ready := !isInflight() || (isState(axi_read) && axi.r.ready) || (isState(axi_write) && axi.b.ready)
+  axi.ar.ready := !isInflight() && mem.req.ready
+  axi.r.valid := isState(axi_read) && mem.resp.valid
   // AW should be buffered so no ready is considered.
-  axi.aw.ready := !is_inflight && !axi.ar.valid
-  axi.w.ready  := inflight_type === axi_write && mem.req.ready
+  axi.aw.ready := !isInflight() && !axi.ar.valid
+  axi.w.ready  := isState(axi_write) && mem.req.ready
   axi.b.valid := bresp_en && mem.resp.valid
   axi.b.bits.resp := AXI4Parameters.RESP_OKAY
+
+  when (axi.ar.fire()) { assert(mem.req.fire() && !isInflight()); }
+  when (axi.aw.fire()) { assert(!isInflight()); }
+  when (axi.w.fire()) { assert(mem.req .fire() && isState(axi_write)); }
+  when (axi.b.fire()) { assert(mem.resp.fire() && isState(axi_write)); }
+  when (axi.r.fire()) { assert(mem.resp.fire() && isState(axi_read)); }
 }
 
 
-class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT) extends Module {
+class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC)
     val out = Flipped(Flipped(outType))
@@ -143,7 +152,8 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT) extends Module {
     axi4.ar.bits.id    := 0.U
     axi4.ar.bits.len   := Mux(mem.req.bits.isBurst(), (LineBeats - 1).U, 0.U)
     axi4.ar.bits.size  := mem.req.bits.size
-    axi4.ar.bits.burst := AXI4Parameters.BURST_WRAP
+    axi4.ar.bits.burst := (if (isFromCache) AXI4Parameters.BURST_WRAP
+                           else AXI4Parameters.BURST_INCR)
     axi4.ar.bits.lock  := false.B
     axi4.ar.bits.cache := 0.U
     axi4.ar.bits.qos   := 0.U
@@ -174,8 +184,8 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT) extends Module {
 }
 
 object SimpleBus2AXI4Converter {
-  def apply[OT <: AXI4Lite](in: SimpleBusUC, outType: OT): OT = {
-    val bridge = Module(new SimpleBus2AXI4Converter(outType))
+  def apply[OT <: AXI4Lite](in: SimpleBusUC, outType: OT, isFromCache: Boolean = false): OT = {
+    val bridge = Module(new SimpleBus2AXI4Converter(outType, isFromCache))
     bridge.io.in <> in
     bridge.io.out
   }

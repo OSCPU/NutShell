@@ -8,14 +8,19 @@ if {[llength $argv] > 0} {
   return 1
 }
 
+if {[llength $argv] > 1} {
+  set standalone [lindex $argv 1]
+} else {
+  puts "standalone mode is not given!"
+  return 1
+}
+
 proc add_bd {tcl_file} {
   source ${tcl_file}
   save_bd_design
   close_bd_design $design_name
   set_property synth_checkpoint_mode Hierarchical [get_files *${design_name}.bd]
 }
-
-set topmodule system_top
 
 set fpga_dir    ${script_dir}/../..
 set project_dir ${script_dir}/build/$project_name
@@ -38,7 +43,7 @@ set inc_files [list \
 add_files -norecurse -fileset sources_1 $inc_files
 set_property is_global_include true [get_files $inc_files]
 
-# Add files for noop
+# Add files for nutshell
 lappend src_files "[file normalize "${fpga_dir}/../build/TopMain.v"]"
 
 add_files -norecurse -fileset sources_1 $src_files
@@ -47,8 +52,16 @@ if {[info exists xdc_files]} {
 }
 
 # Block Designs
-add_bd ${fpga_dir}/noop.tcl
-add_bd ${bd_dir}/prm.tcl
+if {${standalone} == "true"} {
+  add_bd ${bd_dir}/standalone.tcl
+  make_wrapper -files [get_files *system_top.bd] -top
+  add_files -norecurse -fileset sources_1 $project_dir/$project_name.srcs/sources_1/bd/system_top/hdl/system_top_wrapper.v
+  set topmodule system_top_wrapper
+} else {
+  add_bd ${fpga_dir}/NutShell.tcl
+  add_bd ${bd_dir}/arm.tcl
+  set topmodule system_top
+}
 
 # setting top module for FPGA flow and simulation flow
 set_property "top" $topmodule [current_fileset]

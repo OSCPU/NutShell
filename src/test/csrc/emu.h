@@ -8,7 +8,7 @@
 
 //#include "VSimTop__Dpi.h"
 #include "common.h"
-#include "VNOOPSimTop.h"
+#include "VNutShellSimTop.h"
 #if VM_TRACE
 #include <verilated_vcd_c.h>	// Trace file format header
 #endif
@@ -16,7 +16,7 @@
 
 class Emulator {
   const char *image;
-  std::shared_ptr<VNOOPSimTop> dut_ptr;
+  std::shared_ptr<VNutShellSimTop> dut_ptr;
 #if VM_TRACE
   VerilatedVcdC* tfp;
 #endif
@@ -24,25 +24,28 @@ class Emulator {
   // emu control variable
   uint32_t seed;
   uint64_t max_cycles, cycles;
+  uint64_t log_begin, log_end, log_level;
 
   std::vector<const char *> parse_args(int argc, const char *argv[]);
 
   static const struct option long_options[];
   static void print_help(const char *file);
 
-  void read_emu_regs(uint64_t *r) {
+  void read_emu_regs(rtlreg_t *r) {
 #define macro(x) r[x] = dut_ptr->io_difftest_r_##x
     macro(0); macro(1); macro(2); macro(3); macro(4); macro(5); macro(6); macro(7);
     macro(8); macro(9); macro(10); macro(11); macro(12); macro(13); macro(14); macro(15);
     macro(16); macro(17); macro(18); macro(19); macro(20); macro(21); macro(22); macro(23);
     macro(24); macro(25); macro(26); macro(27); macro(28); macro(29); macro(30); macro(31);
     r[DIFFTEST_THIS_PC] = dut_ptr->io_difftest_thisPC;
+#ifndef __RV32__
     r[DIFFTEST_MSTATUS] = dut_ptr->io_difftest_mstatus;
     r[DIFFTEST_SSTATUS] = dut_ptr->io_difftest_sstatus;
     r[DIFFTEST_MEPC   ] = dut_ptr->io_difftest_mepc;
     r[DIFFTEST_SEPC   ] = dut_ptr->io_difftest_sepc;
     r[DIFFTEST_MCAUSE ] = dut_ptr->io_difftest_mcause;
     r[DIFFTEST_SCAUSE ] = dut_ptr->io_difftest_scause;
+#endif
   }
 
   public:
@@ -50,7 +53,8 @@ class Emulator {
   Emulator(int argc, const char *argv[]):
     image(nullptr),
     dut_ptr(new std::remove_reference<decltype(*dut_ptr)>::type),
-    seed(0), max_cycles(-1), cycles(0)
+    seed(0), max_cycles(-1), cycles(0),
+    log_begin(0), log_end(-1), log_level(LOG_ALL)
   {
     // init emu
     auto args = parse_args(argc, argv);
@@ -59,6 +63,11 @@ class Emulator {
     srand(seed);
     srand48(seed);
     Verilated::randReset(2);
+
+    // set log time range and log level
+    dut_ptr->io_logCtrl_log_begin = log_begin;
+    dut_ptr->io_logCtrl_log_end = log_end;
+    dut_ptr->io_logCtrl_log_level = log_level;
 
     // init ram
     extern void init_ram(const char *img);
@@ -132,27 +141,29 @@ class Emulator {
 
       if (!hascommit && dut_ptr->io_difftest_thisPC == 0x80000000u) {
         hascommit = 1;
-        extern void init_difftest(uint64_t *reg);
-        uint64_t reg[DIFFTEST_NR_REG];
+        extern void init_difftest(rtlreg_t *reg);
+        rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
         init_difftest(reg);
       }
 
       // difftest
       if (dut_ptr->io_difftest_commit && hascommit) {
-        uint64_t reg[DIFFTEST_NR_REG];
+        rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
 
-        extern int difftest_step(uint64_t *reg_scala, uint32_t this_inst,
+        extern int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
           int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, int isMultiCommit);
-        if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
+        if (dut_ptr->io_difftestCtrl_enable) {
+          if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
               dut_ptr->io_difftest_isMMIO, dut_ptr->io_difftest_isRVC, dut_ptr->io_difftest_isRVC2,
               dut_ptr->io_difftest_intrNO, dut_ptr->io_difftest_priviledgeMode, 
               dut_ptr->io_difftest_isMultiCommit)) {
 #if VM_TRACE
-          tfp->close();
+            tfp->close();
 #endif
-          set_abort();
+            set_abort();
+          }
         }
         lastcommit = n;
       }

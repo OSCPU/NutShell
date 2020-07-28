@@ -1,3 +1,16 @@
+`ifdef RV32
+`define RAMWIDTH 32
+import "DPI-C" function void ram_helper
+(
+  input  int    rIdx,
+  output int    rdata,
+  input  int    wIdx,
+  input  int    wdata,
+  input  int    wmask,
+  input  bit    wen
+);
+`else
+`define RAMWIDTH 64
 import "DPI-C" function void ram_helper
 (
   input  longint    rIdx,
@@ -7,14 +20,16 @@ import "DPI-C" function void ram_helper
   input  longint    wmask,
   input  bit    wen
 );
+`endif
+
 
 module RAMHelper(
   input         clk,
-  input  [63:0] rIdx,
-  output [63:0] rdata,
-  input  [63:0] wIdx,
-  input  [63:0] wdata,
-  input  [63:0] wmask,
+  input  [`RAMWIDTH-1:0] rIdx,
+  output [`RAMWIDTH-1:0] rdata,
+  input  [`RAMWIDTH-1:0] wIdx,
+  input  [`RAMWIDTH-1:0] wdata,
+  input  [`RAMWIDTH-1:0] wmask,
   input         wen
 );
 

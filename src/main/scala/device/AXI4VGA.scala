@@ -5,6 +5,7 @@ import chisel3.util._
 
 import bus.axi4._
 import utils._
+import top.Settings
 
 trait HasVGAConst {
   val ScreenW = 800
@@ -146,7 +147,8 @@ class AXI4VGA(sim: Boolean = false) extends Module with HasVGAParameter {
 
   fb.io.in.r.ready := true.B
   val data = HoldUnless(fb.io.in.r.bits.data, fb.io.in.r.fire())
-  val color = Mux(hCounter(1), data(63, 32), data(31, 0))
+  val color = if (Settings.get("IsRV32")) data(31, 0)
+              else Mux(hCounter(1), data(63, 32), data(31, 0))
   io.vga.rgb := Mux(io.vga.valid, color(23, 0), 0.U)
 
   if (sim) {

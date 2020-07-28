@@ -314,6 +314,7 @@ xcuserdata
 .cache
 .history
 .lib/
+.coursier/
 dist/*
 target/
 lib_managed/
@@ -343,3 +344,7 @@ hs_err_pid*
 
 # chore
 *.nocompile
+fpga/.Xil/
+
+# vscode temp file
+.vscode/

@@ -1,7 +1,7 @@
-# NOOP
+# NutShell
 
-NOOP(NJU Out-of-Order Processor) is a processor targeting super-scalar out-of-order execution.
-Currently it only supports riscv32.
+NutShell is a processor belonging to OSCPU (Open Source Chip Project by University). <br>
+Currently it supports riscv64/32.
 
 ## Compile chisel code
 
@@ -13,11 +13,11 @@ Currently it only supports riscv32.
 ## Run programs by simulation
 
 * Set a new environment variable `NEMU_HOME` to the **absolute path** of the NEMU project.
-* Set a new environment variable `NOOP_HOME` to the **absolute path** of the NOOP project.
+* Set a new environment variable `NUTSHELL_HOME` to the **absolute path** of the NutShell project.
 * Clone the [AM project](https://github.com/NJU-ProjectN/nexus-am.git).
 * Set a new environment variable `AM_HOME` to the **absolute path** of the AM project.
-* Add a new AM `riscv64-noop` in the AM project if it is not provided.
-* Run the application in the AM project by `make ARCH=riscv64-noop run`.
+* Add a new AM `riscv64-nutshell` in the AM project if it is not provided.
+* Run the application in the AM project by `make ARCH=riscv64-nutshell run`.
 
 ## Run on FPGA
 
@@ -29,7 +29,7 @@ fpga
 ├── lib                # HDL sources shared by different boards
 ├── Makefile
 ├── Makefile.check
-└── noop.tcl           # wrapper of NOOP core in the Vivado project
+└── NutShell.tcl           # wrapper of NutShell core in the Vivado project
 ```
 
 ### Build a Vivado project
@@ -63,7 +63,7 @@ Please refer to the user guide of your board.
 
 Just insert the SD card into the board, open a serial terminal and powerup the board.
 
-### Boot NOOP (the RISC-V subsystem)
+### Boot NutShell (the RISC-V subsystem)
 
 To boot the RISC-V subsystem
 * Send `fpga/resource/ddr-loader/ddr-loader.c` to PS.
@@ -74,12 +74,12 @@ or by sending the file with `scp` if you have your board connected to your host 
 gcc -O2 -o ddr-loader ddr-loader.c
 ```
 * Send the RISC-V program (bin file, should start at 0x80000000) to PS.
-* Open minicom on PS to connect to the UART of NOOP.
+* Open minicom on PS to connect to the UART of NutShell.
 Note that you can connect to PS via `ssh` and use `tmux` to get multiple terminals.
 ```
 minicom -D /dev/ttyUL1
 ```
-* Use the loader to load the program to NOOP memory and start running NOOP.
+* Use the loader to load the program to NutShell memory and start running NutShell.
 ```
 ./ddr-loader axu3cg bin-file
 ```

@@ -26,7 +26,7 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
   }
 }
 
-name := "noop"
+name := "NutShell"
 
 version := "3.1.1"
 
@@ -41,7 +41,7 @@ resolvers ++= Seq(
 
 // Provide a managed dependency on X if -DXVersion="" is supplied on the command line.
 val defaultVersions = Map(
-  "chisel3" -> "3.2-SNAPSHOT",
+  "chisel3" -> "3.2.0-RC1",
   "chisel-iotesters" -> "[1.2.5,1.3-SNAPSHOT["
   )
 
