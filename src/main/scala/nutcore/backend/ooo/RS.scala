@@ -187,6 +187,8 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val selectedBrMask = Reg(UInt(robInstCapacity.W)) // FIXME
   val selectedDecode = Reg(new RenamedDecodeIO)
 
+  selectedBrMask := updateBrMask(selectedBrMask) // update brMask if a selected inst is not issued
+
   when(io.out.fire() || !rsReadygo){
     when(!rsReadygo || io.out.fire()){
       rsReadygo := wakeupReady
