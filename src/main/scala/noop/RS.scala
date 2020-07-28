@@ -126,6 +126,26 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     }
   )
 
+  // set `specwakeup` flag for enqueue insts
+  val enqSrc1Spec = WireInit(false.B)
+  val enqSrc2Spec = WireInit(false.B)
+  val enqSrc1SpecSrc = Wire(UInt(log2Up(WakeupBusWidth).W))
+  val enqSrc2SpecSrc = Wire(UInt(log2Up(WakeupBusWidth).W))
+  enqSrc1SpecSrc := DontCare
+  enqSrc2SpecSrc := DontCare
+  List.tabulate(WakeupBusWidth)(j =>
+    when(io.in.bits.prfSrc1 === io.wakeup(j).bits.pdest && io.wakeup(j).valid){
+        enqSrc1Spec := true.B
+        enqSrc1SpecSrc := j.U
+    }
+  )
+  List.tabulate(WakeupBusWidth)(j =>
+    when(io.in.bits.prfSrc2 === io.wakeup(j).bits.pdest && io.wakeup(j).valid){
+        enqSrc2Spec := true.B
+        enqSrc2SpecSrc := j.U
+    }
+  )
+
   // RS enqueue
   io.in.ready := rsAllowin
   io.empty := rsEmpty
@@ -139,8 +159,10 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
     prfSrc2(enqueueSelect) := io.in.bits.prfSrc2
     src1Rdy(enqueueSelect) := io.in.bits.src1Rdy
     src2Rdy(enqueueSelect) := io.in.bits.src2Rdy
-    src1Spec(enqueueSelect) := false.B // TODO: add judge logic to wake up 1 cycle earlier
-    src2Spec(enqueueSelect) := false.B // TODO: add judge logic to wake up 1 cycle earlier
+    src1Spec(enqueueSelect) := enqSrc1Spec
+    src2Spec(enqueueSelect) := enqSrc2Spec
+    src1SpecSrc(enqueueSelect) := enqSrc1SpecSrc
+    src2SpecSrc(enqueueSelect) := enqSrc2SpecSrc
     src1(enqueueSelect) := io.in.bits.decode.data.src1
     src2(enqueueSelect) := io.in.bits.decode.data.src2
     brMask(enqueueSelect) := io.brMaskIn
@@ -160,6 +182,7 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
   val wakeupReady = Wire(Bool())
   wakeupReady := instRdy.reduce(_||_) && !needMispredictionRecovery(brMask(dequeueSelect))
   val rsReadygo = RegInit(false.B) // i.e. selectedValid
+  val selectedValid = rsReadygo
   val selectedBrMask = Reg(UInt(robInstCapacity.W)) // FIXME
   val selectedDecode = Reg(new RenamedDecodeIO)
 
@@ -225,6 +248,9 @@ class RS(size: Int = 4, pipelined: Boolean = true, fifo: Boolean = false, priori
       printf("\n")
       // printf("\n")
     }
+    printf("[RS " + name + "] selected: valid %x pc %x inst %x src1 %x src2 %x\n", selectedValid, selectedDecode.decode.cf.pc, selectedDecode.decode.cf.instr, selectedDecode.decode.data.src1, selectedDecode.decode.data.src2)
+    printf("[RS " + name + "] wakeup0: valid %x pdst %d data %x\n", io.wakeup(0).valid, io.wakeup(0).bits.pdest, io.wakeup(0).bits.data)
+    printf("[RS " + name + "] wakeup1: valid %x pdst %d data %x\n", io.wakeup(1).valid, io.wakeup(1).bits.pdest, io.wakeup(1).bits.data)
   }
 
   // fix unpipelined 
