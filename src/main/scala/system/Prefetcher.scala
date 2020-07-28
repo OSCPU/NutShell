@@ -16,7 +16,7 @@
 
 package system
 
-import nutcore.{NutCore, NutCoreConfig, HasNutCoreParameter, Cache, CacheConfig}
+import nutcore.{NutCore, NutCoreConfig, HasNutCoreParameter, AddressSpace, Cache, CacheConfig}
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import utils._
@@ -51,7 +51,7 @@ class Prefetcher extends Module with HasPrefetcherParameter {
     getNewReq := io.in.fire() && io.in.bits.isBurst() && neqAddr
   }.otherwise {
     io.out.bits <> prefetchReq
-    io.out.valid := true.B
+    io.out.valid := !AddressSpace.isMMIO(prefetchReq.addr)
     io.in.ready := false.B
     getNewReq := !io.out.fire()
   }
