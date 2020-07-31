@@ -530,7 +530,7 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
     } else { false.B }
   */
   PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire(), io.flush(0))
-  PipelineConnect(s2.io.out, s3.io.in, s3.io.isFinish, io.flush(1) || s2.io.out.bits.mmio && s2.io.out.bits.req.isPrefetch()/* || s2BlockByPrefetch*/)
+  PipelineConnect(s2.io.out, s3.io.in, s3.io.isFinish, io.flush(1))
   io.in.resp <> s3.io.out
   s3.io.flush := io.flush(1)
   io.out.mem <> s3.io.mem
