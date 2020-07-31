@@ -1,3 +1,19 @@
+/**************************************************************************************
+* Copyright (c) 2020 Institute of Computing Technology, CAS
+* Copyright (c) 2020 University of Chinese Academy of Sciences
+* 
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2. 
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2 
+* 
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
+* FIT FOR A PARTICULAR PURPOSE.  
+*
+* See the Mulan PSL v2 for more details.  
+***************************************************************************************/
+
 package top
 
 object DefaultSettings {
@@ -21,6 +37,7 @@ object DefaultSettings {
     "MmodeOnly" -> false,
     "IsRV32" -> false,
 
+    "FPGAPlatform" -> false,
     "EnableILA" -> true,
     "EnableDebug" -> false,
     "EnableRVC" -> true
@@ -29,6 +46,7 @@ object DefaultSettings {
 
 object PynqSettings {
   def apply() = Map(
+    "FPGAPlatform" -> true,
     "NrExtIntr" -> 3,
     "ResetVector" -> 0x60000000L,
     "MemMapBase" -> 0x0000000010000000L,
@@ -40,12 +58,14 @@ object PynqSettings {
 
 object Axu3cgSettings {
   def apply() = Map(
+    "FPGAPlatform" -> true,
     "NrExtIntr" -> 2
   )
 }
 
 object PXIeSettings {
   def apply() = Map(
+    "FPGAPlatform" -> true,
     "NrExtIntr" -> 5
   )
 }
