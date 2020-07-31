@@ -3,6 +3,8 @@
 
 Refer to www.wiki.xilinx.com/Fetch+Sources for more information.
 
+To prepare BOOT.BIN in stand-alone mode, plase refer to [this doc](standalone.md).
+
 ## Build bl31.elf - Arm Trusted Firmware
 
 This step is only needed for zynqmp. If your target board is zynq, skip this step.
