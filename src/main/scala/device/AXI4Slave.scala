@@ -70,7 +70,7 @@ abstract class AXI4SlaveModule[T <: AXI4Lite, B <: Data](_type :T = new AXI4, _e
   val r_busy = BoolStopWatch(in.ar.fire(), in.r.fire() && rLast, startHighPriority = true)
   in.ar.ready := in.r.ready || !r_busy
   in.r.bits.resp := AXI4Parameters.RESP_OKAY
-  ren := RegNext(in.ar.fire()) || (in.r.fire() && !rLast)
+  ren := RegNext(in.ar.fire(), init=false.B) || (in.r.fire() && !rLast)
   in.r.valid := BoolStopWatch(ren && (in.ar.fire() || r_busy), in.r.fire(), startHighPriority = true)
 
 

@@ -27,7 +27,6 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
     val isWFI = Output(Bool()) // require NutCoreSim to advance mtime when wfi to reduce the idle time in Linux
-    val flush = Input(Bool())
   })
 
   val hasIntr = Wire(Bool())
@@ -36,7 +35,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   val instrType :: fuType :: fuOpType :: Nil = // insert Instructions.DecodeDefault when interrupt comes
     Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault) || io.out.bits.cf.exceptionVec(instrAccessFault), intr, dec)}
   // val instrType :: fuType :: fuOpType :: Nil = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
-  val isRVC = instr(1,0) =/= "b11".U
+  val isRVC = if (EnableRVC) instr(1,0) =/= "b11".U else false.B
   val rvcImmType :: rvcSrc1Type :: rvcSrc2Type :: rvcDestType :: Nil =
     ListLookup(instr, CInstructions.DecodeDefault, CInstructions.CExtraDecodeTable) 
 
@@ -191,7 +190,6 @@ class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val io = IO(new Bundle {
     val in = Vec(2, Flipped(Decoupled(new CtrlFlowIO)))
     val out = Vec(2, Decoupled(new DecodeIO))
-    val flush = Input(Bool())
   })
   val decoder1  = Module(new Decoder)
   val decoder2  = Module(new Decoder)
@@ -199,8 +197,6 @@ class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   io.in(1) <> decoder2.io.in
   io.out(0) <> decoder1.io.out
   io.out(1) <> decoder2.io.out
-  decoder1.io.flush := io.flush 
-  decoder2.io.flush := io.flush
   if(!EnableMultiIssue){
     io.in(1).ready := false.B
     decoder2.io.in.valid := false.B
