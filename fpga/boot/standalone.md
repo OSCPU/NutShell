@@ -9,6 +9,7 @@ We use PYNQ-Z2  board as example to demonstrate how to prepare boot files in sta
 * create a project in Vivado and generate bitstream
 
   ```
+  cd $(NUTSHELL_HOME)/fpga
   make PRJ=myprj BOARD=pynq STANDALONE=true vivado
   ```
 
