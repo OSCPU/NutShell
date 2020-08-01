@@ -46,14 +46,38 @@ We use PYNQ-Z2  board as example to demonstrate how to prepare boot files in sta
 
 
 
-## Build RV_BOOT.BIN
+## Build RV_BOOT.bin
 
-RV_BOOT.BIN is the default filename of linux-kernel image. [Here](pynq/RV_BOOT.bin) is a pre-built and currently-used image. You can also build it yourself by riscv-pk and riscv-linux (zynq-standalone branch).
+RV_BOOT.bin is the default filename of linux-kernel image. [Here](pynq/RV_BOOT.bin) is a pre-built and currently-used image. You can also build it yourself by riscv-pk and riscv-linux (currently not avaliable to the public).
 
 
 
-## Prepare SD Card
+## Build rootfs in SD Card
 
-Please follow the instructions in [README](README.md) to build rootfs in SD card and then put `BOOT.BIN`, `RV_BOOT.BIN` generated in the previous steps into `/dev/mmcblk0p1`. 
+* New an `ext4` partition `mmcblk0p2` in SD card. Refer to the step of [here](https://wiki.debian.org/InstallingDebianOn/Xilinx/ZC702/wheezy#SD_Card_root) before executing `debootstrap`.
 
-Pull down SW0 on pynq board to boot Debian.
+* download the debian base system to `mmcblk0p2` with `qemu-debootstrap`.
+
+```
+sudo qemu-debootstrap --arch riscv64 stable /mnt http://ftp.debian.org/debian
+sudo chroot /mnt /bin/bash
+passwd
+apt-get update
+apt-get install net-tools openssh-server vim build-essential minicom tmux libreadline-dev
+exit
+```
+
+* Add a line of `ttyPS0` in `/mnt/etc/securetty` to allow login debian via `ttyPS0`. See [here](http://www.linuxquestions.org/questions/linux-newbie-8/login-incorrect-error-after-boot-no-password-prompted-881131/) for more details.
+
+* Add a line of `PermitRootLogin yes` in `/mnt/etc/ssh/sshd_config` to enable root login via ssh. See [here](https://linuxconfig.org/enable-ssh-root-login-on-debian-linux-server) for more details.
+* Add the following lines to `/mnt/etc/fstab`
+
+```
+# <file system> <mount point> <type>  <options> <dump>  <pass>
+proc /proc proc defaults 0 0
+/dev/mmcblk0p1 /boot vfat defaults 0 2
+/dev/mmcblk0p2 / ext4 errors=remount-ro 0 1
+```
+
+Put `BOOT.BIN`, `RV_BOOT.BIN` generated in the previous steps into `/dev/mmcblk0p1`.
+Finally, insert the SD card into the board. Pull down SW0 on pynq board to boot Debian.
