@@ -573,16 +573,20 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   val mtip = WireInit(false.B)
   val meip = WireInit(false.B)
+  val msip = WireInit(false.B)
   BoringUtils.addSink(mtip, "mtip")
   BoringUtils.addSink(meip, "meip")
+  BoringUtils.addSink(msip, "msip")
   mipWire.t.m := mtip
   mipWire.e.m := meip
+  mipWire.s.m := msip
   
   // SEIP from PLIC is only used to raise interrupt,
   // but it is not stored in the CSR
   val seip = meip    // FIXME: PLIC should generate SEIP different from MEIP
   val mipRaiseIntr = WireInit(mip)
   mipRaiseIntr.e.s := mip.e.s | seip
+  mipRaiseIntr.s.m := mip.s.m | msip
 
   val ideleg =  (mideleg & mipRaiseIntr.asUInt)
   def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),

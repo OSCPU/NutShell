@@ -23,13 +23,15 @@ import chisel3.util.experimental.BoringUtils
 import bus.axi4._
 import utils._
 
-class TimerIO extends Bundle {
+class ClintIO extends Bundle {
   val mtip = Output(Bool())
+  val msip = Output(Bool())
 }
 
-class AXI4Timer(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new TimerIO) {
+class AXI4CLINT(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new ClintIO) {
   val mtime = RegInit(0.U(64.W))  // unit: us
   val mtimecmp = RegInit(0.U(64.W))
+  val msip = RegInit(0.U(64.W))
 
   val clk = (if (!sim) 40 /* 40MHz / 1000000 */ else 10000)
   val freq = RegInit(clk.U(16.W))
@@ -48,6 +50,7 @@ class AXI4Timer(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new 
   }
 
   val mapping = Map(
+    RegMap(0x0, msip),
     RegMap(0x4000, mtimecmp),
     RegMap(0x8000, freq),
     RegMap(0x8008, inc),
@@ -59,4 +62,5 @@ class AXI4Timer(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new 
     getOffset(waddr), in.w.fire(), in.w.bits.data, MaskExpand(in.w.bits.strb))
 
   io.extra.get.mtip := RegNext(mtime >= mtimecmp)
+  io.extra.get.msip := RegNext(msip =/= 0.U)
 }
