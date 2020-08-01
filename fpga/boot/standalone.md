@@ -48,7 +48,7 @@ We use PYNQ-Z2  board as example to demonstrate how to prepare boot files in sta
 
 ## Build RV_BOOT.BIN
 
-RV_BOOT.BIN is the default filename of linux-kernel image. [Here](pynq/RV_BOOT.BIN) is a pre-built and currently-used image. You can also build it yourself by riscv-pk and riscv-linux (zynq-standalone branch).
+RV_BOOT.BIN is the default filename of linux-kernel image. [Here](pynq/RV_BOOT.bin) is a pre-built and currently-used image. You can also build it yourself by riscv-pk and riscv-linux (zynq-standalone branch).
 
 
 
