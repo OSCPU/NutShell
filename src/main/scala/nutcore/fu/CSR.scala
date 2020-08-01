@@ -586,7 +586,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val seip = meip    // FIXME: PLIC should generate SEIP different from MEIP
   val mipRaiseIntr = WireInit(mip)
   mipRaiseIntr.e.s := mip.e.s | seip
-  mipRaiseIntr.s.m := mip.s.m | msip
 
   val ideleg =  (mideleg & mipRaiseIntr.asUInt)
   def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
