@@ -29,7 +29,7 @@ switch -regexp -- $brd {
     set brd_version zedboard
     set arch zynq
   }
-  zcu102|sidewinder|ultraZ|axu3cg {
+  zcu102|sidewinder|ultraZ|axu3cg|PXIe {
     set processor psu_cortexa53_0
     set brd_version zcu102-rev1.0
     set arch zynqmp
