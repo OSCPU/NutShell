@@ -64,7 +64,6 @@ class NLP extends NutCoreModule {
     val out = new RedirectIO 
     val flush = Input(Bool())
     val brIdx = Output(Vec(4, Bool()))
-    val target = Output(Vec(4, UInt(VAddrBits.W)))
     // val instValid = Output(UInt(4.W)) // now instValid is generated in IFU
     val crosslineJump = Output(Bool())
   })
