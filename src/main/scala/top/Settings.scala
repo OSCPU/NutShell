@@ -37,13 +37,16 @@ object DefaultSettings {
     "MmodeOnly" -> false,
     "IsRV32" -> false,
 
+    "FPGAPlatform" -> false,
     "EnableILA" -> true,
-    "EnableDebug" -> true
+    "EnableDebug" -> true,
+    "EnableRVC" -> true
   )
 }
 
 object PynqSettings {
   def apply() = Map(
+    "FPGAPlatform" -> true,
     "NrExtIntr" -> 3,
     "ResetVector" -> 0x60000000L,
     "MemMapBase" -> 0x0000000010000000L,
@@ -55,12 +58,14 @@ object PynqSettings {
 
 object Axu3cgSettings {
   def apply() = Map(
+    "FPGAPlatform" -> true,
     "NrExtIntr" -> 2
   )
 }
 
 object PXIeSettings {
   def apply() = Map(
+    "FPGAPlatform" -> true,
     "NrExtIntr" -> 5
   )
 }
@@ -86,7 +91,8 @@ object EmbededSettings {
     "HasDcache" -> false,
     "HasIcache" -> false,
     "MmodeOnly" -> true,
-    "IsRV32" -> true
+    "IsRV32" -> true,
+    "EnableRVC" -> false
   )
 }
 

@@ -530,7 +530,7 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
     } else { false.B }
   */
   PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire(), io.flush(0))
-  PipelineConnect(s2.io.out, s3.io.in, s3.io.isFinish, io.flush(1) || s2.io.out.bits.mmio && s2.io.out.bits.req.isPrefetch()/* || s2BlockByPrefetch*/)
+  PipelineConnect(s2.io.out, s3.io.in, s3.io.isFinish, io.flush(1))
   io.in.resp <> s3.io.out
   s3.io.flush := io.flush(1)
   io.out.mem <> s3.io.mem
@@ -685,7 +685,7 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
   }
 }
 
-class Cache_fake_joint(implicit val cacheConfig: CacheConfig) extends CacheModule {
+class Cache_dummy(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC(userBits = userBits))
     val flush = Input(UInt(2.W))
@@ -693,117 +693,35 @@ class Cache_fake_joint(implicit val cacheConfig: CacheConfig) extends CacheModul
     val mmio = new SimpleBusUC
     val empty = Output(Bool())
   })
-  
-  val s_idle :: s_memReq :: s_memResp :: s_memReq2 :: s_memResp2 :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(8)
-  val state = RegInit(s_idle)
-
-  val ismmio = AddressSpace.isMMIO(io.in.req.bits.addr)
-  val ismmioRec = RegEnable(ismmio, io.in.req.fire())
-  if (cacheConfig.name == "dcache") {
-    BoringUtils.addSource(ismmio, "lsuMMIO")
-  }
 
   val needFlush = RegInit(false.B)
-  when (io.flush(0) && (state =/= s_idle)) { needFlush := true.B }
-  when (state === s_idle && needFlush) { needFlush := false.B }
-  val alreadyOutFire = RegEnable(true.B, init = false.B, io.in.resp.fire())
-
-  def reqArg(req1: UInt, req2: UInt) = { 
-    val latch = RegInit(req1)
-    when (io.in.req.fire() && (state === s_idle)) { latch := req1 }  // first mem req
-    when (io.out.mem.resp.fire() && (state === s_memResp)) { latch := req2 } // second mem req
-    latch
+  when (io.flush(0)) {
+    needFlush := true.B
+  }
+  when (io.in.req.fire() && !io.flush(0)) {
+    needFlush := false.B
   }
 
-  val addrLatch  = RegEnable(io.in.req.bits.addr, io.in.req.fire())
-  val cmdLatch   = RegEnable(io.in.req.bits.cmd, io.in.req.fire())
-  val sizeLatch  = RegEnable(2.U, io.in.req.fire())  // always read/write 32bit
-  val wdataLatch = RegEnable(io.in.req.bits.wdata, io.in.req.fire())
-  val wmaskLatch = RegEnable(io.in.req.bits.wmask, io.in.req.fire())
+  io.in.req.ready := io.out.mem.req.ready
+  io.in.resp.valid := (io.out.mem.resp.valid && !needFlush) || io.flush(0)
 
-  val reqAddrRead  = reqArg(Cat(io.in.req.bits.addr(31,3), 0.U(3.W)), Cat(addrLatch(31,3), 4.U(3.W)))
-  val reqAddrWrite = reqArg(io.in.req.bits.addr, addrLatch)
-
-  val reqCmd   = reqArg(io.in.req.bits.cmd, cmdLatch)
-  val reqSize  = reqArg(2.U, sizeLatch)
-  val reqWdata = reqArg(io.in.req.bits.wdata, wdataLatch)
-  val reqWmask = reqArg(io.in.req.bits.wmask, wmaskLatch)
-  val reqAddr = Mux(reqCmd === SimpleBusCmd.write, reqAddrWrite, reqAddrRead)
-
-  switch (state) {
-    is (s_idle) {
-      alreadyOutFire := false.B
-      when (io.in.req.fire() && !io.flush(0)) { state := Mux(ismmio, s_mmioReq, s_memReq) }
-    }
-    is (s_memReq) {
-      when (io.out.mem.req.fire()) { state := s_memResp }
-    }
-    is (s_memResp) {
-      when (io.out.mem.resp.fire()) { 
-        when (reqCmd === SimpleBusCmd.write) { state := s_wait_resp } 
-        .otherwise { state := s_memReq2 }
-      }
-    }
-    is (s_memReq2) {
-      when (io.out.mem.req.fire()) { state := s_memResp2 }
-    }
-    is (s_memResp2) {
-      when (io.out.mem.resp.fire()) { state := s_wait_resp }
-    }
-    is (s_mmioReq) {
-      when (io.mmio.req.fire()) { state := s_mmioResp }
-    }
-    is (s_mmioResp) {
-      when (io.mmio.resp.fire()) { state := s_wait_resp }
-    }
-    is (s_wait_resp) {
-      when (io.in.resp.fire() || needFlush || alreadyOutFire) { state := s_idle }
-    }
-  }
-
-  io.in.req.ready := (state === s_idle)
-  io.in.resp.valid := (state === s_wait_resp) && (!needFlush)
-
-  val mmiordata = RegEnable(io.mmio.resp.bits.rdata, io.mmio.resp.fire())
-  val mmiocmd = RegEnable(io.mmio.resp.bits.cmd, io.mmio.resp.fire())
-
-  // val memrdata = RegEnable(io.out.mem.resp.bits.rdata, io.out.mem.resp.fire())
-  val memrdata = RegInit(io.out.mem.resp.bits.rdata)
-  when (io.out.mem.resp.fire()) {
-    when (state === s_memResp) {
-      memrdata := Cat(0.U(32.W), io.out.mem.resp.bits.rdata(31,0))
-    } .elsewhen (state === s_memResp2) {
-      memrdata := Cat(io.out.mem.resp.bits.rdata(31,0), memrdata(31,0))
-    }
-  }
-  val memcmd  = RegEnable(io.out.mem.resp.bits.cmd, io.out.mem.resp.fire())
-  val memuser = RegEnable(io.in.req.bits.user.getOrElse(0.U), io.in.req.fire())  // get from in.req
-
-  io.in.resp.bits.rdata := Mux(ismmioRec, mmiordata, memrdata)
-  io.in.resp.bits.cmd := Mux(ismmioRec, mmiocmd, memcmd)
+  io.in.resp.bits.rdata := io.out.mem.resp.bits.rdata
+  io.in.resp.bits.cmd := io.out.mem.resp.bits.cmd
+  val memuser = RegEnable(io.in.req.bits.user.getOrElse(0.U), io.in.req.fire())
   io.in.resp.bits.user.zip(if (userBits > 0) Some(memuser) else None).map { case (o,i) => o := i }
 
-  io.out.mem.req.bits.apply(  // mem employs indirect-read, direct-write
-    addr = reqAddr,
-    cmd = reqCmd,
-    size = reqSize,
-    wdata = reqWdata,
-    wmask = reqWmask
+  io.out.mem.req.bits.apply( 
+    addr = io.in.req.bits.addr,
+    cmd = io.in.req.bits.cmd,
+    size = io.in.req.bits.size,
+    wdata = io.in.req.bits.wdata,
+    wmask = io.in.req.bits.wmask
   )
-  io.out.mem.req.valid := (state === s_memReq) || (state === s_memReq2)
-  io.out.mem.resp.ready := true.B
-  
-  io.mmio.req.bits.apply(  // mmio employs direct-read, direct-write
-    addr = addrLatch,
-    cmd = cmdLatch,
-    size = sizeLatch,
-    wdata = wdataLatch,
-    wmask = wmaskLatch
-  )
-  io.mmio.req.valid := (state === s_mmioReq)
-  io.mmio.resp.ready := true.B
+  io.out.mem.req.valid := io.in.req.valid
+  io.out.mem.resp.ready := io.in.resp.ready
 
   io.empty := false.B
+  io.mmio := DontCare
   io.out.coh := DontCare
 }
 
@@ -811,7 +729,7 @@ object Cache {
   def apply(in: SimpleBusUC, mmio: Seq[SimpleBusUC], flush: UInt, empty: Bool, enable: Boolean = true)(implicit cacheConfig: CacheConfig) = {
     val cache = if (enable) Module(new Cache) 
                 else (if (Settings.get("IsRV32")) 
-                        (if (cacheConfig.name == "dcache") Module(new Cache_fake) else Module(new Cache_fake_joint)) 
+                        (if (cacheConfig.name == "dcache") Module(new Cache_fake) else Module(new Cache_dummy)) 
                       else 
                         (Module(new Cache_fake)))
     cache.io.flush := flush

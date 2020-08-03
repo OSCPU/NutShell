@@ -136,8 +136,8 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   io.out(1).bits := DontCare
   io.out(1).bits.redirect.valid := false.B
   io.out(1).bits.pc := pcRingMeta(inst2_StartIndex)
-  // io.out(1).bits.pnpc := Mux(io.out(1).bits.brIdx, npcRingMeta(inst2_StartIndex), io.out(1).bits.pc + Mux(dequeueIsRVC(dequeueSize1), 2.U, 4.U))
   io.out(1).bits.pnpc := npcRingMeta(inst2_StartIndex)
+  // io.out(1).bits.pnpc := npcRingMeta(inst2_StartIndex)
   io.out(1).bits.instr := Cat(ringInstBuffer(inst2_StartIndex+1.U), ringInstBuffer(inst2_StartIndex))
   io.out(1).bits.brIdx := branchRingMeta(inst2_StartIndex)
   io.out(1).bits.isRVC := dequeueIsRVC(dequeueSize1)

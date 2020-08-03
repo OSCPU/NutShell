@@ -59,10 +59,11 @@ fpga
 * Run the following command to build a Vivado project
 ```
 cd fpga
-make PRJ=myproject BOARD=axu3cg
+make PRJ=myproject BOARD=pynq STANDALONE=true
 ```
-Change `axu3cg` to the target board you want. Supported boards are listed under `board/`.
-The project will be created under `board/axu3cg/build/myproject-axu3cg`.
+Change `pynq` to the target board you want. Supported boards are listed under `board/`.
+The project will be created under `board/pynq/build/myproject-pynq`. Please note that STANDALONE mode is only used in `pynq` board.
+
 * Open the project with Vivado and generate bitstream.
 
 ### Prepare SD card
@@ -102,7 +103,7 @@ minicom -D /dev/ttyUL1
 ```
 * Use the loader to load the program to NutShell memory and start running NutShell.
 ```
-./ddr-loader axu3cg bin-file
+./ddr-loader $(YOUR_BOARD) bin-file
 ```
 * To shutdown the board, first run `poweroff` in PS.
 

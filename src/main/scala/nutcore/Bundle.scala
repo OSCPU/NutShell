@@ -55,13 +55,13 @@ class MisPredictionRecIO extends NutCoreBundle {
 }
 
 class CtrlFlowIO extends NutCoreBundle {
-  val instr = Output(UInt(32.W))
+  val instr = Output(UInt(64.W))
   val pc = Output(UInt(VAddrBits.W))
   val pnpc = Output(UInt(VAddrBits.W))
   val redirect = new RedirectIO
   val exceptionVec = Output(Vec(16, Bool()))
   val intrVec = Output(Vec(12, Bool()))
-  val brIdx = Output(Bool())
+  val brIdx = Output(UInt(4.W))
   val isRVC = Output(Bool())
   val crossPageIPFFix = Output(Bool())
 }
