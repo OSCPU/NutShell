@@ -10,6 +10,7 @@ import chisel3.util.experimental.BoringUtils
 import bus.axi4._
 import device.AXI4RAM
 import nutcore._
+import utils.GTimer
 
 class DiffTestIO extends Bundle {
   val r = Output(Vec(32, UInt(64.W)))
@@ -84,14 +85,8 @@ class NutShellSimTop extends Module {
   log_end := io.logCtrl.log_end
   log_level := io.logCtrl.log_level
 
-  BoringUtils.addSource(log_begin, "DISPLAY_LOG_START")
-  BoringUtils.addSource(log_end, "DISPLAY_LOG_END")
-  BoringUtils.addSource(log_level, "DISPLAY_LOG_LEVEL")
+  assert(log_begin <= log_end)
+  BoringUtils.addSource((GTimer() >= log_begin) && (GTimer() <= log_end), "DISPLAY_ENABLE")
 
-  // make firrtl happy :)
-  val log_begin_sink, log_end_sink, log_level_sink = WireInit(0.U(64.W))
-  BoringUtils.addSink(log_begin_sink, "DISPLAY_LOG_START")
-  BoringUtils.addSink(log_end_sink, "DISPLAY_LOG_END")
-  BoringUtils.addSink(log_level_sink, "DISPLAY_LOG_LEVEL")
   io.difftestCtrl <> mmio.io.difftestCtrl
 }

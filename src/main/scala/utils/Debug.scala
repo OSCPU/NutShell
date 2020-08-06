@@ -21,24 +21,22 @@ object LogLevel extends Enumeration {
 object LogUtil {
 
   def displayLog: Bool = {
-    val disp_begin, disp_end = WireInit(0.U(64.W))
-    BoringUtils.addSink(disp_begin, "DISPLAY_LOG_START")
-    BoringUtils.addSink(disp_end, "DISPLAY_LOG_END")
-    assert(disp_begin <= disp_end)
-    (GTimer() >= disp_begin) && (GTimer() <= disp_end)
+    val enableDisplay = WireInit(false.B)
+    BoringUtils.addSink(enableDisplay, "DISPLAY_ENABLE")
+    enableDisplay
   }
 
-  def LogLevel: UInt = {
-    val log_level = WireInit(0.U(64.W))
-    BoringUtils.addSink(log_level, "DISPLAY_LOG_LEVEL")
-    log_level
-  }
+  // def LogLevel: UInt = {
+  //   val log_level = WireInit(0.U(64.W))
+  //   BoringUtils.addSink(log_level, "DISPLAY_LOG_LEVEL")
+  //   log_level
+  // }
 
   def apply(debugLevel: LogLevel)
            (cond: Bool, pable: Printable)
            (implicit m: Module): Any = {
-    val commonInfo = p"[$debugLevel][time=${GTimer()}] ${m.name}: "
-    when (debugLevel.id.U >= LogLevel && cond && displayLog) {
+    val commonInfo = p"[${GTimer()}] ${m.name}: "
+    when (cond && displayLog) {
       printf(commonInfo + pable)
     }
   }
@@ -56,7 +54,7 @@ sealed abstract class LogHelper(val logLevel: LogLevel) {
   // NOOP/NutShell style debug
   def apply(flag: Boolean = NutCoreConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any = {
     if(NutCoreConfig().EnhancedLog){
-      if(flag) { when (logLevel.id.U >= LogUtil.LogLevel && cond && LogUtil.displayLog) { body } }
+      if(flag) { when (cond && LogUtil.displayLog) { body } }
     } else {
       if(flag) { when (cond) { body } }
     }
