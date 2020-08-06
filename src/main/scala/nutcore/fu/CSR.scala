@@ -256,8 +256,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
   def getMisaExt(ext: Char): UInt = {1.U << (ext.toInt - 'a'.toInt)} 
   var extList = List('a', 's', 'i', 'u')
-  if(HasMExtension){ extList = extList :+ 'm'}
-  if(HasCExtension){ extList = extList :+ 'c'}
+  if(HasMExtension){ extList = extList :+ 'm' }
+  if(HasCExtension){ extList = extList :+ 'c' }
+  if(HasNExtension){ extList = extList :+ 'n' }
+  // if(HasNExtension){ extList = extList } // Note: current NEMU does not support N ext
   val misaInitVal = getMisaMxl(2) | extList.foldLeft(0.U)((sum, i) => sum | getMisaExt(i)) //"h8000000000141105".U 
   val misa = RegInit(UInt(XLEN.W), misaInitVal) 
   // MXL = 2          | 0 | EXT = b 00 0000 0100 0001 0001 0000 0101
@@ -320,24 +322,48 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // -------------------------------------------------------
   val sstatusRmask = sstatusWmask | "h8000000300018000".U
   // Sstatus Read Mask = (SSTATUS_WMASK | (0xf << 13) | (1ull << 63) | (3ull << 32))
-  val stvec = RegInit(UInt(XLEN.W), 0.U)
-  // val sie = RegInit(0.U(XLEN.W))
   val sieMask = "h222".U & mideleg
-  val sipMask  = "h222".U & mideleg
+  val sipMask  = "h2".U & mideleg
   // val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
   val satp = RegInit(UInt(XLEN.W), 0.U)
+  if (Settings.get("HasDTLB")) {
+    BoringUtils.addSource(satp, "CSRSATP")
+  }
+
+  val stvec = RegInit(UInt(XLEN.W), 0.U)
   val sepc = RegInit(UInt(XLEN.W), 0.U)
   val scause = RegInit(UInt(XLEN.W), 0.U)
   val stval = Reg(UInt(XLEN.W))
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
 
-  if (Settings.get("HasDTLB")) {
-    BoringUtils.addSource(satp, "CSRSATP")
-  }
+  val sedeleg = RegInit(UInt(XLEN.W), 0.U)
+  val sideleg = RegInit(UInt(XLEN.W), 0.U)
+  val sedelegWmask = medeleg
+  val sidelegWmask = mideleg
 
   // User-Level CSRs
+  val ustatusWmask = "h11".U // other fields in ustatus are set as WPRI
+  // Ustatus Write Mask
+  // -------------------------------------------------------
+  //       4    0
+  //    0001 0001
+  // 0x    1    1
+  // -------------------------------------------------------
+  val ustatusRmask = ustatusWmask
+  val uieMask = "h111".U & sideleg
+  val uipMask = "h1".U & sideleg
+
+  val utvec = RegInit(UInt(XLEN.W), 0.U)
   val uepc = Reg(UInt(XLEN.W))
+  val ucause = RegInit(UInt(XLEN.W), 0.U)
+  val utval = Reg(UInt(XLEN.W))
+  val uscratch = RegInit(UInt(XLEN.W), 0.U)
+
+  // User level perf counter
+  // val cycle = WireInit(0.U(XLEN.W)) // TODO
+  // val time = WireInit(0.U(XLEN.W)) // TODO
+  // val instret = WireInit(0.U(XLEN.W)) // TODO
 
   // Atom LR/SC Control Bits
   val setLr = WireInit(Bool(), false.B)
@@ -367,19 +393,23 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val perfCntsHiMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb80 + i, perfCnts(i)(63, 32)) }
 
   // CSR reg map
-  val mapping = Map(
+  val userCSRMapping = Map(
+
+    // Supervisor Trap Delegation Registers
+    MaskedRegMap(Sedeleg, sedeleg, sedelegWmask),
+    MaskedRegMap(Sideleg, sideleg, sidelegWmask),
 
     // User Trap Setup
-    // MaskedRegMap(Ustatus, ustatus), 
-    // MaskedRegMap(Uie, uie, 0.U, MaskedRegMap.Unwritable),
-    // MaskedRegMap(Utvec, utvec),
+    MaskedRegMap(Ustatus, mstatus, ustatusWmask, mstatusUpdateSideEffect, ustatusRmask), 
+    MaskedRegMap(Uie, mie, uieMask, MaskedRegMap.NoSideEffect, uieMask),
+    MaskedRegMap(Utvec, utvec),
     
     // User Trap Handling
-    // MaskedRegMap(Uscratch, uscratch),
-    // MaskedRegMap(Uepc, uepc),
-    // MaskedRegMap(Ucause, ucause),
-    // MaskedRegMap(Utval, utval),
-    // MaskedRegMap(Uip, uip),
+    MaskedRegMap(Uscratch, uscratch),
+    MaskedRegMap(Uepc, uepc),
+    MaskedRegMap(Ucause, ucause),
+    MaskedRegMap(Utval, utval),
+    MaskedRegMap(Uip, mip.asUInt, uipMask, MaskedRegMap.Unwritable, uipMask)
 
     // User Floating-Point CSRs (not implemented)
     // MaskedRegMap(Fflags, fflags),
@@ -389,13 +419,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // User Counter/Timers
     // MaskedRegMap(Cycle, cycle),
     // MaskedRegMap(Time, time),
-    // MaskedRegMap(Instret, instret),
-    
+    // MaskedRegMap(Instret, instret)
+  )
+
+  val mapping = Map(
+
     // Supervisor Trap Setup
     MaskedRegMap(Sstatus, mstatus, sstatusWmask, mstatusUpdateSideEffect, sstatusRmask),
 
-    // MaskedRegMap(Sedeleg, Sedeleg),
-    // MaskedRegMap(Sideleg, Sideleg),
     MaskedRegMap(Sie, mie, sieMask, MaskedRegMap.NoSideEffect, sieMask),
     MaskedRegMap(Stvec, stvec),
     MaskedRegMap(Scounteren, scounteren),
@@ -443,7 +474,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(PmpaddrBase + 2, pmpaddr2),
     MaskedRegMap(PmpaddrBase + 3, pmpaddr3)
 
-  ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
+  ) ++ perfCntsLoMapping ++ (if (HasNExtension) userCSRMapping else Nil)
+  //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
   val addr = src2(11, 0)
   val rdata = Wire(UInt(XLEN.W))
@@ -467,7 +499,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // Fix Mip/Sip write
   val fixMapping = Map(
     MaskedRegMap(Mip, mipReg.asUInt, mipFixMask),
-    MaskedRegMap(Sip, mipReg.asUInt, sipMask, MaskedRegMap.NoSideEffect, sipMask)
+    MaskedRegMap(Sip, mipReg.asUInt, sipMask, MaskedRegMap.NoSideEffect, sipMask),
+    MaskedRegMap(Uip, mipReg.asUInt, uipMask, MaskedRegMap.NoSideEffect, uipMask)
   )
   val rdataDummy = Wire(UInt(XLEN.W))
   MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen, wdata)
@@ -662,13 +695,15 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   // Branch control
 
-  val deleg = Mux(raiseIntr, mideleg , medeleg)
-  // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
-  val delegS = (deleg(causeNO(3,0))) && (priviledgeMode < ModeM)
+  val mdelegSel = Mux(raiseIntr, mideleg , medeleg)
+  val sdelegSel = Mux(raiseIntr, sideleg , sedeleg)
+  // val isDelegS = ((mdelegSel & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
+  val isDelegS = (mdelegSel(causeNO(3,0))) && (priviledgeMode < ModeM)
+  val isDelegU = (sdelegSel(causeNO(3,0))) && (priviledgeMode < ModeS)
   val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in nutcore-riscv64, no exception will come together with PF
 
   ret := isMret || isSret || isUret
-  trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
+  trapTarget := Mux(isDelegU, utvec, Mux(isDelegS, stvec, mtvec))(VAddrBits-1, 0)
   retTarget := DontCare
   // TODO redirect target
   // val illegalEret = TODO
@@ -714,25 +749,32 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
 
-    when (delegS) {
-      scause := causeNO
-      sepc := SignExt(io.cfIn.pc, XLEN)
-      mstatusNew.spp := priviledgeMode
-      mstatusNew.pie.s := mstatusOld.ie.s
-      mstatusNew.ie.s := false.B
-      priviledgeMode := ModeS
-      when(tvalWen){stval := 0.U} // TODO: should not use =/=
-      // printf("[*] mstatusNew.spp %x\n", mstatusNew.spp)
-      // trapTarget := stvec(VAddrBits-1. 0)
+    when (isDelegU) {
+      ucause := causeNO
+      uepc := SignExt(io.cfIn.pc, XLEN)
+      // mstatusNew.upp := priviledgeMode // always U
+      mstatusNew.pie.u := mstatusOld.ie.u
+      mstatusNew.ie.u := false.B
+      priviledgeMode := ModeU
+      when(tvalWen){utval := 0.U}
     }.otherwise {
-      mcause := causeNO
-      mepc := SignExt(io.cfIn.pc, XLEN)
-      mstatusNew.mpp := priviledgeMode
-      mstatusNew.pie.m := mstatusOld.ie.m
-      mstatusNew.ie.m := false.B
-      priviledgeMode := ModeM
-      when(tvalWen){mtval := 0.U} // TODO: should not use =/=
-      // trapTarget := mtvec(VAddrBits-1. 0)
+      when (isDelegS) {
+        scause := causeNO
+        sepc := SignExt(io.cfIn.pc, XLEN)
+        mstatusNew.spp := priviledgeMode
+        mstatusNew.pie.s := mstatusOld.ie.s
+        mstatusNew.ie.s := false.B
+        priviledgeMode := ModeS
+        when(tvalWen){stval := 0.U}
+      }.otherwise {
+        mcause := causeNO
+        mepc := SignExt(io.cfIn.pc, XLEN)
+        mstatusNew.mpp := priviledgeMode
+        mstatusNew.pie.m := mstatusOld.ie.m
+        mstatusNew.ie.m := false.B
+        priviledgeMode := ModeM
+        when(tvalWen){mtval := 0.U}
+      }
     }
     // mstatusNew.pie.m := LookupTree(priviledgeMode, List(
     //   ModeM -> mstatusOld.ie.m,
@@ -748,12 +790,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   io.out.valid := valid
 
   Debug(false) {
-    printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x delegs:%d deleg:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, delegS, deleg, io.cfIn.pc, valid, io.instrValid)
+    printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x isDelegs:%d mdelegSel:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, isDelegS, mdelegSel, io.cfIn.pc, valid, io.instrValid)
   }
 
   Debug(false) {
-    when(raiseExceptionIntr && delegS ) {
-      printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x delegs:%d deleg:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, delegS, deleg, io.cfIn.pc, valid, io.instrValid)
+    when(raiseExceptionIntr && isDelegS ) {
+      printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x isDelegs:%d mdelegSel:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, isDelegS, mdelegSel, io.cfIn.pc, valid, io.instrValid)
       printf("[CSR3] sepc is writen!!! pc:%x time:%d\n", io.cfIn.pc, GTimer())
     }
   }
