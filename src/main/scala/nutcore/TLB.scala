@@ -395,6 +395,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val vpn = req.addr.asTypeOf(vaBundle2).vpn.asTypeOf(vpnBundle)
   val pf = io.pf
   val satp = io.satp.asTypeOf(satpBundle)
+  val ifecth = if(tlbname == "itlb") true.B else false.B
 
   // pf init
   pf.loadPF := false.B
@@ -424,7 +425,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val hitWBStore = RegEnable(Cat(0.U(10.W), hitData.ppn, 0.U(2.W), hitRefillFlag), hitWB)
 
   // hit permission check
-  val hitCheck = hit /*&& hitFlag.v */&& !(pf.priviledgeMode === ModeU && !hitFlag.u) && !(pf.priviledgeMode === ModeS && hitFlag.u && !pf.status_sum)
+  val hitCheck = hit /*&& hitFlag.v */&& !(pf.priviledgeMode === ModeU && !hitFlag.u) && !(pf.priviledgeMode === ModeS && hitFlag.u && (!pf.status_sum || ifecth))
   val hitExec = hitCheck && hitFlag.x
   val hitLoad = hitCheck && (hitFlag.r || pf.status_mxr && hitFlag.x)
   val hitStore = hitCheck && hitFlag.w
@@ -517,7 +518,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
             raddr := paddrApply(memRdata.ppn, Mux(level === 3.U, vpn.vpn1, vpn.vpn0))
           }
         }.elsewhen (level =/= 0.U) { //TODO: fix needFlush
-          val permCheck = missflag.v && !(pf.priviledgeMode === ModeU && !missflag.u) && !(pf.priviledgeMode === ModeS && missflag.u && !pf.status_sum)
+          val permCheck = missflag.v && !(pf.priviledgeMode === ModeU && !missflag.u) && !(pf.priviledgeMode === ModeS && missflag.u && (!pf.status_sum || ifecth))
           val permExec = permCheck && missflag.x
           val permLoad = permCheck && (missflag.r || pf.status_mxr && missflag.x)
           val permStore = permCheck && missflag.w
