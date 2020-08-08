@@ -139,6 +139,12 @@ trait HasCSRConst {
     IRQ_SEIP, IRQ_SSIP, IRQ_STIP,
     IRQ_UEIP, IRQ_USIP, IRQ_UTIP
   )
+
+  def csrAccessPermissionCheck(addr: UInt, wen: Bool, mode: UInt): Bool = {
+    val readOnly = addr(11,10) === "b11".U
+    val lowestAccessPrivilegeLevel = addr(9,8)
+    mode >= lowestAccessPrivilegeLevel && !(wen && readOnly)
+  }
 }
 
 trait HasExceptionNO {
@@ -458,9 +464,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   ))
 
   val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException
-  // Debug(){when(wen){printf("[CSR] addr %x wdata %x func %x rdata %x\n", addr, wdata, func, rdata)}}
-  MaskedRegMap.generate(mapping, addr, rdata, wen, wdata)
+  val permitted = csrAccessPermissionCheck(addr, false.B, priviledgeMode) 
+  // Writeable check is ingored.
+  // Currently, write to illegal csr addr will be ignored
+  MaskedRegMap.generate(mapping, addr, rdata, wen && permitted, wdata)
   val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
+  val isIllegalAccess = !permitted
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
   io.out.bits := rdata
 
@@ -609,7 +618,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
-  csrExceptionVec(illegalInstr) := isIllegalAddr && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written
+  // Trigger an illegal instr exception when:
+  // * unimplemented csr is being read/written
+  // * csr access is illegal
+  csrExceptionVec(illegalInstr) := (isIllegalAddr || isIllegalAccess) && wen && !io.isBackendException 
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
