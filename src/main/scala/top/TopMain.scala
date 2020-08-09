@@ -54,10 +54,14 @@ object TopMain extends App {
     case "ooo"  => OOOSettings()
     case "small"=> EmbededSettings()
   } )
-  s.map{Settings.settings += _} // add and overwrite DefaultSettings
+  s.foreach{Settings.settings += _} // add and overwrite DefaultSettings
   println("====== Settings = (" + board + ", " +  core + ") ======")
-  Settings.settings.toList.sortBy(_._1)(Ordering.String).map(s => println(s._1 + " = " + s._2))
-
+  Settings.settings.toList.sortBy(_._1)(Ordering.String).foreach {
+    case (f, v: Long) =>
+      println(f + " = 0x" + v.toHexString)
+    case (f, v) =>
+      println(f + " = " + v)
+  }
   if (board == "sim") {
     Driver.execute(args, () => new NutShellSimTop)
   } else {
