@@ -36,6 +36,7 @@ class CtrlSignalIO extends NutCoreBundle {
   val isSrc2Forward = Output(Bool())
   val noSpecExec = Output(Bool())  // This inst can not be speculated
   val isBlocked = Output(Bool())   // This inst requires pipeline to be blocked
+  val fpuIOFunc = Output(UInt(3.W))
 }
 
 class DataSrcIO extends NutCoreBundle {
