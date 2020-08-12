@@ -1,9 +1,25 @@
+/**************************************************************************************
+* Copyright (c) 2020 Institute of Computing Technology, CAS
+* Copyright (c) 2020 University of Chinese Academy of Sciences
+* 
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2. 
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2 
+* 
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
+* FIT FOR A PARTICULAR PURPOSE.  
+*
+* See the Mulan PSL v2 for more details.  
+***************************************************************************************/
+
 package system
 
 import nutcore._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
-import device.{AXI4Timer, AXI4PLIC}
+import device.{AXI4CLINT, AXI4PLIC}
 import top.Settings
 
 import chisel3._
@@ -13,7 +29,7 @@ import chisel3.util.experimental.BoringUtils
 trait HasSoCParameter {
   val EnableILA = Settings.get("EnableILA")
   val HasL2cache = Settings.get("HasL2cache")
-  val HasPrefetch = Settings.get("HasL2cache")
+  val HasPrefetch = Settings.get("HasPrefetch")
 }
 
 class ILABundle extends NutCoreBundle {
@@ -94,10 +110,12 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   if (p.FPGAPlatform) { io.mmio <> extDev.toAXI4() }
   else { io.mmio <> extDev }
 
-  val clint = Module(new AXI4Timer(sim = !p.FPGAPlatform))
+  val clint = Module(new AXI4CLINT(sim = !p.FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
   val mtipSync = clint.io.extra.get.mtip
+  val msipSync = clint.io.extra.get.msip
   BoringUtils.addSource(mtipSync, "mtip")
+  BoringUtils.addSource(msipSync, "msip")
 
   val plic = Module(new AXI4PLIC(nrIntr = Settings.getInt("NrExtIntr"), nrHart = 1))
   plic.io.in <> mmioXbar.io.out(2).toAXI4Lite()

@@ -1,6 +1,22 @@
+/**************************************************************************************
+* Copyright (c) 2020 Institute of Computing Technology, CAS
+* Copyright (c) 2020 University of Chinese Academy of Sciences
+* 
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2. 
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2 
+* 
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
+* FIT FOR A PARTICULAR PURPOSE.  
+*
+* See the Mulan PSL v2 for more details.  
+***************************************************************************************/
+
 package system
 
-import nutcore.{NutCore, NutCoreConfig, HasNutCoreParameter, Cache, CacheConfig}
+import nutcore.{NutCore, NutCoreConfig, HasNutCoreParameter, AddressSpace, Cache, CacheConfig}
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import utils._
@@ -35,9 +51,9 @@ class Prefetcher extends Module with HasPrefetcherParameter {
     getNewReq := io.in.fire() && io.in.bits.isBurst() && neqAddr
   }.otherwise {
     io.out.bits <> prefetchReq
-    io.out.valid := true.B
+    io.out.valid := !AddressSpace.isMMIO(prefetchReq.addr)
     io.in.ready := false.B
-    getNewReq := !io.out.fire()
+    getNewReq := !(io.out.fire() || AddressSpace.isMMIO(prefetchReq.addr))
   }
   
   Debug() {
