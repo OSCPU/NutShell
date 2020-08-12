@@ -17,6 +17,7 @@ object LSUOpType { //TODO: refactor LSU fuop
   def lbu  = "b0000100".U
   def lhu  = "b0000101".U
   def lwu  = "b0000110".U
+  def flw  = "b0010110".U // box 32-bit data to 64-bit with 1s
   def sb   = "b0001000".U
   def sh   = "b0001001".U
   def sw   = "b0001010".U

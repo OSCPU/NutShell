@@ -117,6 +117,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.out.bits(0).commits(FuType.csr) := csrOut
   io.out.bits(0).commits(FuType.mdu) := mduOut
   io.out.bits(0).commits(FuType.mou) := 0.U
+  io.out.bits(0).commits(FuType.fpu) := 0.U
 
   io.out.bits(1).commits(FuType.alu) := alu2Out
 

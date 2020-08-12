@@ -31,6 +31,8 @@ trait HasNutCoreParameter {
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = false
+  val HasFPU = true
+  require(HasFPU && !EnableOutOfOrderExec, "not supported!")
 }
 
 trait HasNutCoreConst extends HasNutCoreParameter {
