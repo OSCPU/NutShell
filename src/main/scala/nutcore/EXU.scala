@@ -140,12 +140,14 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.in.ready := !io.in.valid || io.out.fire()
 
   io.forward(0).valid := io.in.valid
+  io.forward(0).wb.fpWen := false.B //TODO: support forward for fpu
   io.forward(0).wb.rfWen := io.in.bits(0).ctrl.rfWen
   io.forward(0).wb.rfDest := io.in.bits(0).ctrl.rfDest
   io.forward(0).wb.rfData := Mux(alu.io.out.fire(), aluOut, lsuOut)
   io.forward(0).fuType := io.in.bits(0).ctrl.fuType
 
   io.forward(1).valid := pipeline2valid
+  io.forward(1).wb.fpWen := false.B
   io.forward(1).wb.rfWen := io.in.bits(1).ctrl.rfWen
   io.forward(1).wb.rfDest := io.in.bits(1).ctrl.rfDest
   io.forward(1).wb.rfData := alu2Out

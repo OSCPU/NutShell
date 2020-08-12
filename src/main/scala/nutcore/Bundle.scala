@@ -22,10 +22,12 @@ import chisel3.util._
 class CtrlSignalIO extends NutCoreBundle {
   val src1Type = Output(SrcType())
   val src2Type = Output(SrcType())
+  val src3Type = Output(SrcType())
   val fuType = Output(FuType())
   val fuOpType = Output(FuOpType())
   val rfSrc1 = Output(UInt(5.W))
   val rfSrc2 = Output(UInt(5.W))
+  val rfSrc3 = Output(UInt(5.W))
   val rfWen = Output(Bool())
   val fpWen = Output(Bool())
   val rfDest = Output(UInt(5.W))
@@ -69,6 +71,7 @@ class DecodeIO extends NutCoreBundle {
 
 class WriteBackIO extends NutCoreBundle {
   val rfWen = Output(Bool())
+  val fpWen = Output(Bool())
   val rfDest = Output(UInt(5.W))
   val rfData = Output(UInt(XLEN.W))
 }

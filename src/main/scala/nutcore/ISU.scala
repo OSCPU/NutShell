@@ -40,8 +40,11 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   val rfDest1 = io.in(0).bits.ctrl.rfDest
   val rfDest2 = io.in(1).bits.ctrl.rfDest
 
-  def isDepend(rfSrc: UInt, rfDest: UInt, wen: Bool): Bool = (rfSrc =/= 0.U) && (rfSrc === rfDest) && wen
-  def isDepend2(rfSrc: UInt, rfDest1: UInt, wen1: Bool, rfDest2: UInt, wen2: Bool): Bool = (rfSrc =/= 0.U) && ((rfSrc === rfDest1) && wen1 || (rfSrc === rfDest2) && wen2)
+  def isDepend(rfSrc: UInt, rfDest: UInt, wen: Bool): Bool =
+    (rfSrc =/= 0.U) && (rfSrc === rfDest) && wen
+
+  def isDepend2(rfSrc: UInt, rfDest1: UInt, wen1: Bool, rfDest2: UInt, wen2: Bool): Bool =
+    (rfSrc =/= 0.U) && ((rfSrc === rfDest1) && wen1 || (rfSrc === rfDest2) && wen2)
 
   val enablePipeline2 = EnableSuperScalarExec.B
 
@@ -131,20 +134,82 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   {
     printf("[ISU] ForwardDat: %x %x %x %x %x %x\n", out1_1ForwardDataEX, out1_1ForwardDataWB, rf.read(rfSrc1), out1_2ForwardDataEX, out1_2ForwardDataWB, rf.read(rfSrc2))
   }
+
+  val (fpCanIssue, fpDataVec) =  if(HasFPU){
+
+    val fsb = new ScoreBoard(hasZero = false)
+    val fpr = new RegFile(hasZero = false)
+
+    val wb = io.wb(0)
+    val forward = io.forward(0)
+    val in = io.in(0)
+
+    val forwardFpWen = forward.valid && forward.wb.fpWen
+    when(wb.fpWen){
+      fpr.write(wb.rfDest, wb.rfData)
+    }
+
+    val fsbClearMask = Mux(
+      wb.fpWen && !isDepend(wb.rfDest, forward.wb.rfDest, forwardFpWen),
+      fsb.mask(wb.rfDest),
+      0.U(NRReg.W)
+    )
+    val fsbSetMask = Mux(io.out.fire() && in.bits.ctrl.fpWen, fsb.mask(rfDest1), 0.U)
+
+    when (io.flush) {
+      fsb.update(0.U, Fill(NRReg, 1.U(1.W)))
+    }.otherwise {
+      fsb.update(fsbSetMask, fsbClearMask)
+    }
+
+    val (fpSrc1,fpSrc2,fpSrc3) = (rfSrc1, rfSrc2, in.bits.ctrl.rfSrc3)
+    val srcTuple = Seq(
+      fpSrc1, fpSrc2, fpSrc3
+    ).zip(Seq(
+      in.bits.ctrl.src1Type,
+      in.bits.ctrl.src2Type,
+      in.bits.ctrl.src3Type
+    ))
+
+    val dataVec = Array.fill(3)(Wire(UInt(XLEN.W)))
+
+    val rdyVec = srcTuple.zipWithIndex.map({
+      case ((src, t), i) =>
+        val dependEX = isDepend(src, forward.wb.rfDest, forwardFpWen)
+        val dependWB = isDepend(src, wb.rfDest, wb.fpWen)
+        val forwardEX = dependEX && !dontForward1
+        val forwardWB = dependWB && Mux(dontForward1, !dependEX, true.B)
+        dataVec(i) := MuxCase(fpr.read(src),Seq(
+          forwardEX -> forward.wb.rfData,
+          forwardWB -> wb.rfData
+        ))
+        (!fsb.busy(src) || forwardEX || forwardWB) || (t =/= SrcType.fp)
+    })
+
+    val canFire = rdyVec.reduce(_ && _)
+    (canFire, dataVec)
+  } else (true.B, Array.fill(3)(DontCare))
+
   // out1
   io.out.bits(0).data.src1 := Mux1H(List(
+    (io.in(0).bits.ctrl.src1Type === SrcType.fp) -> fpDataVec(0),
     (io.in(0).bits.ctrl.src1Type === SrcType.pc) -> SignExt(io.in(0).bits.cf.pc, AddrBits),
     src1ForwardNextCycle -> out1_1ForwardDataEX, //io.forward.wb.rfData,
     (src1Forward && !src1ForwardNextCycle) -> out1_1ForwardDataWB, //io.wb.rfData,
     ((io.in(0).bits.ctrl.src1Type =/= SrcType.pc) && !src1ForwardNextCycle && !src1Forward) -> rf.read(rfSrc1)
   ))
   io.out.bits(0).data.src2 := Mux1H(List(
+    (io.in(0).bits.ctrl.src2Type === SrcType.fp) -> fpDataVec(1),
     (io.in(0).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(0).bits.data.imm,
     src2ForwardNextCycle -> out1_2ForwardDataEX, //io.forward.wb.rfData,
     (src2Forward && !src2ForwardNextCycle) -> out1_2ForwardDataWB, //io.wb.rfData,
     ((io.in(0).bits.ctrl.src2Type === SrcType.reg) && !src2ForwardNextCycle && !src2Forward) -> rf.read(rfSrc2)
   ))
-  io.out.bits(0).data.imm  := io.in(0).bits.data.imm
+  io.out.bits(0).data.imm  := Mux(
+    io.in(0).bits.ctrl.src3Type===SrcType.fp,
+    fpDataVec(2),
+    io.in(0).bits.data.imm
+  )
 
   io.out.bits(0).cf <> io.in(0).bits.cf
   io.out.bits(0).ctrl := io.in(0).bits.ctrl

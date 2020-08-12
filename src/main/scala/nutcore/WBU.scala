@@ -29,13 +29,20 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   })
 
   val commitPipeline2 = io.in.valid && io.in.bits(1).decode.pipeline2 && !io.redirect.valid
-  io.wb(0).rfWen := io.in.bits(0).decode.ctrl.rfWen && io.in.valid
-  io.wb(0).rfDest := io.in.bits(0).decode.ctrl.rfDest
-  io.wb(0).rfData := io.in.bits(0).commits(io.in.bits(0).decode.ctrl.fuType)
 
+  def do_wb(src: CommitIO, dst: WriteBackIO) = {
+    dst.fpWen := src.decode.ctrl.fpWen && io.in.valid
+    dst.rfWen := src.decode.ctrl.rfWen && io.in.valid
+    dst.rfDest := src.decode.ctrl.rfDest
+    dst.rfData := src.commits(src.decode.ctrl.fuType)
+  }
+
+  for((i, o) <- io.in.bits.zip(io.wb)){
+    do_wb(i, o)
+  }
+  // override rfWen
   io.wb(1).rfWen := io.in.bits(1).decode.ctrl.rfWen && commitPipeline2
-  io.wb(1).rfDest := io.in.bits(1).decode.ctrl.rfDest
-  io.wb(1).rfData := io.in.bits(1).commits(io.in.bits(1).decode.ctrl.fuType)
+
   if(!EnableSuperScalarExec){ io.wb(1).rfWen := false.B }
 
   io.in.ready := true.B
