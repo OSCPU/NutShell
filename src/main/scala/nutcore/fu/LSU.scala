@@ -854,7 +854,8 @@ class LSU extends NutCoreModule with HasLSUConst {
       LSUOpType.ld   -> SignExt(rdataSel(63, 0), XLEN),
       LSUOpType.lbu  -> ZeroExt(rdataSel(7, 0) , XLEN),
       LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), XLEN),
-      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN)
+      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN),
+      LSUOpType.flw  -> fpu.boxF32ToF64(rdataSel(31, 0))
   ))
   val atomDataPartialLoad = Mux(moq(moqidxResp).size(0), SignExt(rdataSel(63, 0), XLEN), SignExt(rdataSel(31, 0), XLEN))
 

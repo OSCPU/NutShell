@@ -1,5 +1,7 @@
-import mill._, scalalib._
+import mill._
+import scalalib._
 import coursier.maven.MavenRepository
+import os.Path
 
 object CustomZincWorkerModule extends ZincWorkerModule {
   def repositories() = super.repositories ++ Seq(
@@ -31,7 +33,11 @@ trait HasChisel3 extends ScalaModule {
 
 trait HasChiselTests extends CrossSbtModule  {
   object test extends Tests {
-    override def ivyDeps = Agg(ivy"org.scalatest::scalatest:3.0.4", ivy"edu.berkeley.cs::chisel-iotesters:1.2+")
+    override def ivyDeps = Agg(
+      ivy"org.scalatest::scalatest:3.0.4",
+      ivy"edu.berkeley.cs::chisel-iotesters:1.2+",
+      ivy"edu.berkeley.cs::chiseltest:0.2.1"
+    )
     def testFrameworks = Seq("org.scalatest.tools.Framework")
   }
 }
@@ -43,8 +49,15 @@ trait HasMacroParadise extends ScalaModule {
   def compileIvyDeps = macroPlugins
 }
 
+object FPU extends CrossSbtModule with HasChisel3 with HasChiselTests {
+  override def millSourcePath = super.millSourcePath / 'FPU
+  def crossScalaVersion = "2.11.12"
+}
+
 object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests with HasXsource211 with HasMacroParadise {
   def zincWorker = CustomZincWorkerModule
   def crossScalaVersion = "2.11.12"
+
+  override def moduleDeps = super.moduleDeps ++ Seq(FPU)
 }
 
