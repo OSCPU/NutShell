@@ -19,9 +19,9 @@ package nutcore
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
-
 import utils._
 import bus.simplebus._
+import nutcore.fu.FPU
 import top.Settings
 
 class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
@@ -92,11 +92,39 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   mou.access(valid = fuValids(FuType.mou), src1 = src1, src2 = src2, func = fuOpType)
   mou.io.cfIn := io.in.bits(0).cf
   mou.io.out.ready := true.B
+
+  val (fpuOut, fpuOutValid) = if(HasFPU) {
+    val fpu = Module(new FPU)
+    fpu.io.out.ready := true.B
+    csr.io.fpu_csr <> fpu.io.fpu_csr
+    fpu.io.fpWen := io.in.bits(0).ctrl.fpWen
+    fpu.io.inputFunc := io.in.bits(0).ctrl.fpuIOFunc.head(1)
+    fpu.io.outputFunc := io.in.bits(0).ctrl.fpuIOFunc.tail(1)
+    fpu.io.instr := io.in.bits(0).cf.instr
+    (
+      fpu.access( // fpu result
+        fuValids(FuType.fpu),
+        src1, src2, io.in.bits(0).data.imm, io.in.bits(0).ctrl.fuOpType
+      ),
+      fpu.io.out.valid
+    )
+  } else {
+    csr.io.fpu_csr <> DontCare
+    (0.U, false.B)
+  }
   
   io.out.bits(1) := DontCare
   io.out.bits(0).decode := DontCare
   (io.out.bits(0).decode.ctrl, io.in.bits(0).ctrl) match { case (o, i) =>
-    o.rfWen := i.rfWen && (!lsuTlbPF && !lsu.io.loadAddrMisaligned && !lsu.io.storeAddrMisaligned || !fuValids(FuType.lsu)) && !(csr.io.wenFix && fuValids(FuType.csr))
+    val canWb = (
+      !lsuTlbPF &&
+        !lsu.io.loadAddrMisaligned &&
+        !lsu.io.storeAddrMisaligned ||
+        !fuValids(FuType.lsu)
+      ) && !(csr.io.wenFix && fuValids(FuType.csr))
+
+    o.fpWen := i.fpWen && canWb
+    o.rfWen := i.rfWen && canWb
     o.rfDest := i.rfDest
     o.fuType := i.fuType
   }
@@ -125,7 +153,8 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   // FIXME: should handle io.out.ready == false
   io.out.valid := io.in.valid && MuxLookup(fuType, true.B, List(
     FuType.lsu -> lsu.io.out.valid,
-    FuType.mdu -> mdu.io.out.valid
+    FuType.mdu -> mdu.io.out.valid,
+    FuType.fpu -> fpuOutValid
   ))
 
   io.out.bits(0).commits(FuType.alu) := aluOut
@@ -133,14 +162,15 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.out.bits(0).commits(FuType.csr) := csrOut
   io.out.bits(0).commits(FuType.mdu) := mduOut
   io.out.bits(0).commits(FuType.mou) := 0.U
-  io.out.bits(0).commits(FuType.fpu) := 0.U
+  io.out.bits(0).commits(FuType.fpu) := fpuOut
+
 
   io.out.bits(1).commits(FuType.alu) := alu2Out
 
   io.in.ready := !io.in.valid || io.out.fire()
 
   io.forward(0).valid := io.in.valid
-  io.forward(0).wb.fpWen := false.B //TODO: support forward for fpu
+  io.forward(0).wb.fpWen := io.in.bits(0).ctrl.fpWen
   io.forward(0).wb.rfWen := io.in.bits(0).ctrl.rfWen
   io.forward(0).wb.rfDest := io.in.bits(0).ctrl.rfDest
   io.forward(0).wb.rfData := Mux(alu.io.out.fire(), aluOut, lsuOut)

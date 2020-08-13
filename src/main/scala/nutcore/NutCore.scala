@@ -49,7 +49,7 @@ trait HasNutCoreParameter {
   val EnablePerfCnt = false
   val EnableRVC = Settings.get("EnableRVC")
   val HasFPU = true
-  require(HasFPU && !EnableOutOfOrderExec, "not supported!")
+  require(!(HasFPU && EnableOutOfOrderExec), "not supported!")
 }
 
 trait HasNutCoreConst extends HasNutCoreParameter {
