@@ -342,22 +342,22 @@ class IFU_inorder extends NutCoreModule with HasResetVector {
 
   val bp1 = Module(new BPU3)
 
-  val lateJump = bp1.io.lateJump
-  val lateJumpLatch = RegInit(false.B) 
+  val crosslineJump = bp1.io.crosslineJump
+  val crosslineJumpLatch = RegInit(false.B) 
   when(pcUpdate || bp1.io.flush) {
-    lateJumpLatch := Mux(bp1.io.flush, false.B, lateJump && !lateJumpLatch)
+    crosslineJumpLatch := Mux(bp1.io.flush, false.B, crosslineJump && !crosslineJumpLatch)
   }
-  val lateJumpTarget = RegEnable(bp1.io.out.target, lateJump)
-  val lateJumpForceSeq = lateJump && bp1.io.out.valid
-  val lateJumpForceTgt = lateJumpLatch && !bp1.io.flush
+  val crosslineJumpTarget = RegEnable(bp1.io.out.target, crosslineJump)
+  val crosslineJumpForceSeq = crosslineJump && bp1.io.out.valid
+  val crosslineJumpForceTgt = crosslineJumpLatch && !bp1.io.flush
 
   // predicted next pc
-  val pnpc = Mux(lateJump, snpc, bp1.io.out.target)
+  val pnpc = Mux(crosslineJump, snpc, bp1.io.out.target)
   val pbrIdx = bp1.io.brIdx
-  val npc = Mux(io.redirect.valid, io.redirect.target, Mux(lateJumpLatch, lateJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
-  val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(lateJumpLatch, false.B, Mux(lateJump, true.B, Mux(bp1.io.out.valid, false.B, true.B))))
+  val npc = Mux(io.redirect.valid, io.redirect.target, Mux(crosslineJumpLatch, crosslineJumpTarget, Mux(bp1.io.out.valid, pnpc, snpc)))
+  val npcIsSeq = Mux(io.redirect.valid , false.B, Mux(crosslineJumpLatch, false.B, Mux(crosslineJump, true.B, Mux(bp1.io.out.valid, false.B, true.B))))
   // Debug(){
-  //   printf("[NPC] %x %x %x %x %x %x\n",lateJumpLatch, lateJumpTarget, lateJump, bp1.io.out.valid, pnpc, snpc)
+  //   printf("[NPC] %x %x %x %x %x %x\n",crosslineJumpLatch, crosslineJumpTarget, crosslineJump, bp1.io.out.valid, pnpc, snpc)
   // }
 
   // val npc = Mux(io.redirect.valid, io.redirect.target, Mux(io.redirectRVC.valid, io.redirectRVC.target, snpc))
@@ -387,7 +387,7 @@ class IFU_inorder extends NutCoreModule with HasResetVector {
 
   Debug(){
     when(pcUpdate) {
-      printf("[IFUPC] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpn:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,lateJumpLatch,lateJumpTarget,lateJump,snpc,bp1.io.out.valid,pnpc)
+      printf("[IFUPC] pc:%x pcUpdate:%d npc:%x RedValid:%d RedTarget:%x LJL:%d LJTarget:%x LJ:%d snpc:%x bpValid:%d pnpn:%x \n",pc, pcUpdate, npc, io.redirect.valid,io.redirect.target,crosslineJumpLatch,crosslineJumpTarget,crosslineJump,snpc,bp1.io.out.valid,pnpc)
       //printf(p"[IFUIN] redirect: ${io.redirect} \n")
     }
   }
