@@ -3,17 +3,15 @@
 # ------------------------------------------------------------------
 
 LOG_BEGIN ?= 0
-LOG_END ?= -1
-LOG_LEVEL ?= OFF
-# Valid LOG_LEVELs are: ALL, DEBUG, INFO, WARN, ERROR, OFF
+LOG_END ?= 0
 
-ARCH = ARCH=riscv64-nutshell
+ARCH = ARCH=riscv64-noop
 # ------------------------------------------------------------------
 
 SINGLETEST = recursion
 RVTEST_TARGET = towers
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
-EMU_ARGS = LOG_BEGIN=$(LOG_BEGIN) LOG_END=$(LOG_END) LOG_LEVEL=$(LOG_LEVEL)
+EMU_ARGS = LOG_BEGIN=$(LOG_BEGIN) LOG_END=$(LOG_END)
 CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
 MB_RESULT = $(shell cat microbench.log | grep IPC)
 MBT_RESULT = $(shell cat microbench-train.log | grep IPC)
@@ -142,3 +140,9 @@ disassemble-freertos:
 disassemble-xv6:
 	cp $(XV6_HOME)/build/code.txt ./d-xv6.log
 
+# ------------------------------------------------------------------
+# chore
+# ------------------------------------------------------------------
+
+clean:
+	$(MAKE) -C .. clean
