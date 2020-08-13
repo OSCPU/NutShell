@@ -693,6 +693,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     priviledgeMode := mstatusOld.mpp
     mstatusNew.pie.m := true.B
     mstatusNew.mpp := ModeU
+    mstatusNew.mprv := 0.U
     mstatus := mstatusNew.asUInt
     lr := false.B
     retTarget := mepc(VAddrBits-1, 0)
@@ -707,6 +708,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     mstatusNew.pie.s := true.B
     mstatusNew.spp := ModeU
     mstatus := mstatusNew.asUInt
+    mstatusNew.mprv := 0.U
     lr := false.B
     retTarget := sepc(VAddrBits-1, 0)
   }
