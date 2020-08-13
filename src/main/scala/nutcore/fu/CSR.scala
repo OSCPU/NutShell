@@ -292,7 +292,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // | mpp  | 00 |
   // | hpp  | 00 |
   // | spp  | 0 |
-  // | pie  | 0000 |
+  // | pie  | 0000 | pie.h is used as UBE
   // | ie   | 0000 | uie hardlinked to 0, as N ext is not implemented
   val mstatusStruct = mstatus.asTypeOf(new MstatusStruct)
   def mstatusUpdateSideEffect(mstatus: UInt): UInt = {
@@ -300,6 +300,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val mstatusNew = Cat(mstatusOld.fs === "b11".U, mstatus(XLEN-2, 0))
     mstatusNew
   }
+  val mstatusMask = ~ZeroExt((
+    GenMask(XLEN-2, 38) | GenMask(31, 23) | GenMask(10, 9) | GenMask(2) |
+    GenMask(37) | // MBE
+    GenMask(36) | // SBE
+    GenMask(6)    // UBE
+  ), 64)
 
   val medeleg = RegInit(UInt(XLEN.W), 0.U)
   val mideleg = RegInit(UInt(XLEN.W), 0.U)
@@ -424,7 +430,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
     // Machine Trap Setup
     // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
-    MaskedRegMap(Mstatus, mstatus, "hffffffffffffffff".U, mstatusUpdateSideEffect),
+    MaskedRegMap(Mstatus, mstatus, mstatusMask, mstatusUpdateSideEffect, mstatusMask),
     MaskedRegMap(Misa, misa), // now MXL, EXT is not changeable
     MaskedRegMap(Medeleg, medeleg, "hbbff".U),
     MaskedRegMap(Mideleg, mideleg, "h222".U),
