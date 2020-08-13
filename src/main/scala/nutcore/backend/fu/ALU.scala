@@ -1,3 +1,19 @@
+/**************************************************************************************
+* Copyright (c) 2020 Institute of Computing Technology, CAS
+* Copyright (c) 2020 University of Chinese Academy of Sciences
+* 
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2. 
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2 
+* 
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
+* FIT FOR A PARTICULAR PURPOSE.  
+*
+* See the Mulan PSL v2 for more details.  
+***************************************************************************************/
+
 package nutcore
 
 import chisel3._
@@ -5,6 +21,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import top.Settings
 
 object ALUOpType {
   def add  = "b1000000".U
@@ -66,7 +83,6 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
     io.out.bits
   }
 
-  // val isAdderSub = (func =/= ALUOpType.add) && (func =/= ALUOpType.addw) && !ALUOpType.isJump(func)
   val isAdderSub = !ALUOpType.isAdd(func)
   val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
   val xorRes = src1 ^ src2
@@ -98,16 +114,11 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
 
   val isBranch = ALUOpType.isBranch(func)
   val isBru = ALUOpType.isBru(func)
-  // val pcPlus2 = ALUOpType.pcPlus2(func)
   val taken = LookupTree(ALUOpType.getBranchType(func), branchOpTable) ^ ALUOpType.isBranchInvert(func)
   val target = Mux(isBranch, io.cfIn.pc + io.offset, adderRes)(VAddrBits-1,0)
-  val predictWrong = Mux(!taken && isBranch, io.cfIn.brIdx, !io.cfIn.brIdx || (io.redirect.target =/= io.cfIn.pnpc))
-  // val predictWrong = (io.redirect.target =/= io.cfIn.pnpc)
-  val isRVC = io.cfIn.isRVC
-  // when(!(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)){
-  //   printf("[ERROR] io.cfIn.instr %x\n", io.cfIn.instr)
-  // }
-  assert(io.cfIn.instr(1,0) === "b11".U || io.cfIn.isRVC || !valid)
+  val predictWrong = Mux(!taken && isBranch, io.cfIn.brIdx(0), !io.cfIn.brIdx(0) || (io.redirect.target =/= io.cfIn.pnpc))
+  val isRVC = (io.cfIn.instr(1,0) =/= "b11".U)
+  assert(io.cfIn.instr(1,0) === "b11".U || isRVC || !valid)
   when(valid){
     when((io.cfIn.instr(1,0) === "b11".U) =/= !isRVC){
       printf("[ERROR] pc %x inst %x rvc %x\n",io.cfIn.pc, io.cfIn.instr, isRVC)
@@ -122,9 +133,6 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   // may be can be moved to ISU to calculate pc + 4
   // this is actually for jal and jalr to write pc + 4/2 to rd
   io.out.bits := Mux(isBru, Mux(!isRVC, SignExt(io.cfIn.pc, AddrBits) + 4.U, SignExt(io.cfIn.pc, AddrBits) + 2.U), aluRes)
-  // when(pcPlus2 && isBru){
-  //   printf("CJALR %x %x \n ", io.cfIn.instr, io.cfIn.pc)
-  // }
 
   Debug(){
     when(valid && isBru){
