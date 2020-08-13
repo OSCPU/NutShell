@@ -21,7 +21,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 import utils._
 import bus.simplebus._
-import nutcore.fu.FPU
+import nutcore.fu.{FPU, FpuCsrIO}
 import top.Settings
 
 class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
@@ -79,6 +79,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   csr.io.cfIn.exceptionVec(loadAddrMisaligned) := lsu.io.loadAddrMisaligned
   csr.io.cfIn.exceptionVec(storeAddrMisaligned) := lsu.io.storeAddrMisaligned
   csr.io.instrValid := io.in.valid && !io.flush
+  csr.io.dirty_fs := io.in.valid && !io.flush && io.in.bits(0).ctrl.fpWen
   csr.io.isBackendException := false.B
   io.out.bits(0).intrNO := csr.io.intrNO
   csr.io.isBackendException := false.B

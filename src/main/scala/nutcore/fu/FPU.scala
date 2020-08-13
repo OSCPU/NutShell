@@ -23,7 +23,6 @@ class FpInstr extends NutCoreBundle {
 class FpuCsrIO extends NutCoreBundle {
   val fflags = Output(new Fflags)
   val isIllegal = Output(Bool())
-  val dirty_fs = Output(Bool())
   val frm = Input(UInt(3.W))
 }
 
@@ -122,6 +121,5 @@ class FPU extends NutCoreModule{
 
   //TODO: check illegal rounding mode exception
   io.fpu_csr.isIllegal := false.B
-  io.fpu_csr.dirty_fs := io.in.fire() && io.fpWen
   io.fpu_csr.fflags := Mux(io.out.valid, subModuleOutput.bits.fflags, 0.U.asTypeOf(new Fflags))
 }

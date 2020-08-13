@@ -178,6 +178,7 @@ class CSRIO extends FunctionUnitIO {
   val cfIn = Flipped(new CtrlFlowIO)
   val redirect = new RedirectIO
   val fpu_csr = Flipped(new FpuCsrIO)
+  val dirty_fs = Input(Bool())
   // for exception check
   val instrValid = Input(Bool())
   val isBackendException = Input(Bool())
@@ -521,7 +522,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     fcsr := fflags_wfn(io.fpu_csr.fflags.asUInt())
   }
   // set fs and sd in mstatus
-  when(csrw_dirty_fp_state || io.fpu_csr.dirty_fs){
+  when(csrw_dirty_fp_state || io.dirty_fs){
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     mstatusNew.fs := "b11".U
     mstatusNew.sd := true.B
