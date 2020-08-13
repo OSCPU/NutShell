@@ -256,7 +256,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val mie = RegInit(0.U(XLEN.W))
   val mipWire = WireInit(0.U.asTypeOf(new Interrupt))
   val mipReg  = RegInit(0.U.asTypeOf(new Interrupt).asUInt)
-  val mipFixMask = "h77f".U
+  val mipFixMask = GenMask(9) | GenMask(5) | GenMask(1)
   val mip = (mipWire.asUInt | mipReg).asTypeOf(new Interrupt)
 
   def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
