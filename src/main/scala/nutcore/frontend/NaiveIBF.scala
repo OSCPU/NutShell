@@ -22,7 +22,8 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 
-class IDU1 extends NutCoreModule with HasInstrType with HasExceptionNO {
+// 1-width Naive Instruction Align Buffer
+class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExceptionNO {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new CtrlFlowIO)
@@ -186,7 +187,7 @@ class IDU1 extends NutCoreModule with HasInstrType with HasExceptionNO {
   io.out.valid := io.in.valid && canGo
   io.in.ready := (!io.in.valid || (io.out.fire() && canIn) || loadNextInstline)
 
-  io.out.bits.exceptionVec := io.in.bits.exceptionVec/*.map(_ := false.B)*/ //Fix by zhangzifei from false.B
+  io.out.bits.exceptionVec := io.in.bits.exceptionVec
   io.out.bits.exceptionVec(instrPageFault) := io.in.bits.exceptionVec(instrPageFault) || specialIPFR && (state === s_waitnext_thenj || state === s_waitnext)
   io.out.bits.crossPageIPFFix := io.in.bits.exceptionVec(instrPageFault) && (state === s_waitnext_thenj || state === s_waitnext) && !specialIPFR
 }
