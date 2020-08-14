@@ -803,13 +803,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     "MexuBusy"    -> (0xb32, "perfCntCondMexuBusy"     ),
     "MloadStall"  -> (0xb33, "perfCntCondMloadStall"   ),
     "MstoreStall" -> (0xb34, "perfCntCondMstoreStall"  ),
-    "ISUIssue"    -> (0xb35, "perfCntCondISUIssue"     ),
-    "ISU1Issue"   -> (0xb36, "perfCntCondISU1Issue"    ),
-    "ISU2Issue"   -> (0xb37, "perfCntCondISU2Issue"    ),
-    "Src2NotReady"-> (0xb38, "perfCntCondSrc2NotReady" ),
-    "Dst2Conflict"-> (0xb39, "perfCntCondDst2Conflict" ),
-    "Inst2NotALU" -> (0xb40, "perfCntCondInst2NotALU"  ),
-    "Inst2NoReady"-> (0xb41, "perfCntCondInst2NotReady")
+    "ISUIssue"    -> (0xb35, "perfCntCondISUIssue"     )
   )
 
   val outOfOrderPerfCntList = Map(

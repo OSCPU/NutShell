@@ -26,6 +26,7 @@ import utils._
 import top.Settings
 
 trait HasNutCoreParameter {
+  // General Parameter for NutShell
   val XLEN = if (Settings.get("IsRV32")) 32 else 64
   val HasMExtension = true
   val HasCExtension = true
@@ -40,14 +41,14 @@ trait HasNutCoreParameter {
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN
   val DataBytes = DataBits / 8
-  val EnableMultiCyclePredictor = false
-  val EnableOutOfOrderMemAccess = false
-  val EnableMultiIssue = Settings.get("EnableMultiIssue")
-  val EnableSuperScalarExec = Settings.get("EnableSuperScalarExec")
-  val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = true
   val EnableRVC = Settings.get("EnableRVC")
+  // Parameter for Argo's OoO backend
+  val EnableMultiIssue = Settings.get("EnableMultiIssue")
+  val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
+  val EnableMultiCyclePredictor = false // false unless a customized condition branch predictor is included
+  val EnableOutOfOrderMemAccess = false // enable out of order mem access will improve OoO backend's performance
 }
 
 trait HasNutCoreConst extends HasNutCoreParameter {

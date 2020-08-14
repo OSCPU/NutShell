@@ -70,7 +70,6 @@ class DecodeIO extends NutCoreBundle {
   val cf = new CtrlFlowIO
   val ctrl = new CtrlSignalIO
   val data = new DataSrcIO
-  val pipeline2 = Output(Bool())
 }
 
 class WriteBackIO extends NutCoreBundle {
