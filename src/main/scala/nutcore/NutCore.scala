@@ -26,33 +26,33 @@ import utils._
 import top.Settings
 
 trait HasNutCoreParameter {
+  // General Parameter for NutShell
   val XLEN = if (Settings.get("IsRV32")) 32 else 64
   val HasMExtension = true
-  val HasCExtension = true
+  val HasCExtension = Settings.get("EnableRVC")
   val HasDiv = true
   val HasIcache = Settings.get("HasIcache")
   val HasDcache = Settings.get("HasDcache")
   val HasITLB = Settings.get("HasITLB")
   val HasDTLB = Settings.get("HasDTLB")
-  val EnableStoreQueue = false
   val AddrBits = 64 // AddrBits is used in some cases
   val VAddrBits = if (Settings.get("IsRV32")) 32 else 39 // VAddrBits is Virtual Memory addr bits
   val PAddrBits = 32 // PAddrBits is Phyical Memory addr bits
   val AddrBytes = AddrBits / 8 // unused
   val DataBits = XLEN
   val DataBytes = DataBits / 8
-  val EnableMultiCyclePredictor = false
-  val EnableMultiIssue = Settings.get("EnableMultiIssue")
-  val EnableSuperScalarExec = Settings.get("EnableSuperScalarExec")
-  val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = true
-  val EnableRVC = Settings.get("EnableRVC")
+  // Parameter for Argo's OoO backend
+  val EnableMultiIssue = Settings.get("EnableMultiIssue")
+  val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
+  val EnableMultiCyclePredictor = false // false unless a customized condition branch predictor is included
+  val EnableOutOfOrderMemAccess = false // enable out of order mem access will improve OoO backend's performance
 }
 
 trait HasNutCoreConst extends HasNutCoreParameter {
   val CacheReadWidth = 8
-  val ICacheUserBundleWidth = VAddrBits*2 + 9 // TODO: this const depends on VAddrBits
+  val ICacheUserBundleWidth = VAddrBits*2 + 9
   val DCacheUserBundleWidth = 16
   val IndependentBru = if (Settings.get("EnableOutOfOrderExec")) true else false
 }
@@ -62,8 +62,11 @@ abstract class NutCoreBundle extends Bundle with HasNutCoreParameter with HasNut
 
 case class NutCoreConfig (
   FPGAPlatform: Boolean = true,
-  EnableDebug: Boolean = Settings.get("EnableDebug")
+  EnableDebug: Boolean = Settings.get("EnableDebug"),
+  EnhancedLog: Boolean = true 
 )
+// Enable EnhancedLog will slow down simulation, 
+// but make it possible to control debug log using emu parameter
 
 object AddressSpace extends HasNutCoreParameter {
   // (start, size)

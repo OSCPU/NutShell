@@ -92,12 +92,18 @@ $(REF_SO):
 endif
 
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS) $(REF_SO)
-	CPPFLAGS=-DREF_SO=\\\"$(REF_SO)\\\" $(MAKE) -C $(dir $(EMU_MK)) -f $(abspath $(EMU_MK))
+	CPPFLAGS=-DREF_SO=\\\"$(REF_SO)\\\" $(MAKE) VM_PARALLEL_BUILDS=1 -C $(dir $(EMU_MK)) -f $(abspath $(EMU_MK))
 
 SEED = -s $(shell seq 1 10000 | shuf | head -n 1)
 
+# log will only be printed when (LOG_BEGIN<=GTimer<=LOG_END) && (LOG_LEVEL < loglevel)
+# use 'emu -h' to see more details
+LOG_BEGIN ?= 0
+LOG_END ?= 0
+LOG_LEVEL ?= ALL
+
 emu: $(EMU)
-	@$(EMU) -i $(IMAGE) $(SEED)
+	@$(EMU) -i $(IMAGE) $(SEED) -b $(LOG_BEGIN) -e $(LOG_END) -v $(LOG_LEVEL)
 
 cache:
 	$(MAKE) emu IMAGE=Makefile

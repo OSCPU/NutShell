@@ -109,7 +109,7 @@ class Frontend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
   })
 
   val ifu  = Module(new IFU_inorder)
-  val idu1 = Module(new IDU1)
+  val ibf = Module(new NaiveRVCAlignBuffer)
   val idu  = Module(new IDU)
 
   def PipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
@@ -117,11 +117,11 @@ class Frontend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
     right <> FlushableQueue(left, isFlush,  entries = entries, pipe = pipe)
   }
 
-  PipelineConnect2(ifu.io.out, idu1.io.in, ifu.io.flushVec(0))
-  PipelineConnect(idu1.io.out, idu.io.in(0), idu.io.out(0).fire(), ifu.io.flushVec(1))
+  PipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
+  PipelineConnect(ibf.io.out, idu.io.in(0), idu.io.out(0).fire(), ifu.io.flushVec(1))
   idu.io.in(1) := DontCare
 
-  idu1.io.flush := ifu.io.flushVec(1)
+  ibf.io.flush := ifu.io.flushVec(1)
   io.out <> idu.io.out
   io.redirect <> ifu.io.redirect
   io.flushVec <> ifu.io.flushVec

@@ -28,7 +28,6 @@ object DefaultSettings {
     "HasL2cache" -> true,
     "HasPrefetch" -> true,
     "EnableMultiIssue" -> false,
-    "EnableSuperScalarExec" -> false,
     "EnableOutOfOrderExec" -> false,
     "HasDTLB" -> true,
     "HasITLB" -> true,
@@ -39,7 +38,7 @@ object DefaultSettings {
 
     "FPGAPlatform" -> false,
     "EnableILA" -> true,
-    "EnableDebug" -> false,
+    "EnableDebug" -> true,
     "EnableRVC" -> true
   )
 }
@@ -73,7 +72,6 @@ object PXIeSettings {
 object OOOSettings {
   def apply() = Map(
     "EnableMultiIssue" -> true,
-    "EnableSuperScalarExec" -> true,
     "EnableOutOfOrderExec" -> true
   )
 }

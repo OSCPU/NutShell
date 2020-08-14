@@ -29,6 +29,7 @@ trait HasIBUFConst{
   val ibufSize = ibufBitSize / instUnitWidth
 }
 
+// 2-width Instruction Align Buffer
 class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new InstFetchIO))

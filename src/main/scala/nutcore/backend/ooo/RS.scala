@@ -27,14 +27,13 @@ trait HasRSConst{
   val rsCommitWidth = 2
 }
 
-// Reservation Station
+// Reservation Station for Out Of Order Execution Backend
 class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priority: Boolean = false, checkpoint: Boolean = false, storeBarrier: Boolean = false, storeSeq: Boolean = false, name: String = "unnamedRS") extends NutCoreModule with HasRSConst with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
-    val brMaskIn = Input(UInt(robInstCapacity.W))
-    val brMaskOut = Output(UInt(robInstCapacity.W))
     val cdb = Vec(rsCommitWidth, Flipped(Valid(new OOCommitIO)))
+    val mispredictRec = Flipped(new MisPredictionRecIO)
     val flush = Input(Bool())
     val empty = Output(Bool())
     val updateCheckpoint = if (checkpoint) Some(Output(Valid(UInt(log2Up(size).W)))) else None
@@ -50,7 +49,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val valid   = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src1Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
   val src2Rdy = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
-  val brMask  = RegInit(VecInit(Seq.fill(rsSize)(0.U(robInstCapacity.W))))
+  val brMask  = RegInit(VecInit(Seq.fill(rsSize)(0.U(checkpointSize.W))))
   val prfSrc1 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val prfSrc2 = Reg(Vec(rsSize, UInt(prfAddrWidth.W)))
   val src1    = Reg(Vec(rsSize, UInt(XLEN.W)))
@@ -68,11 +67,11 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val forceDequeue = WireInit(false.B)
 
   def needMispredictionRecovery(brMask: UInt) = {
-    List.tabulate(CommitWidth)(i => (io.cdb(i).bits.decode.cf.redirect.valid && (io.cdb(i).bits.decode.cf.redirect.rtype === 1.U) && brMask(io.cdb(i).bits.prfidx))).foldRight(false.B)((sum, i) => sum | i)
+    io.mispredictRec.valid && io.mispredictRec.redirect.valid && brMask(io.mispredictRec.checkpoint)
   }
 
   def updateBrMask(brMask: UInt) = {
-    brMask & ~ List.tabulate(CommitWidth)(i => (UIntToOH(io.cdb(i).bits.prfidx) & Fill(robInstCapacity, io.cdb(i).valid))).foldRight(0.U)((sum, i) => sum | i)
+    brMask & ~ (UIntToOH(io.mispredictRec.checkpoint) & Fill(checkpointSize, io.mispredictRec.valid))
   }
 
   // Listen to Common Data Bus
@@ -115,7 +114,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     src2Rdy(enqueueSelect) := io.in.bits.src2Rdy
     src1(enqueueSelect) := io.in.bits.decode.data.src1
     src2(enqueueSelect) := io.in.bits.decode.data.src2
-    brMask(enqueueSelect) := io.brMaskIn
+    brMask(enqueueSelect) := io.in.bits.brMask
   }
 
   // RS dequeue
@@ -129,7 +128,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
 
   io.out.valid := rsReadygo // && validNext(dequeueSelect)
   io.out.bits := decode(dequeueSelect)
-  io.brMaskOut := brMask(dequeueSelect)
+  io.out.bits.brMask := brMask(dequeueSelect)
   io.out.bits.decode.data.src1 := src1(dequeueSelect)
   io.out.bits.decode.data.src2 := src2(dequeueSelect)
 
@@ -159,7 +158,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   // if an unpipelined fu can store uop itself, set `pipelined` to true (it behaves just like a pipelined FU)
   if(!pipelined){
     val fuValidReg = RegInit(false.B)
-    val brMaskPReg = RegInit(0.U(robInstCapacity.W))
+    val brMaskPReg = RegInit(0.U(checkpointSize.W))
     val fuFlushReg = RegInit(false.B)
     val fuDecodeReg = RegEnable(io.out.bits, io.out.fire())
     brMaskPReg := updateBrMask(brMaskPReg)
@@ -172,7 +171,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     when(io.commit.get){ fuFlushReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
-    io.brMaskOut := brMaskPReg
+    io.out.bits.brMask := brMaskPReg
     Debug(){
       printf("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire())
     }
@@ -254,17 +253,24 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     // val stMask = RegInit(VecInit(Seq.fill(rsSize)(VecInit(Seq.fill(robSize)(false.B)))))
     val needStore = Reg(Vec(rsSize, Bool()))
     val stMaskReg = RegInit(VecInit(Seq.fill(robSize)(false.B)))
-    val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
-      valid(i) &&
-      Mux(
-        needStore(i), 
-        !(priorityMask(i).asUInt.orR), // there is no other inst ahead
-        true.B
-      ) &&
-      !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
-    }))
-    dequeueSelect := OHToUInt(dequeueSelectVec)
-    io.out.valid := instRdy(dequeueSelect) && dequeueSelectVec(dequeueSelect)
+    if(EnableOutOfOrderMemAccess){
+      val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
+        valid(i) &&
+        Mux(
+          needStore(i), 
+          !(priorityMask(i).asUInt.orR), // there is no other inst ahead
+          true.B
+        ) &&
+        !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
+      }))
+      dequeueSelect := OHToUInt(dequeueSelectVec)
+      io.out.valid := instRdy(dequeueSelect) && dequeueSelectVec(dequeueSelect)
+    }else{
+      dequeueSelect := OHToUInt(List.tabulate(rsSize)(i => {
+        !priorityMask(i).asUInt.orR && valid(i)
+      }))
+      io.out.valid := instRdy(dequeueSelect) && !priorityMask(dequeueSelect).asUInt.orR && valid(dequeueSelect)
+    }
     // update priorityMask
     List.tabulate(rsSize)(i => 
       when(needMispredictionRecovery(brMask(i))){ 

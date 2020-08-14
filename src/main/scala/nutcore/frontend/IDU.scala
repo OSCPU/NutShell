@@ -35,7 +35,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   val instrType :: fuType :: fuOpType :: Nil = // insert Instructions.DecodeDefault when interrupt comes
     Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault) || io.out.bits.cf.exceptionVec(instrAccessFault), intr, dec)}
   // val instrType :: fuType :: fuOpType :: Nil = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
-  val isRVC = if (EnableRVC) instr(1,0) =/= "b11".U else false.B
+  val isRVC = if (HasCExtension) instr(1,0) =/= "b11".U else false.B
   val rvcImmType :: rvcSrc1Type :: rvcSrc2Type :: rvcDestType :: Nil =
     ListLookup(instr, CInstructions.DecodeDefault, CInstructions.CExtraDecodeTable) 
 
@@ -120,7 +120,8 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
     RVCInstr.ImmLUI   -> SignExt(Cat(instr(12), instr(6,2), 0.U(12.W)), XLEN),
     RVCInstr.ImmADDI  -> SignExt(Cat(instr(12), instr(6,2)), XLEN),
     RVCInstr.ImmADDI16SP-> SignExt(Cat(instr(12), instr(4,3), instr(5), instr(2), instr(6), 0.U(4.W)), XLEN),
-    RVCInstr.ImmADD4SPN-> ZeroExt(Cat(instr(10,7), instr(12,11), instr(5), instr(6), 0.U(2.W)), XLEN)
+    RVCInstr.ImmADD4SPN-> ZeroExt(Cat(instr(10,7), instr(12,11), instr(5), instr(6), 0.U(2.W)), XLEN),
+    RVCInstr.ImmCBREAK -> 1.U(XLEN.W)
     // ImmFLWSP  -> 
     // ImmFLDSP  -> 
   ))
@@ -139,26 +140,27 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   io.out.bits.ctrl.src2Type := src2Type
 
   val NoSpecList = Seq(
-    FuType.csr,
-    FuType.mou
+    FuType.csr
   )
 
   val BlockList = Seq(
+    FuType.mou
   )
 
   io.out.bits.ctrl.isNutCoreTrap := (instr(31,0) === NutCoreTrap.TRAP) && io.in.valid
-  io.out.bits.ctrl.noSpecExec := NoSpecList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
+  io.out.bits.ctrl.noSpecExec := NoSpecList.map(j => io.out.bits.ctrl.fuType === j).reduce(_ || _)
   io.out.bits.ctrl.isBlocked :=
   (
     io.out.bits.ctrl.fuType === FuType.lsu && LSUOpType.isAtom(io.out.bits.ctrl.fuOpType) ||
-    BlockList.map(j => io.out.bits.ctrl.fuType === j).foldRight(false.B)((sum, i) => sum | i)
+    BlockList.map(j => io.out.bits.ctrl.fuType === j).reduce(_ || _)
   )
 
   //output signals
-
   io.out.valid := io.in.valid
   io.in.ready := !io.in.valid || io.out.fire() && !hasIntr
   io.out.bits.cf <> io.in.bits
+  // fix c_break
+
 
   Debug(){
     when(io.out.fire()){printf("[IDU] issue: pc %x npc %x instr %x\n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr)}
