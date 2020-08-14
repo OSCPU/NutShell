@@ -29,7 +29,7 @@ trait HasNutCoreParameter {
   // General Parameter for NutShell
   val XLEN = if (Settings.get("IsRV32")) 32 else 64
   val HasMExtension = true
-  val HasCExtension = true
+  val HasCExtension = Settings.get("EnableRVC")
   val HasDiv = true
   val HasIcache = Settings.get("HasIcache")
   val HasDcache = Settings.get("HasDcache")
@@ -43,7 +43,6 @@ trait HasNutCoreParameter {
   val DataBytes = DataBits / 8
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = true
-  val EnableRVC = Settings.get("EnableRVC")
   // Parameter for Argo's OoO backend
   val EnableMultiIssue = Settings.get("EnableMultiIssue")
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
