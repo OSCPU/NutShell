@@ -99,7 +99,7 @@ SEED = -s $(shell seq 1 10000 | shuf | head -n 1)
 # log will only be printed when (LOG_BEGIN<=GTimer<=LOG_END) && (LOG_LEVEL < loglevel)
 # use 'emu -h' to see more details
 LOG_BEGIN ?= 0
-LOG_END ?= -1
+LOG_END ?= 0
 LOG_LEVEL ?= ALL
 
 emu: $(EMU)
