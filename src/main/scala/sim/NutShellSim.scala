@@ -102,7 +102,7 @@ class NutShellSimTop extends Module {
   log_level := io.logCtrl.log_level
 
   assert(log_begin <= log_end)
-  BoringUtils.addSource((GTimer() >= log_begin) && (GTimer() <= log_end), "DISPLAY_ENABLE")
+  BoringUtils.addSource((GTimer() >= log_begin) && (GTimer() < log_end), "DISPLAY_ENABLE")
 
   // make BoringUtils not report boring exception when EnableDebug is set to false
   val dummyWire = WireInit(false.B)
