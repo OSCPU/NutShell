@@ -3,8 +3,8 @@ import coursier.maven.MavenRepository
 
 object CustomZincWorkerModule extends ZincWorkerModule {
   def repositories() = super.repositories ++ Seq(
-    MavenRepository("https://oss.sonatype.org/content/repositories/releases"),
-    MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
+	  MavenRepository("https://maven.aliyun.com/repository/public"),
+    MavenRepository("https://maven.aliyun.com/repository/apache-snapshots")
   )  
 }
 
