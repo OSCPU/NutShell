@@ -1,19 +1,34 @@
-package xiangshan.cache
+/**************************************************************************************
+* Copyright (c) 2020 Institute of Computing Technology, CAS
+* Copyright (c) 2020 University of Chinese Academy of Sciences
+* 
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2. 
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2 
+* 
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
+* FIT FOR A PARTICULAR PURPOSE.  
+*
+* See the Mulan PSL v2 for more details.  
+***************************************************************************************/
 
-import chipsalliance.rocketchip.config.Parameters
+package nutcore
+
 import chisel3._
 import chisel3.util._
-import xiangshan._
-import utils._
 import chisel3.util.experimental.BoringUtils
-import xiangshan.backend.decode.XSTrap
-import xiangshan.mem._
-import chisel3.ExcitingUtils._
-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
-import freechips.rocketchip.tilelink.{TLClientNode, TLMasterParameters, TLMasterPortParameters}
 
-trait HasPtwConst extends HasTlbConst with MemoryOpConstants{
+import utils._
+import bus.simplebus._
+import top.Settings
+
+trait HasPtwConst extends HasTlbConst{
   val PtwWidth = 2
+  val PtwL1EntrySize = 16
+  val PtwL2EntrySize = 256
+  val TlbL2EntrySize = 512
 
   def MakeAddr(ppn: UInt, off: UInt) = {
     require(off.getWidth == 9)
@@ -25,9 +40,8 @@ trait HasPtwConst extends HasTlbConst with MemoryOpConstants{
   }
 }
 
-abstract class PtwBundle extends XSBundle with HasPtwConst
-abstract class PtwModule(outer: PTW) extends LazyModuleImp(outer)
-  with HasXSParameter with HasXSLog with HasPtwConst
+abstract class PtwBundle extends NutCoreBundle with HasPtwConst
+abstract class PtwModule extends NutCoreModule with HasPtwConst
 
 class PteBundle extends PtwBundle{
   val reserved  = UInt(pteResLen.W)
@@ -108,6 +122,7 @@ class PtwResp extends PtwBundle {
 
 class PtwIO extends PtwBundle {
   val tlb = Vec(PtwWidth, Flipped(new TlbPtwIO))
+  val mem = new SimpleBusUC()
 }
 
 object ValidHold {
@@ -130,20 +145,7 @@ object OneCycleValid {
   }
 }
 
-class PTW()(implicit p: Parameters) extends LazyModule {
-
-  val node = TLClientNode(Seq(TLMasterPortParameters.v1(
-    clients = Seq(TLMasterParameters.v1(
-      "ptw"
-    ))
-  )))
-
-  lazy val module = new PTWImp(this)
-}
-
-class PTWImp(outer: PTW) extends PtwModule(outer){
-
-  val (mem, edge) = outer.node.out.head
+class PTW extends PtwModule {
 
   val io = IO(new PtwIO)
 
@@ -152,7 +154,6 @@ class PTWImp(outer: PTW) extends PtwModule(outer){
   val arbChosen = RegEnable(arb.io.chosen, arb.io.out.fire())
   val req = RegEnable(arb.io.out.bits, arb.io.out.fire())
   val resp  = VecInit(io.tlb.map(_.resp))
-
 
   val valid = ValidHold(arb.io.out.fire(), resp(arbChosen).fire())
   val validOneCycle = OneCycleValid(arb.io.out.fire())
@@ -191,12 +192,14 @@ class PTWImp(outer: PTW) extends PtwModule(outer){
   val latch = Reg(new PtwResp)
 
   // mem alias
-  val memRdata = mem.d.bits.data
+  val mem = io.mem
+  val memRdata = mem.resp.bits.rdata
   val memPte = memRdata.asTypeOf(new PteBundle)
-  val memValid = mem.d.valid
-  val memRespFire = mem.d.fire()
-  val memReqReady = mem.a.ready
-  val memReqFire = mem.a.fire()
+  val memValid = mem.resp.valid
+  val memRespFire = mem.resp.fire()
+  val memReqReady = mem.req.ready
+  val memReqValid = mem.req.valid
+  val memReqFire = mem.req.fire()
 
   /*
    * tlbl2
@@ -249,8 +252,6 @@ class PTWImp(outer: PTW) extends PtwModule(outer){
   /*
    * fsm
    */
-  assert(!(tlbHit && (mem.a.valid || state===state_wait_resp))) // when tlb hit, should not req/resp.valid
-
   val notFound = WireInit(false.B)
   switch (state) {
     is (state_idle) {
@@ -312,17 +313,19 @@ class PTWImp(outer: PTW) extends PtwModule(outer){
    */
   val memAddr =  Mux(level===0.U, l1addr/*when l1Hit, DontCare, when l1miss, l1addr*/,
                  Mux(level===1.U, Mux(l2Hit, l3addr, l2addr)/*when l2Hit, l3addr, when l2miss, l2addr*/, l3addr))
-  val pteRead =  edge.Get(
-    fromSource = 0.U/*id*/,
-    toAddress  = memAddr,
-    lgSize     = log2Up(XLEN/8).U
-  )._2
-  mem.a.bits  := pteRead
-  mem.a.valid := state === state_req && 
+  mem.req.bits.apply(
+    addr = memAddr,
+    cmd = SimpleBusCmd.read,
+    size = "b11".U,
+    wdata = 0.U,
+    wmask = 0.U//,
+    // user := 0.U
+  )
+  mem.req.valid := state === state_req && 
                ((level===0.U && !tlbHit && !l1Hit) ||
                 (level===1.U && !l2Hit) ||
                 (level===2.U))
-  mem.d.ready := state === state_wait_resp
+  mem.resp.ready := state === state_wait_resp
 
   /*
    * resp
@@ -391,36 +394,17 @@ class PTWImp(outer: PTW) extends PtwModule(outer){
       }
     }
   }
-
-  if (!env.FPGAPlatform) {
-    ExcitingUtils.addSource(validOneCycle, "perfCntPtwReqCnt", Perf)
-    ExcitingUtils.addSource(valid, "perfCntPtwCycleCnt", Perf)
-    ExcitingUtils.addSource(valid && tlbHit && state===state_req && level===0.U, "perfCntPtwL2TlbHit", Perf)
-  }
-
   assert(level=/=3.U)
 
-  def PrintFlag(en: Bool, flag: Bool, nameEnable: String, nameDisable: String): Unit = {
-    when(flag) {
-      XSDebug(false, en, nameEnable)
-    }.otherwise {
-      XSDebug(false, en, nameDisable)
-    }
-  }
+  Debug(validOneCycle, p"**New Ptw Req from ${arbChosen}: (v:${validOneCycle} r:${arb.io.out.ready}) vpn:0x${Hexadecimal(req.vpn)}\n")
+  Debug(resp(arbChosen).fire(), p"**Ptw Resp to ${arbChosen}: (v:${resp(arbChosen).valid} r:${resp(arbChosen).ready}) entry:${resp(arbChosen).bits.entry} pf:${resp(arbChosen).bits.pf}\n")
 
-  XSDebug(validOneCycle, "**New Ptw Req from ")
-  PrintFlag(validOneCycle, arbChosen===0.U, "DTLB**:", "ITLB**:")
-  XSDebug(false, validOneCycle, p"(v:${validOneCycle} r:${arb.io.out.ready}) vpn:0x${Hexadecimal(req.vpn)}\n")
-  XSDebug(resp(arbChosen).fire(), "**Ptw Resp to ")
-  PrintFlag(resp(arbChosen).fire(), arbChosen===0.U, "DTLB**:\n", "ITLB**\n")
-  XSDebug(resp(arbChosen).fire(), p"(v:${resp(arbChosen).valid} r:${resp(arbChosen).ready}) entry:${resp(arbChosen).bits.entry} pf:${resp(arbChosen).bits.pf}\n")
+  Debug(sfence.valid, p"Sfence: sfence instr here ${sfence.bits}\n")
+  Debug(valid, p"CSR: ${csr}\n")
 
-  XSDebug(sfence.valid, p"Sfence: sfence instr here ${sfence.bits}\n")
-  XSDebug(valid, p"CSR: ${csr}\n")
+  Debug(valid, p"vpn2:0x${Hexadecimal(getVpnn(req.vpn, 2))} vpn1:0x${Hexadecimal(getVpnn(req.vpn, 1))} vpn0:0x${Hexadecimal(getVpnn(req.vpn, 0))}\n")
+  Debug(valid, p"state:${state} level:${level} tlbHit:${tlbHit} l1addr:0x${Hexadecimal(l1addr)} l1Hit:${l1Hit} l2addr:0x${Hexadecimal(l2addr)} l2Hit:${l2Hit}  l3addr:0x${Hexadecimal(l3addr)} memReq(v:${memReqValid} r:${memReqReady})\n")
 
-  XSDebug(valid, p"vpn2:0x${Hexadecimal(getVpnn(req.vpn, 2))} vpn1:0x${Hexadecimal(getVpnn(req.vpn, 1))} vpn0:0x${Hexadecimal(getVpnn(req.vpn, 0))}\n")
-  XSDebug(valid, p"state:${state} level:${level} tlbHit:${tlbHit} l1addr:0x${Hexadecimal(l1addr)} l1Hit:${l1Hit} l2addr:0x${Hexadecimal(l2addr)} l2Hit:${l2Hit}  l3addr:0x${Hexadecimal(l3addr)} memReq(v:${mem.a.valid} r:${mem.a.ready})\n")
-
-  XSDebug(memRespFire, p"mem req fire addr:0x${Hexadecimal(memAddr)}\n")
-  XSDebug(memRespFire, p"mem resp fire rdata:0x${Hexadecimal(mem.d.bits.data)} Pte:${memPte}\n")
+  Debug(memRespFire, p"mem req fire addr:0x${Hexadecimal(memAddr)}\n")
+  Debug(memRespFire, p"mem resp fire rdata:0x${Hexadecimal(memRdata)} Pte:${memPte}\n")
 }

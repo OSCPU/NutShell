@@ -1,17 +1,29 @@
-package xiangshan.cache
+/**************************************************************************************
+* Copyright (c) 2020 Institute of Computing Technology, CAS
+* Copyright (c) 2020 University of Chinese Academy of Sciences
+* 
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2. 
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2 
+* 
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
+* FIT FOR A PARTICULAR PURPOSE.  
+*
+* See the Mulan PSL v2 for more details.  
+***************************************************************************************/
+
+package nutcore
 
 import chisel3._
 import chisel3.util._
-import xiangshan._
-import utils._
 import chisel3.util.experimental.BoringUtils
-import xiangshan.backend.decode.XSTrap
-import xiangshan.mem._
-import bus.simplebus._
-import xiangshan.backend.fu.HasCSRConst
-import chisel3.ExcitingUtils._
 
-trait HasTlbConst extends HasXSParameter {
+import utils._
+import nutcore.backend.ooo.HasBackendConst
+
+trait HasTlbConst extends HasNutCoreParameter with HasBackendConst{
   val Level = 3
 
   val offLen  = 12
@@ -21,6 +33,8 @@ trait HasTlbConst extends HasXSParameter {
   val flagLen = 8
   val pteResLen = XLEN - ppnLen - 2 - flagLen
   val asidLen = 16
+
+  val RoqIdxWidth = log2Up(robSize)
 
   def vaBundle = new Bundle {
     val vpn  = UInt(vpnLen.W)
@@ -43,8 +57,8 @@ trait HasTlbConst extends HasXSParameter {
   }
 }
 
-abstract class TlbBundle extends XSBundle with HasTlbConst
-abstract class TlbModule extends XSModule with HasTlbConst
+abstract class TlbBundle extends NutCoreBundle with HasTlbConst
+abstract class TlbModule extends NutCoreModule with HasTlbConst
 
 class PermBundle(val hasV: Boolean = true) extends TlbBundle {
   val d = Bool()
@@ -62,16 +76,47 @@ class PermBundle(val hasV: Boolean = true) extends TlbBundle {
   }
 }
 
-class comBundle extends TlbBundle with HasRoqIdx{
+object ParallelOperation {
+  def apply[T <: Data](nut: Seq[T], func: (T, T) => T): T = {
+    nut match {
+      case Seq(a) => a
+      case Seq(a, b) => func(a, b)
+      case _ =>
+        apply(Seq(apply(nut take nut.size/2, func), apply(nut drop nut.size/2, func)), func)
+    }
+  }
+}
+
+object ParallelOR {
+  def apply[T <: Data](nut: Seq[T]): T = {
+    ParallelOperation(nut, (a: T, b: T) => (a.asUInt() | b.asUInt()).asTypeOf(nut.head))
+  }
+}
+
+object ParallelAND {
+  def apply[T <: Data](nut: Seq[T]): T = {
+    ParallelOperation(nut, (a: T, b:T) => (a.asUInt() & b.asUInt()).asTypeOf(nut.head))
+  }
+}
+
+object ParallelMux {
+  def apply[T<:Data](in: Seq[(Bool, T)]): T = {
+    val nut = in map { case (cond, x) => (Fill(x.getWidth, cond) & x.asUInt()).asTypeOf(in.head._2) }
+    ParallelOR(nut)
+  }
+}
+
+class comBundle extends TlbBundle {
   val valid = Bool()
+  val roqIdx = UInt(1.W) // TODO
   val bits = new PtwReq
   def isPrior(that: comBundle): Bool = {
     (this.valid && !that.valid) || (this.valid && that.valid && (that isAfter this))
   }
 }
 object Compare {
-  def apply[T<:Data](xs: Seq[comBundle]): comBundle = {
-    ParallelOperation(xs, (a: comBundle, b: comBundle) => Mux(a isPrior b, a, b))
+  def apply[T<:Data](nut: Seq[comBundle]): comBundle = {
+    ParallelOperation(nut, (a: comBundle, b: comBundle) => Mux(a.valid/*a isPrior b*/, a, b))
   }
 }
 
@@ -173,8 +218,8 @@ class TlbIO(Width: Int) extends TlbBundle {
   override def cloneType: this.type = (new TlbIO(Width)).asInstanceOf[this.type]
 }
 
-
-class TLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
+// Non-block TLB
+class NBTLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
   val io = IO(new TlbIO(Width))
 
   val req    = io.requestor.map(_.req)
@@ -283,7 +328,7 @@ class TLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
     v := Mux(ptw.resp.bits.pf, v & ~UIntToOH(refillIdx), v | UIntToOH(refillIdx))
     pfRefill := Mux(ptw.resp.bits.pf, UIntToOH(refillIdx), 0.U)
     entry(refillIdx) := ptw.resp.bits.entry
-    XSDebug(p"Refill: idx:${refillIdx} entry:${ptw.resp.bits.entry}\n")
+    Debug(p"Refill: idx:${refillIdx} entry:${ptw.resp.bits.entry}\n")
   }
 
   // pf update
@@ -329,33 +374,33 @@ class TLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
 
   // Log
   for(i <- 0 until Width) {
-    XSDebug(req(i).valid, p"req(${i.U}): ${req(i).bits}\n")
-    XSDebug(resp(i).valid, p"resp(${i.U}): ${resp(i).bits}\n")
+    Debug(req(i).valid, p"req(${i.U}): ${req(i).bits}\n")
+    Debug(resp(i).valid, p"resp(${i.U}): ${resp(i).bits}\n")
   }
 
-  XSDebug(sfence.valid, p"Sfence: ${sfence}\n")
-  XSDebug(ParallelOR(valid)|| ptw.resp.valid, p"CSR: ${csr}\n")
-  XSDebug(ParallelOR(valid) || ptw.resp.valid, p"vmEnable:${vmEnable} hit:${Binary(VecInit(hit).asUInt)} miss:${Binary(VecInit(miss).asUInt)} v:${Hexadecimal(v)} pf:${Hexadecimal(pf)} state:${state}\n")
-  XSDebug(ptw.req.fire(), p"PTW req:${ptw.req.bits}\n")
-  XSDebug(ptw.resp.valid, p"PTW resp:${ptw.resp.bits} (v:${ptw.resp.valid}r:${ptw.resp.ready}) \n")
+  Debug(sfence.valid, p"Sfence: ${sfence}\n")
+  Debug(ParallelOR(valid)|| ptw.resp.valid, p"CSR: ${csr}\n")
+  Debug(ParallelOR(valid) || ptw.resp.valid, p"vmEnable:${vmEnable} hit:${Binary(VecInit(hit).asUInt)} miss:${Binary(VecInit(miss).asUInt)} v:${Hexadecimal(v)} pf:${Hexadecimal(pf)} state:${state}\n")
+  Debug(ptw.req.fire(), p"PTW req:${ptw.req.bits}\n")
+  Debug(ptw.resp.valid, p"PTW resp:${ptw.resp.bits} (v:${ptw.resp.valid}r:${ptw.resp.ready}) \n")
 
   // assert check, can be remove when tlb can work
   for(i <- 0 until Width) {
     assert((hit(i)&pfArray(i))===false.B, "hit(%d):%d pfArray(%d):%d v:0x%x pf:0x%x", i.U, hit(i), i.U, pfArray(i), v, pf)
   }
   for(i <- 0 until Width) {
-    XSDebug(multiHit, p"vpn:0x${Hexadecimal(reqAddr(i).vpn)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)} pfHitVec:0x${Hexadecimal(VecInit(pfHitVec(i)).asUInt)}\n")
+    Debug(multiHit, p"vpn:0x${Hexadecimal(reqAddr(i).vpn)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)} pfHitVec:0x${Hexadecimal(VecInit(pfHitVec(i)).asUInt)}\n")
   }
   for(i <- 0 until TlbEntrySize) {
-    XSDebug(multiHit, p"entry(${i.U}): v:${v(i)} ${entry(i)}\n")
+    Debug(multiHit, p"entry(${i.U}): v:${v(i)} ${entry(i)}\n")
   }
   assert(!multiHit) // add multiHit here, later it should be removed (maybe), turn to miss and flush
 
   for (i <- 0 until Width) {
-    XSDebug(resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr), p"vaddr:0x${Hexadecimal(req(i).bits.vaddr)} paddr:0x${Hexadecimal(resp(i).bits.paddr)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)}}\n")
+    Debug(resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr), p"vaddr:0x${Hexadecimal(req(i).bits.vaddr)} paddr:0x${Hexadecimal(resp(i).bits.paddr)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)}}\n")
     when (resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr)) {
       for (j <- 0 until TlbEntrySize) {
-        XSDebug(true.B, p"TLBEntry(${j.U}): v:${v(j)} ${entry(j)}\n")
+        Debug(true.B, p"TLBEntry(${j.U}): v:${v(j)} ${entry(j)}\n")
       }
     } // FIXME: remove me when tlb may be ok
     when(resp(i).valid && hit(i)) {

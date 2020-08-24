@@ -170,3 +170,35 @@ class RenamedDecodeIO extends NutCoreBundle with HasBackendConst {
   val src2Rdy = Output(Bool())
   val brMask = Output(UInt(checkpointSize.W))
 }
+
+class SfenceBundle extends NutCoreBundle {
+  val valid = Bool()
+  val bits = new Bundle {
+    val rs1 = Bool()
+    val rs2 = Bool()
+    val addr = UInt(VAddrBits.W)
+  }
+
+  override def toPrintable: Printable = {
+    p"valid:0x${Hexadecimal(valid)} rs1:${bits.rs1} rs2:${bits.rs2} addr:${Hexadecimal(bits.addr)}"
+  }
+}
+
+class TlbCsrBundle extends NutCoreBundle {
+  val satp = new Bundle {
+    val mode = UInt(4.W) // TODO: may change number to parameter
+    val asid = UInt(16.W)
+    val ppn  = UInt(44.W) // just use PAddrBits - 3 - vpnnLen
+  }
+  val priv = new Bundle {
+    val mxr = Bool()
+    val sum = Bool()
+    val imode = UInt(2.W)
+    val dmode = UInt(2.W)
+  }
+
+  override def toPrintable: Printable = {
+    p"Satp mode:0x${Hexadecimal(satp.mode)} asid:0x${Hexadecimal(satp.asid)} ppn:0x${Hexadecimal(satp.ppn)} " + 
+    p"Priv mxr:${priv.mxr} sum:${priv.sum} imode:${priv.imode} dmode:${priv.dmode}"
+  }
+}
