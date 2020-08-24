@@ -21,9 +21,8 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
-import nutcore.backend.ooo.HasBackendConst
 
-trait HasTlbConst extends HasNutCoreParameter with HasBackendConst{
+trait HasNBTlbConst extends HasNutCoreParameter with HasBackendConst{
   val Level = 3
 
   val offLen  = 12
@@ -35,6 +34,8 @@ trait HasTlbConst extends HasNutCoreParameter with HasBackendConst{
   val asidLen = 16
 
   val RoqIdxWidth = log2Up(robSize)
+  val LsroqIdxWidth = 1 // Temp
+  val TlbEntrySize = 32
 
   def vaBundle = new Bundle {
     val vpn  = UInt(vpnLen.W)
@@ -57,10 +58,10 @@ trait HasTlbConst extends HasNutCoreParameter with HasBackendConst{
   }
 }
 
-abstract class TlbBundle extends NutCoreBundle with HasTlbConst
-abstract class TlbModule extends NutCoreModule with HasTlbConst
+abstract class NBTlbBundle extends NutCoreBundle with HasNBTlbConst
+abstract class NBTlbModule extends NutCoreModule with HasNBTlbConst
 
-class PermBundle(val hasV: Boolean = true) extends TlbBundle {
+class PermBundle(val hasV: Boolean = true) extends NBTlbBundle {
   val d = Bool()
   val a = Bool()
   val g = Bool()
@@ -106,21 +107,21 @@ object ParallelMux {
   }
 }
 
-class comBundle extends TlbBundle {
+class comBundle extends NBTlbBundle {
   val valid = Bool()
   val roqIdx = UInt(1.W) // TODO
   val bits = new PtwReq
   def isPrior(that: comBundle): Bool = {
-    (this.valid && !that.valid) || (this.valid && that.valid && (that isAfter this))
+    (this.valid && !that.valid) || (this.valid && that.valid && (this.roqIdx <= that.roqIdx)/*tmp*/)
   }
 }
 object Compare {
   def apply[T<:Data](nut: Seq[comBundle]): comBundle = {
-    ParallelOperation(nut, (a: comBundle, b: comBundle) => Mux(a.valid/*a isPrior b*/, a, b))
+    ParallelOperation(nut, (a: comBundle, b: comBundle) => Mux(a isPrior b, a, b))
   }
 }
 
-class TlbEntry extends TlbBundle {
+class TlbEntry extends NBTlbBundle {
   val vpn = UInt(vpnLen.W) // tag is vpn
   val ppn = UInt(ppnLen.W)
   val level = UInt(log2Up(Level).W) // 0 for 4KB, 1 for 2MB, 2 for 1GB
@@ -170,7 +171,7 @@ object TlbCmd {
   def isExec(a: UInt) = a===exec
 }
 
-class TlbReq extends TlbBundle {
+class TlbReq extends NBTlbBundle {
   val vaddr = UInt(VAddrBits.W)
   val cmd = TlbCmd()
   val roqIdx = UInt(RoqIdxWidth.W)
@@ -184,7 +185,7 @@ class TlbReq extends TlbBundle {
   }
 }
 
-class TlbResp extends TlbBundle {
+class TlbResp extends NBTlbBundle {
   val paddr = UInt(PAddrBits.W)
   val miss = Bool()
   val excp = new Bundle {
@@ -199,19 +200,19 @@ class TlbResp extends TlbBundle {
   }
 }
 
-class TlbRequestIO() extends TlbBundle {
+class TlbRequestIO() extends NBTlbBundle {
   val req = Valid(new TlbReq)
   val resp = Flipped(Valid(new TlbResp))
 
   // override def cloneType: this.type = (new TlbRequestIO(Width)).asInstanceOf[this.type]
 }
 
-class TlbPtwIO extends TlbBundle {
+class TlbPtwIO extends NBTlbBundle {
   val req = DecoupledIO(new PtwReq)
   val resp = Flipped(DecoupledIO(new PtwResp))
 }
 
-class TlbIO(Width: Int) extends TlbBundle {
+class TlbIO(Width: Int) extends NBTlbBundle {
   val requestor = Vec(Width, Flipped(new TlbRequestIO))
   val ptw = new TlbPtwIO
 
@@ -219,7 +220,7 @@ class TlbIO(Width: Int) extends TlbBundle {
 }
 
 // Non-block TLB
-class NBTLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
+class NBTLB(Width: Int, isDtlb: Boolean)(implicit m: Module) extends NBTlbModule with HasCSRConst{
   val io = IO(new TlbIO(Width))
 
   val req    = io.requestor.map(_.req)
@@ -233,8 +234,8 @@ class NBTLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
   val ifecth = if (isDtlb) false.B else true.B
   val mode   = if (isDtlb) priv.dmode else priv.imode
   val vmEnable = false.B //satp.mode === 8.U // && (mode < ModeM) // FIXME: fix me when boot xv6/linux...
-  BoringUtils.addSink(sfence, "SfenceBundle")
-  BoringUtils.addSink(csr, "TLBCSRIO")
+  // BoringUtils.addSink(sfence, "SfenceBundle")
+  // BoringUtils.addSink(csr, "TLBCSRIO")
 
   val reqAddr = req.map(_.bits.vaddr.asTypeOf(vaBundle))
   val cmd     = req.map(_.bits.cmd)
@@ -328,7 +329,7 @@ class NBTLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
     v := Mux(ptw.resp.bits.pf, v & ~UIntToOH(refillIdx), v | UIntToOH(refillIdx))
     pfRefill := Mux(ptw.resp.bits.pf, UIntToOH(refillIdx), 0.U)
     entry(refillIdx) := ptw.resp.bits.entry
-    Debug(p"Refill: idx:${refillIdx} entry:${ptw.resp.bits.entry}\n")
+    // Debug(p"Refill: idx:${refillIdx} entry:${ptw.resp.bits.entry}\n")
   }
 
   // pf update
@@ -361,18 +362,7 @@ class NBTLB(Width: Int, isDtlb: Boolean) extends TlbModule with HasCSRConst{
     }
   }
 
-  if (!env.FPGAPlatform) {
-    ExcitingUtils.addSource(valid(0)/* && vmEnable*/, "perfCntDtlbReqCnt0", Perf)
-    ExcitingUtils.addSource(valid(1)/* && vmEnable*/, "perfCntDtlbReqCnt1", Perf)
-    ExcitingUtils.addSource(valid(2)/* && vmEnable*/, "perfCntDtlbReqCnt2", Perf)
-    ExcitingUtils.addSource(valid(3)/* && vmEnable*/, "perfCntDtlbReqCnt3", Perf)
-    ExcitingUtils.addSource(valid(0)/* && vmEnable*/ && miss(0), "perfCntDtlbMissCnt0", Perf)
-    ExcitingUtils.addSource(valid(1)/* && vmEnable*/ && miss(1), "perfCntDtlbMissCnt1", Perf)
-    ExcitingUtils.addSource(valid(2)/* && vmEnable*/ && miss(2), "perfCntDtlbMissCnt2", Perf)
-    ExcitingUtils.addSource(valid(3)/* && vmEnable*/ && miss(3), "perfCntDtlbMissCnt3", Perf)
-  }
-
-  // Log
+  // // Log
   for(i <- 0 until Width) {
     Debug(req(i).valid, p"req(${i.U}): ${req(i).bits}\n")
     Debug(resp(i).valid, p"resp(${i.U}): ${resp(i).bits}\n")

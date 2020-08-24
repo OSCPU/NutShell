@@ -24,7 +24,7 @@ import utils._
 import bus.simplebus._
 import top.Settings
 
-trait HasPtwConst extends HasTlbConst{
+trait HasPtwConst extends HasNBTlbConst{
   val PtwWidth = 2
   val PtwL1EntrySize = 16
   val PtwL2EntrySize = 256
@@ -145,7 +145,7 @@ object OneCycleValid {
   }
 }
 
-class PTW extends PtwModule {
+class PTW(implicit m: Module) extends PtwModule {
 
   val io = IO(new PtwIO)
 
@@ -163,8 +163,8 @@ class PTW extends PtwModule {
   val csr    = WireInit(0.U.asTypeOf(new TlbCsrBundle))
   val satp   = csr.satp
   val priv   = csr.priv
-  BoringUtils.addSink(sfence, "SfenceBundle")
-  BoringUtils.addSink(csr, "TLBCSRIO")
+  // BoringUtils.addSink(sfence, "SfenceBundle")
+  // BoringUtils.addSink(csr, "TLBCSRIO")
 
   // two level: l2-tlb-cache && pde/pte-cache
   // l2-tlb-cache is ram-larger-edition tlb
