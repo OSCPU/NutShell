@@ -167,7 +167,5 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     io.mmio <> mmioXbar.io.out
   }
 
-  Debug() {
-    printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
-  }
+  Debug("------------------------ BACKEND ------------------------\n")
 }
