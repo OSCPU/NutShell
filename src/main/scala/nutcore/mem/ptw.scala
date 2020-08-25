@@ -396,15 +396,15 @@ class PTW /*(implicit m: Module)*/ extends PtwModule {
   }
   assert(level=/=3.U)
 
-  // Debug(validOneCycle, p"**New Ptw Req from ${arbChosen}: (v:${validOneCycle} r:${arb.io.out.ready}) vpn:0x${Hexadecimal(req.vpn)}\n")
-  // Debug(resp(arbChosen).fire(), p"**Ptw Resp to ${arbChosen}: (v:${resp(arbChosen).valid} r:${resp(arbChosen).ready}) entry:${resp(arbChosen).bits.entry} pf:${resp(arbChosen).bits.pf}\n")
+  Debug(validOneCycle, p"**New Ptw Req from ${arbChosen}: (v:${validOneCycle} r:${arb.io.out.ready}) vpn:0x${Hexadecimal(req.vpn)}\n")
+  Debug(resp(arbChosen).fire(), p"**Ptw Resp to ${arbChosen}: (v:${resp(arbChosen).valid} r:${resp(arbChosen).ready}) entry:${resp(arbChosen).bits.entry} pf:${resp(arbChosen).bits.pf}\n")
 
-  // Debug(sfence.valid, p"Sfence: sfence instr here ${sfence.bits}\n")
-  // Debug(valid, p"CSR: ${csr}\n")
+  Debug(sfence.valid, p"Sfence: sfence instr here ${sfence.bits}\n")
+  Debug(valid, p"CSR: ${csr}\n")
 
-  // Debug(valid, p"vpn2:0x${Hexadecimal(getVpnn(req.vpn, 2))} vpn1:0x${Hexadecimal(getVpnn(req.vpn, 1))} vpn0:0x${Hexadecimal(getVpnn(req.vpn, 0))}\n")
-  // Debug(valid, p"state:${state} level:${level} tlbHit:${tlbHit} l1addr:0x${Hexadecimal(l1addr)} l1Hit:${l1Hit} l2addr:0x${Hexadecimal(l2addr)} l2Hit:${l2Hit}  l3addr:0x${Hexadecimal(l3addr)} memReq(v:${memReqValid} r:${memReqReady})\n")
+  Debug(valid, p"vpn2:0x${Hexadecimal(getVpnn(req.vpn, 2))} vpn1:0x${Hexadecimal(getVpnn(req.vpn, 1))} vpn0:0x${Hexadecimal(getVpnn(req.vpn, 0))}\n")
+  Debug(valid, p"state:${state} level:${level} tlbHit:${tlbHit} l1addr:0x${Hexadecimal(l1addr)} l1Hit:${l1Hit} l2addr:0x${Hexadecimal(l2addr)} l2Hit:${l2Hit}  l3addr:0x${Hexadecimal(l3addr)} memReq(v:${memReqValid} r:${memReqReady})\n")
 
-  // Debug(memRespFire, p"mem req fire addr:0x${Hexadecimal(memAddr)}\n")
-  // Debug(memRespFire, p"mem resp fire rdata:0x${Hexadecimal(memRdata)} Pte:${memPte}\n")
+  Debug(memRespFire, p"mem req fire addr:0x${Hexadecimal(memAddr)}\n")
+  Debug(memRespFire, p"mem resp fire rdata:0x${Hexadecimal(memRdata)} Pte:${memPte}\n")
 }
