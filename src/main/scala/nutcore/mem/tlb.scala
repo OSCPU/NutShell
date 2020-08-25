@@ -21,6 +21,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import bus.simplebus._
 
 trait HasNBTlbConst extends HasNutCoreParameter with HasBackendConst{
   val Level = 3
@@ -220,7 +221,7 @@ class TlbIO(Width: Int) extends NBTlbBundle {
 }
 
 // Non-block TLB
-class NBTLB(Width: Int, isDtlb: Boolean)(implicit m: Module) extends NBTlbModule with HasCSRConst{
+class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbModule with HasCSRConst{
   val io = IO(new TlbIO(Width))
 
   val req    = io.requestor.map(_.req)
@@ -234,8 +235,8 @@ class NBTLB(Width: Int, isDtlb: Boolean)(implicit m: Module) extends NBTlbModule
   val ifecth = if (isDtlb) false.B else true.B
   val mode   = if (isDtlb) priv.dmode else priv.imode
   val vmEnable = false.B //satp.mode === 8.U // && (mode < ModeM) // FIXME: fix me when boot xv6/linux...
-  // BoringUtils.addSink(sfence, "SfenceBundle")
-  // BoringUtils.addSink(csr, "TLBCSRIO")
+  BoringUtils.addSink(sfence, "SfenceBundle")
+  BoringUtils.addSink(csr, "TLBCSRIO")
 
   val reqAddr = req.map(_.bits.vaddr.asTypeOf(vaBundle))
   val cmd     = req.map(_.bits.cmd)
@@ -363,40 +364,121 @@ class NBTLB(Width: Int, isDtlb: Boolean)(implicit m: Module) extends NBTlbModule
   }
 
   // // Log
-  for(i <- 0 until Width) {
-    Debug(req(i).valid, p"req(${i.U}): ${req(i).bits}\n")
-    Debug(resp(i).valid, p"resp(${i.U}): ${resp(i).bits}\n")
-  }
+  // for(i <- 0 until Width) {
+  //   Debug(req(i).valid, p"req(${i.U}): ${req(i).bits}\n")
+  //   Debug(resp(i).valid, p"resp(${i.U}): ${resp(i).bits}\n")
+  // }
 
-  Debug(sfence.valid, p"Sfence: ${sfence}\n")
-  Debug(ParallelOR(valid)|| ptw.resp.valid, p"CSR: ${csr}\n")
-  Debug(ParallelOR(valid) || ptw.resp.valid, p"vmEnable:${vmEnable} hit:${Binary(VecInit(hit).asUInt)} miss:${Binary(VecInit(miss).asUInt)} v:${Hexadecimal(v)} pf:${Hexadecimal(pf)} state:${state}\n")
-  Debug(ptw.req.fire(), p"PTW req:${ptw.req.bits}\n")
-  Debug(ptw.resp.valid, p"PTW resp:${ptw.resp.bits} (v:${ptw.resp.valid}r:${ptw.resp.ready}) \n")
+  // Debug(sfence.valid, p"Sfence: ${sfence}\n")
+  // Debug(ParallelOR(valid)|| ptw.resp.valid, p"CSR: ${csr}\n")
+  // Debug(ParallelOR(valid) || ptw.resp.valid, p"vmEnable:${vmEnable} hit:${Binary(VecInit(hit).asUInt)} miss:${Binary(VecInit(miss).asUInt)} v:${Hexadecimal(v)} pf:${Hexadecimal(pf)} state:${state}\n")
+  // Debug(ptw.req.fire(), p"PTW req:${ptw.req.bits}\n")
+  // Debug(ptw.resp.valid, p"PTW resp:${ptw.resp.bits} (v:${ptw.resp.valid}r:${ptw.resp.ready}) \n")
 
-  // assert check, can be remove when tlb can work
-  for(i <- 0 until Width) {
-    assert((hit(i)&pfArray(i))===false.B, "hit(%d):%d pfArray(%d):%d v:0x%x pf:0x%x", i.U, hit(i), i.U, pfArray(i), v, pf)
-  }
-  for(i <- 0 until Width) {
-    Debug(multiHit, p"vpn:0x${Hexadecimal(reqAddr(i).vpn)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)} pfHitVec:0x${Hexadecimal(VecInit(pfHitVec(i)).asUInt)}\n")
-  }
-  for(i <- 0 until TlbEntrySize) {
-    Debug(multiHit, p"entry(${i.U}): v:${v(i)} ${entry(i)}\n")
-  }
-  assert(!multiHit) // add multiHit here, later it should be removed (maybe), turn to miss and flush
+  // // assert check, can be remove when tlb can work
+  // for(i <- 0 until Width) {
+  //   assert((hit(i)&pfArray(i))===false.B, "hit(%d):%d pfArray(%d):%d v:0x%x pf:0x%x", i.U, hit(i), i.U, pfArray(i), v, pf)
+  // }
+  // for(i <- 0 until Width) {
+  //   Debug(multiHit, p"vpn:0x${Hexadecimal(reqAddr(i).vpn)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)} pfHitVec:0x${Hexadecimal(VecInit(pfHitVec(i)).asUInt)}\n")
+  // }
+  // for(i <- 0 until TlbEntrySize) {
+  //   Debug(multiHit, p"entry(${i.U}): v:${v(i)} ${entry(i)}\n")
+  // }
+  // assert(!multiHit) // add multiHit here, later it should be removed (maybe), turn to miss and flush
 
-  for (i <- 0 until Width) {
-    Debug(resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr), p"vaddr:0x${Hexadecimal(req(i).bits.vaddr)} paddr:0x${Hexadecimal(resp(i).bits.paddr)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)}}\n")
-    when (resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr)) {
-      for (j <- 0 until TlbEntrySize) {
-        Debug(true.B, p"TLBEntry(${j.U}): v:${v(j)} ${entry(j)}\n")
-      }
-    } // FIXME: remove me when tlb may be ok
-    when(resp(i).valid && hit(i)) {
-      assert(req(i).bits.vaddr===resp(i).bits.paddr, "vaddr:0x%x paddr:0x%x hitVec:%x ", req(i).bits.vaddr, resp(i).bits.paddr, VecInit(hitVec(i)).asUInt)
-    } // FIXME: remove me when tlb may be ok
-  }
+  // for (i <- 0 until Width) {
+  //   Debug(resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr), p"vaddr:0x${Hexadecimal(req(i).bits.vaddr)} paddr:0x${Hexadecimal(resp(i).bits.paddr)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)}}\n")
+  //   when (resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr)) {
+  //     for (j <- 0 until TlbEntrySize) {
+  //       Debug(true.B, p"TLBEntry(${j.U}): v:${v(j)} ${entry(j)}\n")
+  //     }
+  //   } // FIXME: remove me when tlb may be ok
+  //   when(resp(i).valid && hit(i)) {
+  //     assert(req(i).bits.vaddr===resp(i).bits.paddr, "vaddr:0x%x paddr:0x%x hitVec:%x ", req(i).bits.vaddr, resp(i).bits.paddr, VecInit(hitVec(i)).asUInt)
+  //   } // FIXME: remove me when tlb may be ok
+  // }
   
-  assert((v&pf)===0.U, "v and pf can't be true at same time: v:0x%x pf:0x%x", v, pf)
+  // assert((v&pf)===0.U, "v and pf can't be true at same time: v:0x%x pf:0x%x", v, pf)
+}
+
+object NBTLB {
+  def apply(in: SimpleBusUC, mem: TlbPtwIO, cacheEmpty: Bool, excp: TlbExcpBundle, isDtlb: Boolean, ifecth: Bool, userBits: Int = 0) = {
+    val tlb = Module(new NBTLB(1, isDtlb))
+    tlb.io.requestor(0).req.valid := in.req.valid
+    tlb.io.requestor(0).req.bits.vaddr := in.req.bits.addr
+    tlb.io.requestor(0).req.bits.cmd   := Mux(ifecth, TlbCmd.exec, Mux(in.req.bits.isRead, TlbCmd.read, TlbCmd.write)) // TODO: need check AMO
+    tlb.io.requestor(0).req.bits.roqIdx := DontCare
+    tlb.io.requestor(0).req.bits.debug := DontCare
+    in.req.ready := !tlb.io.requestor(0).resp.bits.miss
+
+    val pf = LookupTree(tlb.io.requestor(0).req.bits.cmd, List(
+      TlbCmd.read -> tlb.io.requestor(0).resp.bits.excp.pf.ld,
+      TlbCmd.write -> tlb.io.requestor(0).resp.bits.excp.pf.st,
+      TlbCmd.exec -> tlb.io.requestor(0).resp.bits.excp.pf.instr
+    ))
+
+    val out = Wire(new SimpleBusUC(userBits = userBits))
+    out.req.valid := Mux(pf, false.B, in.req.valid && !tlb.io.requestor(0).resp.bits.miss)
+    out.req.bits := in.req.bits
+    out.req.bits.addr := tlb.io.requestor(0).resp.bits.paddr
+
+    val isAMO = WireInit(false.B)
+    if (isDtlb) {
+      BoringUtils.addSink(isAMO, "ISAMO")
+    }
+
+    excp.pf.ld := tlb.io.requestor(0).resp.bits.excp.pf.ld && !isAMO
+    excp.pf.st := tlb.io.requestor(0).resp.bits.excp.pf.st && (tlb.io.requestor(0).resp.bits.excp.pf.ld && isAMO)
+    excp.pf.instr := tlb.io.requestor(0).resp.bits.excp.pf.instr
+    excp.pf.addr := in.req.bits.addr
+
+    assert(!(pf && in.req.valid))
+
+    // when (pf && cacheEmpty) {
+      // 
+    // }
+    in.resp <> out.resp
+
+    mem <> tlb.io.ptw
+
+    out
+  }
+}
+
+object OOTLB {
+  def apply(in: SimpleBusUC, mem: TlbPtwIO, excp: TlbExcpBundle, isDtlb: Boolean, ifecth: Bool, userBits: Int = 0) = {
+    val tlb = Module(new NBTLB(1, isDtlb))
+    tlb.io.requestor(0).req.valid := in.req.valid
+    tlb.io.requestor(0).req.bits.vaddr := in.req.bits.addr
+    tlb.io.requestor(0).req.bits.cmd   := Mux(ifecth, TlbCmd.exec, Mux(in.req.bits.isRead, TlbCmd.read, TlbCmd.write)) // TODO: need check AMO
+    tlb.io.requestor(0).req.bits.roqIdx := DontCare
+    tlb.io.requestor(0).req.bits.debug := DontCare
+    in.req.ready := !tlb.io.requestor(0).resp.bits.miss
+
+    val pf = LookupTree(tlb.io.requestor(0).req.bits.cmd, List(
+      TlbCmd.read -> tlb.io.requestor(0).resp.bits.excp.pf.ld,
+      TlbCmd.write -> tlb.io.requestor(0).resp.bits.excp.pf.st,
+      TlbCmd.exec -> tlb.io.requestor(0).resp.bits.excp.pf.instr
+    ))
+    in.req.ready := !tlb.io.requestor(0).resp.bits.miss
+    in.resp := DontCare
+    in.resp.valid := tlb.io.requestor(0).resp.valid && !tlb.io.requestor(0).resp.bits.miss
+    in.resp.bits.rdata := tlb.io.requestor(0).resp.bits.paddr
+
+    val isAMO = WireInit(false.B)
+    if (isDtlb) {
+      BoringUtils.addSink(isAMO, "ISAMO")
+    }
+
+    // excp := tlb.io.requestor(0).resp.bits.excp
+    excp.pf.ld := tlb.io.requestor(0).resp.bits.excp.pf.ld && !isAMO
+    excp.pf.st := tlb.io.requestor(0).resp.bits.excp.pf.st && (tlb.io.requestor(0).resp.bits.excp.pf.ld && isAMO)
+    excp.pf.instr := tlb.io.requestor(0).resp.bits.excp.pf.instr
+    excp.pf.addr := in.req.bits.addr
+
+    mem <> tlb.io.ptw
+
+    tlb
+  }
 }

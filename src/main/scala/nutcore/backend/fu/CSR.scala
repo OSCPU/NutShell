@@ -183,8 +183,6 @@ class CSRIO extends FunctionUnitIO {
   val isBackendException = Input(Bool())
   // for differential testing
   val intrNO = Output(UInt(XLEN.W))
-  val imemMMU = Flipped(new MMUIO)
-  val dmemMMU = Flipped(new MMUIO)
   val wenFix = Output(Bool())
 }
 
@@ -238,6 +236,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val e = new Priv
     val t = new Priv
     val s = new Priv
+  }
+
+  class SatpStruct extends Bundle {
+    val mode = UInt(4.W)
+    val asid = UInt(16.W)
+    val ppn  = UInt(44.W)
   }
 
   // Machine-Level CSRs
@@ -333,8 +337,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
 
-  if (Settings.get("HasDTLB")) {
-    BoringUtils.addSource(satp, "CSRSATP")
+  val tlb = WireInit(0.U.asTypeOf(new TlbCsrBundle))
+  tlb.satp.mode := satp.asTypeOf(new SatpStruct).mode
+  tlb.satp.ppn  := satp.asTypeOf(new SatpStruct).ppn
+  if (/*Settings.get("EnableVirtualMemory") || */Settings.get("HasDTLB")) {
+    BoringUtils.addSource(tlb, "TLBCSRIO")
   }
 
   // User-Level CSRs
@@ -514,12 +521,18 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // assert(!hasStorePageFault)
 
   //TODO: Havn't test if io.dmemMMU.priviledgeMode is correct yet
-  io.imemMMU.priviledgeMode := priviledgeMode
-  io.dmemMMU.priviledgeMode := Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
-  io.imemMMU.status_sum := mstatusStruct.sum.asBool
-  io.dmemMMU.status_sum := mstatusStruct.sum.asBool
-  io.imemMMU.status_mxr := DontCare
-  io.dmemMMU.status_mxr := mstatusStruct.mxr.asBool
+
+  // io.imemMMU.priviledgeMode := priviledgeMode
+  // io.dmemMMU.priviledgeMode := Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
+  // io.imemMMU.status_sum := mstatusStruct.sum.asBool
+  // io.dmemMMU.status_sum := mstatusStruct.sum.asBool
+  // io.imemMMU.status_mxr := DontCare
+  // io.dmemMMU.status_mxr := mstatusStruct.mxr.asBool
+
+  tlb.priv.mxr := mstatusStruct.mxr.asBool
+  tlb.priv.sum := mstatusStruct.sum.asBool
+  tlb.priv.imode := priviledgeMode
+  tlb.priv.dmode := Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
 
   val hasInstrPageFault = Wire(Bool())
   val hasLoadPageFault = Wire(Bool())
@@ -540,12 +553,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     dmemPagefaultAddr := src1 // LSU -> wbresult -> prf -> beUop.data.src1
     dmemAddrMisalignedAddr := src1
   }else{
+    val dtlbExcp = WireInit(0.U.asTypeOf(new TlbExcpBundle))
+    BoringUtils.addSink(dtlbExcp, "DTlbExcpIO")
     hasInstrPageFault := io.cfIn.exceptionVec(instrPageFault) && valid
-    hasLoadPageFault := io.dmemMMU.loadPF
-    hasStorePageFault := io.dmemMMU.storePF
+    hasLoadPageFault := dtlbExcp.pf.ld
+    hasStorePageFault := dtlbExcp.pf.st
     hasStoreAddrMisaligned := io.cfIn.exceptionVec(storeAddrMisaligned)
     hasLoadAddrMisaligned := io.cfIn.exceptionVec(loadAddrMisaligned)
-    dmemPagefaultAddr := io.dmemMMU.addr
+    dmemPagefaultAddr := dtlbExcp.pf.addr
     dmemAddrMisalignedAddr := lsuAddr
   }
 

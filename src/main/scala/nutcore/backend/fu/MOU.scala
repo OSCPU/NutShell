@@ -31,6 +31,7 @@ object MOUOpType {
 
 class MOUIO extends FunctionUnitIO {
   val cfIn = Flipped(new CtrlFlowIO)
+  val ctrlIn = Flipped(new CtrlSignalIO)
   val redirect = new RedirectIO
 }
 
@@ -58,7 +59,12 @@ class MOU extends NutCoreModule {
   }
 
   val flushTLB = valid && (func === MOUOpType.sfence_vma)
-  BoringUtils.addSource(flushTLB, "MOUFlushTLB")
+  val sfence = Wire(new SfenceBundle)
+  sfence.valid := flushTLB
+  sfence.bits.rs1 := io.ctrlIn.rfSrc1===0.U
+  sfence.bits.rs2 := io.ctrlIn.rfSrc2===0.U
+  sfence.bits.addr := src1
+  BoringUtils.addSource(sfence, "SfenceBundle")
   Debug() {
     when (flushTLB) {
       printf("%d: [MOU] Flush TLB at %x\n", GTimer(), io.cfIn.pc)

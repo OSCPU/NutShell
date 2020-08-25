@@ -202,3 +202,16 @@ class TlbCsrBundle extends NutCoreBundle {
     p"Priv mxr:${priv.mxr} sum:${priv.sum} imode:${priv.imode} dmode:${priv.dmode}"
   }
 }
+
+class TlbExcpBundle extends NutCoreBundle {
+  val pf = new Bundle {
+    val ld = Bool()
+    val st = Bool()
+    val instr = Bool()
+    val addr = UInt(XLEN.W)
+  }
+
+  override def toPrintable: Printable = {
+    p"pf: ld:${pf.ld} st:${pf.st} instr:${pf.instr} addr:0x${Hexadecimal(pf.addr)}"
+  }
+}

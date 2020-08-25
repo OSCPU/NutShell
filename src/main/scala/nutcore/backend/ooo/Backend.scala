@@ -49,8 +49,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
     val dtlb = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
 
-    val memMMU = Flipped(new MemMMUIO)
-
     // WBU
     val redirect = new RedirectIO
   })
@@ -386,8 +384,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // lsu.io.instr := lsuUop.decode.cf.instr
   io.dmem <> lsu.io.dmem
   io.dtlb <> lsu.io.dtlb
-  BoringUtils.addSource(io.memMMU.dmem.loadPF, "loadPF") // FIXIT: this is nasty
-  BoringUtils.addSource(io.memMMU.dmem.storePF, "storePF") // FIXIT: this is nasty
   lsu.io.out.ready := true.B //TODO
   lsucommit.decode := lsu.io.uopOut.decode
   lsucommit.isMMIO := lsu.io.isMMIO
@@ -468,9 +464,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // fix wen
   when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
 
-  csr.io.imemMMU <> io.memMMU.imem
-  csr.io.dmemMMU <> io.memMMU.dmem
-
   Debug(){
     when(csrVaild && commitBackendException){
       printf("[BACKEND EXC] time %d pc %x inst %x evec %b\n", GTimer(), csrUop.decode.cf.pc, csrUop.decode.cf.instr, csrUop.decode.cf.exceptionVec.asUInt)
@@ -487,6 +480,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     func = csrrs.io.out.bits.decode.ctrl.fuOpType
   )
   mou.io.cfIn := csrrs.io.out.bits.decode.cf
+  mou.io.ctrlIn := csrrs.io.out.bits.decode.ctrl
   mou.io.out.ready := true.B // mou will stall the pipeline
   moucommit.decode := csrrs.io.out.bits.decode
   moucommit.isMMIO := false.B
@@ -677,7 +671,6 @@ class Backend_seq(implicit val p: NutCoreConfig) extends NutCoreModule {
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
     val flush = Input(UInt(2.W))
     val dmem = new SimpleBusUC(addrBits = VAddrBits)
-    val memMMU = Flipped(new MemMMUIO)
 
     val redirect = new RedirectIO
   })
@@ -699,7 +692,5 @@ class Backend_seq(implicit val p: NutCoreConfig) extends NutCoreModule {
   // forward
   isu.io.forward <> exu.io.forward  
 
-  io.memMMU.imem <> exu.io.memMMU.imem
-  io.memMMU.dmem <> exu.io.memMMU.dmem
   io.dmem <> exu.io.dmem
 }

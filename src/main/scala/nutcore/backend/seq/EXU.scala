@@ -31,7 +31,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
     val flush = Input(Bool())
     val dmem = new SimpleBusUC(addrBits = VAddrBits)
     val forward = new ForwardIO
-    val memMMU = Flipped(new MemMMUIO)
+    // val memMMU = Flipped(new MemMMUIO)
   })
 
   val src1 = io.in.bits.data.src1(XLEN-1,0)
@@ -75,13 +75,14 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   csr.io.isBackendException := false.B
   csr.io.out.ready := true.B
 
-  csr.io.imemMMU <> io.memMMU.imem
-  csr.io.dmemMMU <> io.memMMU.dmem
+  // csr.io.imemMMU <> io.memMMU.imem
+  // csr.io.dmemMMU <> io.memMMU.dmem
 
   val mou = Module(new MOU)
   // mou does not write register
   mou.access(valid = fuValids(FuType.mou), src1 = src1, src2 = src2, func = fuOpType)
   mou.io.cfIn := io.in.bits.cf
+  mou.io.ctrlIn := io.in.bits.ctrl
   mou.io.out.ready := true.B
   
   io.out.bits.decode := DontCare
