@@ -151,12 +151,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       for(k <- (0 to robWidth - 1)){
         when(valid(i)(j) && io.cdb(k).bits.prfidx === robIdx && io.cdb(k).valid){
         // when(true.B){
-          when(commited(i)(j)){
-            printf("[ERROR] double commit at time %d robidx %d pc %x inst %x pcin %x instin %x\n", GTimer(), robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
-          }
-          when(io.cdb(k).bits.decode.cf.pc =/= decode(i)(j).cf.pc){
-            printf("[ERROR] commit pc not match at time %d robidx %d pc %x inst %x pcin %x instin %x\n", GTimer(), robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
-          }
+          Debug(commited(i)(j), "[ERROR] double commit robidx %d pc %x inst %x pcin %x instin %x\n", robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
+          Debug(io.cdb(k).bits.decode.cf.pc =/= decode(i)(j).cf.pc, "[ERROR] commit pc not match robidx %d pc %x inst %x pcin %x instin %x\n", robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
           assert(io.cdb(k).bits.decode.cf.pc === decode(i)(j).cf.pc)
           assert(!commited(i)(j), "double commit")
         }
@@ -164,9 +160,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       when(valid(i)(j) && needMispredictionRecovery(brMask(i)(j))){
         valid(i)(j) := false.B
         canceled(i)(j) := true.B
-        Debug(){
-          printf("[ROB] %d: mis-prediction recovery invalidated robidx %d pc %x (%b)\n", GTimer(), robIdx, decode(i)(j).cf.pc, brMask(i)(j))
-        }
+        Debug("[ROB] mis-prediction recovery invalidated robidx %d pc %x (%b)\n", robIdx, decode(i)(j).cf.pc, brMask(i)(j))
       }
       brMask(i)(j) := updateBrMask(brMask(i)(j))
     }
@@ -247,13 +241,13 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // mispredict checkpoint recovery
   when(io.updateCheckpoint.valid){
     checkpoints(io.updateCheckpoint.bits) := checkpointUpdate
-    Debug(){printf("[CP] checkpoint %d set\n", io.updateCheckpoint.bits)}
-    // Debug(){printf("[CP] %d %d\n", checkpointUpdate.valid(14), checkpointUpdate.map(14))}
+    Debug("[CP] checkpoint %d set\n", io.updateCheckpoint.bits)
+    // Debug("[CP] %d %d\n", checkpointUpdate.valid(14), checkpointUpdate.map(14))
   }
   when(io.recoverCheckpoint.valid){
     rmtMap := checkpoints(io.recoverCheckpoint.bits).map
     rmtValid := rmtValidRecovery
-    Debug(){printf("[CP] recover rmt to checkpoint %d\n", io.recoverCheckpoint.bits)}
+    Debug("[CP] recover rmt to checkpoint %d\n", io.recoverCheckpoint.bits)
   }
 
   // retire: trigger redirect
@@ -326,16 +320,11 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // In current version, only one l/s inst can be sent to agu in a cycle
   // therefore, in all banks, there is no more than 1 store insts
 
-  Debug(){
-    when(io.scommit){
-      printf("[SCommit] %x %x %x %x\n", 
+  Debug(io.scommit, "[SCommit] %x %x %x %x\n", 
         redirect(ringBufferTail)(0).valid,
         redirect(ringBufferTail)(1).valid,
         exception(ringBufferTail)(0),
-        exception(ringBufferTail)(1)
-      )
-    }
-  }
+        exception(ringBufferTail)(1))
 
   // For debug:
   // check if store mem req is from a commited store
@@ -362,12 +351,11 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       !Q1.io.deq.valid
     ) 
   ){
-    printf("[ERROR] robpc1 %x robpc2 %x v %x lsupc %x time %d\n", 
+    Debug("[ERROR] robpc1 %x robpc2 %x v %x lsupc %x\n", 
       Q1.io.deq.bits,
       Q2.io.deq.bits,
       Q1.io.deq.valid,
-      lsupc,
-      GTimer()
+      lsupc
     )
   }
 
@@ -449,60 +437,57 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   // Generate Debug Info
-  Debug(){
-    when (io.in(0).fire()){printf("[DISPATCH1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x\n", GTimer(), io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)}
-    when (io.in(1).fire()){printf("[DISPATCH2] TIMER: %d pc = 0x%x inst %x wen %x wdst %x\n", GTimer(), io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)}
-    when (io.cdb(0).valid){printf("[COMMIT1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", GTimer(), io.cdb(0).bits.decode.cf.pc, io.cdb(0).bits.decode.cf.instr, io.cdb(0).bits.decode.ctrl.rfWen, io.cdb(0).bits.decode.ctrl.rfDest, io.cdb(0).bits.commits)}
-    when (io.cdb(1).valid){printf("[COMMIT2] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", GTimer(), io.cdb(1).bits.decode.cf.pc, io.cdb(1).bits.decode.cf.instr, io.cdb(1).bits.decode.ctrl.rfWen, io.cdb(1).bits.decode.ctrl.rfDest, io.cdb(1).bits.commits)}
-    when (retireATerm && valid(ringBufferTail)(0)) { printf("[RETIRE1] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", GTimer(), decode(ringBufferTail)(0).cf.pc, decode(ringBufferTail)(0).cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, isMMIO(ringBufferTail)(0), intrNO(ringBufferTail)(0)) }
-    when (retireATerm && valid(ringBufferTail)(1)) { printf("[RETIRE2] TIMER: %d pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", GTimer(), decode(ringBufferTail)(1).cf.pc, decode(ringBufferTail)(1).cf.instr, io.wb(1).rfWen, io.wb(1).rfDest, io.wb(1).rfData, isMMIO(ringBufferTail)(1), intrNO(ringBufferTail)(1)) }
-  }
+    Debug(io.in(0).fire(), "[DISPATCH1] pc = 0x%x inst %x wen %x wdst %x\n", io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)
+    Debug(io.in(1).fire(), "[DISPATCH2] pc = 0x%x inst %x wen %x wdst %x\n", io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)
+    Debug(io.cdb(0).valid, "[COMMIT1] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(0).bits.decode.cf.pc, io.cdb(0).bits.decode.cf.instr, io.cdb(0).bits.decode.ctrl.rfWen, io.cdb(0).bits.decode.ctrl.rfDest, io.cdb(0).bits.commits)
+    Debug(io.cdb(1).valid, "[COMMIT2] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(1).bits.decode.cf.pc, io.cdb(1).bits.decode.cf.instr, io.cdb(1).bits.decode.ctrl.rfWen, io.cdb(1).bits.decode.ctrl.rfDest, io.cdb(1).bits.commits)
+    Debug(retireATerm && valid(ringBufferTail)(0), "[RETIRE1] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", decode(ringBufferTail)(0).cf.pc, decode(ringBufferTail)(0).cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, isMMIO(ringBufferTail)(0), intrNO(ringBufferTail)(0))
+    Debug(retireATerm && valid(ringBufferTail)(1), "[RETIRE2] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", decode(ringBufferTail)(1).cf.pc, decode(ringBufferTail)(1).cf.instr, io.wb(1).rfWen, io.wb(1).rfDest, io.wb(1).rfData, isMMIO(ringBufferTail)(1), intrNO(ringBufferTail)(1))
 
   Debug(){
-    printf("[ROB] time %d\n", GTimer())
-    printf("[ROB] ")
+    Debug("[ROB] ")
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(0) && commited(i)(0)){printf("c")}.elsewhen(valid(i)(0)){printf("v")}.otherwise{printf("-")}
+      when(valid(i)(0) && commited(i)(0)){Debug(false, "c")}.elsewhen(valid(i)(0)){Debug(false, "v")}.otherwise{Debug(false, "-")}
     }
-    printf("\n[ROB] ")
+    Debug("\n[ROB] ")
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(1) && commited(i)(1)){printf("c")}.elsewhen(valid(i)(1)){printf("v")}.otherwise{printf("-")}
+      when(valid(i)(1) && commited(i)(1)){Debug("c")}.elsewhen(valid(i)(1)){Debug("v")}.otherwise{Debug("-")}
     }
-    printf("\n[ROB] ")
+    Debug("\n[ROB] ")
     for(i <- 0 to (robSize - 1)){
-      when(ringBufferHead === i.U){printf("h")}
-      .elsewhen(ringBufferTail === i.U){printf("t")}
-      .otherwise{printf(" ")}
+      when(ringBufferHead === i.U){Debug("h")}
+      .elsewhen(ringBufferTail === i.U){Debug("t")}
+      .otherwise{Debug(" ")}
     }
-    printf("\n")
-    printf("[ROB] pc           v w c r e   pc           v w c r e\n")
+    Debug("\n")
+    Debug("[ROB] pc           v w c r e   pc           v w c r e\n")
     for(i <- 0 to (robSize - 1)){
-      printf("[ROB] 0x%x %d %d %d %d %d   0x%x %d %d %d %d %d  " + i, 
+      Debug("[ROB] 0x%x %d %d %d %d %d   0x%x %d %d %d %d %d  " + i, 
         decode(i)(0).cf.pc, valid(i)(0), commited(i)(0), canceled(i)(0), redirect(i)(0).valid && valid(i)(0), exception(i)(0),
         decode(i)(1).cf.pc, valid(i)(1), commited(i)(1), canceled(i)(1), redirect(i)(1).valid && valid(i)(1), exception(i)(1)
       )
-      when(valid(i)(0) || valid(i)(1)){printf("  valid")}
-      when(ringBufferHead === i.U){printf("  head")}
-      when(ringBufferTail === i.U){printf("  tail")}
-      printf("\n")
+      when(valid(i)(0) || valid(i)(1)){Debug("  valid")}
+      when(ringBufferHead === i.U){Debug("  head")}
+      when(ringBufferTail === i.U){Debug("  tail")}
+      Debug("\n")
     }
     
     // for(i <- 0 to (robSize - 1)){
-    //   printf("[ROB] %b %b " + i + "\n", brMask(i)(0), brMask(i)(1))
+    //   Debug("[ROB] %b %b " + i + "\n", brMask(i)(0), brMask(i)(1))
     // }
 
     // for(i <- 0 until NRReg){
-    //   printf("[ROB] prMap %b %d " + i + "\n", rmtValid(i), rmtMap(i))
+    //   Debug("[ROB] prMap %b %d " + i + "\n", rmtValid(i), rmtMap(i))
     // }
 
-    // printf("[RMT INFO]")
+    // Debug("[RMT INFO]")
     // for(i <- 0 to (NRReg - 1)){
-    //  // if(i % 6 == 0)printf("\n")
+    //  // if(i % 6 == 0)Debug("\n")
     //   when(rmtValid(i)){
-    //     printf("%d -> %d %b  ", i.U, rmtMap(i), commited(i.U>>1)(i.U(0)))
+    //     Debug("%d -> %d %b  ", i.U, rmtMap(i), commited(i.U>>1)(i.U(0)))
     //   }
     // }
-    // printf("\n")
+    // Debug("\n")
   }
 
   val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1) && !instRedirect(0)
@@ -528,10 +513,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     BoringUtils.addSource(io.wb(0).rfData, "ilaWBUrfData")
   }
 
-  Debug(){
-    when(io.empty){printf("%d: empty\n", GTimer())}
-    when(io.redirect.valid && io.redirect.rtype === 1.U){printf("%d: mbr finished\n", GTimer())}
-  }
+  Debug(io.empty, "empty\n")
+  Debug(io.redirect.valid && io.redirect.rtype === 1.U, "mbr finished\n")
 
 
   // sim pref counter

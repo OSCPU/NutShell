@@ -49,23 +49,30 @@ object LogUtil {
   // }
 
   def apply(debugLevel: LogLevel)
-           (cond: Bool, pable: Printable)
-           (implicit m: Module): Any = {
-    val commonInfo = p"[${GTimer()}] ${m.name}: "
+           (prefix: Boolean, cond: Bool, pable: Printable)
+           (implicit name: String): Any = {
+    val commonInfo = p"[${GTimer()}] $name: "
     when (cond && displayLog) {
-      printf(commonInfo + pable)
+      if(prefix) printf(commonInfo)
+      printf(pable)
     }
   }
 }
 
 sealed abstract class LogHelper(val logLevel: LogLevel) {
 
-  def apply(cond: Bool, fmt: String, data: Bits*)(implicit m: Module): Any =
+  def apply(cond: Bool, fmt: String, data: Bits*)(implicit name: String): Any =
     apply(cond, Printable.pack(fmt, data:_*))
-  def apply(cond: Bool, pable: Printable)(implicit m: Module): Any = LogUtil(logLevel)(cond, pable)
-  def apply(fmt: String, data: Bits*)(implicit m: Module): Any =
+  def apply(cond: Bool, pable: Printable)(implicit name: String): Any = apply(true, cond, pable)
+  def apply(fmt: String, data: Bits*)(implicit name: String): Any =
     apply(true.B, Printable.pack(fmt, data:_*))
-  def apply(pable: Printable)(implicit m: Module): Any = LogUtil(logLevel)(true.B, pable)
+  def apply(pable: Printable)(implicit name: String): Any = apply(true.B, pable)
+  def apply(prefix: Boolean, fmt: String, data: Bits*)(implicit name: String): Any = apply(prefix, true.B, Printable.pack(fmt, data:_*))
+  def apply(prefix: Boolean, pable: Printable)(implicit name: String): Any = apply(prefix, true.B, pable)
+  def apply(prefix: Boolean, cond: Bool, fmt: String, data: Bits*)(implicit name: String): Any =
+    apply(prefix, cond, Printable.pack(fmt, data:_*))
+  def apply(prefix: Boolean, cond: Bool, pable: Printable)(implicit name: String): Any =
+    LogUtil(logLevel)(prefix, cond, pable)
 
   // NOOP/NutShell style debug
   def apply(flag: Boolean = NutCoreConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any = {
