@@ -214,11 +214,9 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     mispredictionRecoveryReg && !rob.io.empty || io.redirect.valid && io.redirect.rtype === 1.U // waiting for misprediction recovery or misprediction detected
   }
 
-  Debug(){
-    when(flushBackend){printf("%d: flushbackend\n", GTimer())}
-    when(io.redirect.valid && io.redirect.rtype === 1.U){printf("[REDIRECT] %d: bpr start, redirect to %x\n", GTimer(), io.redirect.target)}
-    when(io.redirect.valid && io.redirect.rtype === 0.U){printf("[REDIRECT] %d: special redirect to %x\n", GTimer(), io.redirect.target)}
-  }
+  Debug(flushBackend, "flushbackend\n")
+  Debug(io.redirect.valid && io.redirect.rtype === 1.U, "[REDIRECT] bpr start, redirect to %x\n", io.redirect.target)
+  Debug(io.redirect.valid && io.redirect.rtype === 0.U, "[REDIRECT]special redirect to %x\n", io.redirect.target)
 
   instCango(0) := 
     io.in(0).valid &&
@@ -275,9 +273,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire() && isBranch(1)))
   brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bruDelayer.io.out.bits.brMask), brMask(3)))
 
-  Debug(){
-    printf("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
-  }
+  Debug("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
 
   val rs = List(brurs, alu1rs, alu2rs, csrrs, lsurs, mdurs)
   val rsInstSel = List(bruInst, alu1Inst, alu2Inst, csrInst, lsuInst, mduInst)
@@ -464,11 +460,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // fix wen
   when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
 
-  Debug(){
-    when(csrVaild && commitBackendException){
-      printf("[BACKEND EXC] time %d pc %x inst %x evec %b\n", GTimer(), csrUop.decode.cf.pc, csrUop.decode.cf.instr, csrUop.decode.cf.exceptionVec.asUInt)
-    }
-  }
+  Debug(csrVaild && commitBackendException, "[BACKEND EXC] pc %x inst %x evec %b\n", csrUop.decode.cf.pc, csrUop.decode.cf.instr, csrUop.decode.cf.exceptionVec.asUInt)
 
   val mou = Module(new MOU)
   val moucommit = Wire(new OOCommitIO)
@@ -545,9 +537,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   }
   val commitValidVec = commitValidPriority.asUInt & ~notSecondMask.asUInt
 
-  Debug(){
-    printf("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
-  }
+  Debug("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
 
   val cdbSrc1 = PriorityMux(commitValidPriority, commitPriority)
   val cdbSrc1Valid = PriorityMux(commitValidPriority, commitValidPriority)
@@ -583,8 +573,8 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   lsurs.io.out.ready := lsu.io.in.ready
   mdurs.io.out.ready := mdu.io.in.ready
 
-  Debug(){when(flushBackend){printf("[FLUSH] TIMER: %d\n", GTimer())}}
-  Debug(){when(io.redirect.valid){printf("[RDIRECT] TIMER: %d target 0x%x\n", GTimer(), io.redirect.target)}}
+  Debug(flushBackend, "[FLUSH]\n")
+  Debug(io.redirect.valid, "[RDIRECT] target 0x%x\n", io.redirect.target)
 
   // Performance Counter
 

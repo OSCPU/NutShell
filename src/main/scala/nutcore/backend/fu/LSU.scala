@@ -390,29 +390,22 @@ class LSU extends NutCoreModule with HasLSUConst {
     moq(moqDmemPtr).finished := true.B
     // store inst does not need to access mem until it is commited
   }
-
-  Debug(){
-    printf("[LSU MOQ] time %d\n", GTimer())
-    printf("[LSU MOQ] pc           id vaddr        paddr        func    op      data             mmio   valid   finished    exc     mask\n")
-    for(i <- 0 until moqSize){
-      printf(
-        "[LSU MOQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b valid:%b finished:%b%b exc:%b%b%b%b %x %d", 
-        moq(i).pc, moq(i).prfidx, moq(i).vaddr, moq(i).paddr, moq(i).func, moq(i).op, moq(i).data, moq(i).isMMIO, moq(i).valid, moq(i).tlbfin, moq(i).finished, moq(i).loadPageFault, moq(i).storePageFault, moq(i).loadAddrMisaligned, moq(i).storeAddrMisaligned, moq(i).brMask, i.U
-      )
-      when(moq(i).valid){printf(" valid")}
-      when(moqHeadPtr === i.U){printf(" head")}
-      when(moqDtlbPtr === i.U){printf(" tlb")}
-      when(moqDmemPtr === i.U){printf(" mem")}
-      when(moqTailPtr === i.U){printf(" tail")}
-      printf("\n")
-    }
+  
+  Debug("[LSU MOQ] pc           id vaddr        paddr        func    op      data             mmio   valid   finished    exc     mask\n")
+  for(i <- 0 until moqSize){
+    Debug(
+      "[LSU MOQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b valid:%b finished:%b%b exc:%b%b%b%b %x %d", 
+      moq(i).pc, moq(i).prfidx, moq(i).vaddr, moq(i).paddr, moq(i).func, moq(i).op, moq(i).data, moq(i).isMMIO, moq(i).valid, moq(i).tlbfin, moq(i).finished, moq(i).loadPageFault, moq(i).storePageFault, moq(i).loadAddrMisaligned, moq(i).storeAddrMisaligned, moq(i).brMask, i.U
+    )
+    Debug(false, moq(i).valid, " valid")
+    Debug(false, moqHeadPtr === i.U, " head")
+    Debug(false, moqDtlbPtr === i.U, " tlb")
+    Debug(false, moqDmemPtr === i.U, " mem")
+    Debug(false, moqTailPtr === i.U, " tail")
+    Debug(false, "\n")
   }
 
-  Debug(){
-    when(moqEnqueue){
-      printf("[ENMOQ] pc %x moqidx %x time %x\n", io.uopIn.decode.cf.pc, moqHeadPtr, GTimer())
-    }
-  }
+  Debug(moqEnqueue, "[ENMOQ] pc %x moqidx %x time %x\n", io.uopIn.decode.cf.pc, moqHeadPtr, GTimer())
 
   //                               Store Queue
   //              ------------------------------------------------------------
@@ -435,9 +428,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   val haveUnfinishedStore = 0.U =/= storeHeadPtr
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
   io.haveUnfinishedStore := haveUnfinishedStore
-  when(storeCmtPtr > storeHeadPtr){
-    printf("%d retired store should be less than valid store\n", GTimer())
-  }
+  Debug(storeCmtPtr > storeHeadPtr, "retired store should be less than valid store\n")
     
   // assert(storeCmtPtr <= storeHeadPtr, "retired store should be less than valid store")
 
@@ -531,28 +522,21 @@ class LSU extends NutCoreModule with HasLSUConst {
   BoringUtils.addSource(storeTBCV, "GSPCV")
   BoringUtils.addSource(storeTBC, "GSPC")
 
-  Debug(){
-    when(storeQueueEnqueue || storeQueueAMOEnqueue){
-      printf("[ENSTQ] pc %x moqidx %x valid %x enqp %x head %x time %x\n", moq(moqidxResp).pc, moqidxResp, moq(moqidxResp).valid, storeQueueEnqPtr, storeHeadPtr, GTimer())
-    }
-  }
+  Debug(storeQueueEnqueue || storeQueueAMOEnqueue, "[ENSTQ] pc %x moqidx %x valid %x enqp %x head %x\n", moq(moqidxResp).pc, moqidxResp, moq(moqidxResp).valid, storeQueueEnqPtr, storeHeadPtr)
 
   // printf("[PSTQ] time %x alloc %x head %x mid %x flush %x\n", GTimer(), storeAlloc, storeHeadPtr, storeCmtPtr, io.flush)
 
-  Debug(){
-    printf("[LSU STQ] time %d\n", GTimer())
-    printf("[LSU STQ] pc           id vaddr        paddr        func    op      data             mmio v mask \n")
-    for(i <- 0 to (storeQueueSize - 1)){
-      printf(
-        "[LSU STQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b %b %x %d", 
-        storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).paddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, storeQueue(i).valid, storeQueue(i).brMask, i.U
-      )
-      // when(storeAlloc === i.U){printf(" alloc")}
-      when(storeHeadPtr === i.U){printf(" head")}
-      when(storeCmtPtr === i.U){printf(" cmt")}
-      // when(storeReqPtr === i.U){printf(" req")}
-      printf("\n")
-    }
+  Debug("[LSU STQ] pc           id vaddr        paddr        func    op      data             mmio v mask \n")
+  for(i <- 0 to (storeQueueSize - 1)){
+    Debug(
+      "[LSU STQ] 0x%x %x 0x%x 0x%x %b %b %x mmio:%b %b %x %d", 
+      storeQueue(i).pc, storeQueue(i).prfidx, storeQueue(i).vaddr, storeQueue(i).paddr, storeQueue(i).func, storeQueue(i).op, storeQueue(i).data, storeQueue(i).isMMIO, storeQueue(i).valid, storeQueue(i).brMask, i.U
+    )
+    // Debug(storeAlloc === i.U, " alloc")
+    Debug(storeHeadPtr === i.U, " head")
+    Debug(storeCmtPtr === i.U, " cmt")
+    // Debug(storeReqPtr === i.U, " req")
+    Debug("\n")
   }
 
   //-------------------------------------------------------
@@ -605,17 +589,9 @@ class LSU extends NutCoreModule with HasLSUConst {
   BoringUtils.addSink(loadPF, "loadPF") // FIXIT: this is nasty
   BoringUtils.addSink(storePF, "storePF") // FIXIT: this is nasty
   // val dtlbPF = loadPF || storePF
-  Debug(){
-    when(io.flush){
-      printf("[DTLB FLUSH] %d\n", GTimer())
-    }
-    when(io.dtlb.req.fire()){
-      printf("[DTLB REQ] %d: req paddr for %x MOQid %x\n", GTimer(), io.dtlb.req.bits.addr, moqDtlbPtr)
-    }
-    when(io.dtlb.resp.fire()){
-      printf("[DTLB RESP] %d: get paddr: %x for %x MOQid %x exc l %b s %b\n", GTimer(), io.dtlb.resp.bits.rdata, moq(tlbRespmoqidx).vaddr, tlbRespmoqidx, loadPF, storePF)
-    }
-  }
+  Debug(io.flush, "[DTLB FLUSH]\n")
+  Debug(io.dtlb.req.fire(), "[DTLB REQ] %d: req paddr for %x MOQid %x\n", GTimer(), io.dtlb.req.bits.addr, moqDtlbPtr)
+  Debug(io.dtlb.resp.fire(), "[DTLB RESP] %d: get paddr: %x for %x MOQid %x exc l %b s %b\n", GTimer(), io.dtlb.resp.bits.rdata, moq(tlbRespmoqidx).vaddr, tlbRespmoqidx, loadPF, storePF)
   when(io.dtlb.resp.fire()){
     moq(tlbRespmoqidx).paddr := io.dtlb.resp.bits.rdata // FIXIT
     moq(tlbRespmoqidx).tlbfin := true.B
@@ -798,11 +774,7 @@ class LSU extends NutCoreModule with HasLSUConst {
     ldStmask(reqRobidx) := moq(loadDMemReqSrcPick).stMask
     ldDataMask(reqRobidx) := genWmask(io.dmem.req.bits.addr, moq(loadDMemReqSrcPick).size)
   }
-  Debug(){
-    when(io.dmem.req.fire() && MEMOpID.needLoad(opReq)){
-      printf("[LSU] add load to MOQ pc:%x stmask:%x\n",io.dmem.req.bits.addr(PAddrBits-1, 3), moq(reqRobidx).stMask)
-    }
-  }
+  Debug(io.dmem.req.fire() && MEMOpID.needLoad(opReq), "[LSU] add load to MOQ pc:%x stmask:%x\n",io.dmem.req.bits.addr(PAddrBits-1, 3), moq(reqRobidx).stMask)
   
   val storeNeedRollback = (0 until robSize).map(i =>{
     ldAddr(i) === Mux(havePendingStqEnq, moq(moqDmemPtr).paddr(PAddrBits-1, 3), io.dtlb.resp.bits.rdata(PAddrBits-1, 3)) &&
@@ -815,12 +787,8 @@ class LSU extends NutCoreModule with HasLSUConst {
     // printf("%d: Rollback detected at pc %x vaddr %x\n", GTimer(), moq(storeQueueEnqSrcPick).pc, moq(storeQueueEnqSrcPick).vaddr)
   }
   
-  // Debug(){
-  //   when(storeQueueEnqueue){
-  //     printf("[LSU] store backward pc %x lvec %b rob %x addrtag %x\n",moq(storeQueueEnqSrcPick).pc, robLoadInstVec, moq(storeQueueEnqSrcPick).prfidx(prfAddrWidth-1,1), Mux(havePendingStqEnq, moq(moqDmemPtr).paddr(PAddrBits-1, 3), io.dtlb.resp.bits.rdata(PAddrBits-1, 3)))
-  //     (0 until robSize).map(i =>{printf("[LSU] %x %x %x "+i+"\n",ldAddr(i),ldStmask(i),robLoadInstVec(i))})
-  //   }
-  // }
+  // Debug(storeQueueEnqueue, "store backward pc %x lvec %b rob %x addrtag %x\n",moq(storeQueueEnqSrcPick).pc, robLoadInstVec, moq(storeQueueEnqSrcPick).prfidx(prfAddrWidth-1,1), Mux(havePendingStqEnq, moq(moqDmemPtr).paddr(PAddrBits-1, 3), io.dtlb.resp.bits.rdata(PAddrBits-1, 3)))
+  // (0 until robSize).map(i =>Debug(storeQueueEnqueue, "%x %x %x "+i+"\n",ldAddr(i),ldStmask(i),robLoadInstVec(i)))
   
   // write back to load queue
   when(dmem.req.fire() && MEMOpID.needLoad(opReq)){
@@ -890,9 +858,7 @@ class LSU extends NutCoreModule with HasLSUConst {
       )
   )
 
-  // when(LSUOpType.isAMO(moq(moqTailPtr).func) && io.out.fire()){
-  //   printf("[AMO] %d: pc %x %x %x func %b word %b op %b res %x addr %x:%x\n", GTimer(), moq(moqTailPtr).pc, atomALU.io.src1, atomALU.io.src2, moq(moqTailPtr).func, atomALU.io.isWordOp, moq(moqTailPtr).op, atomALU.io.result, moq(moqTailPtr).vaddr, moq(moqTailPtr).paddr)
-  // }
+  // Debug(LSUOpType.isAMO(moq(moqTailPtr).func) && io.out.fire(), "[AMO] %d: pc %x %x %x func %b word %b op %b res %x addr %x:%x\n", GTimer(), moq(moqTailPtr).pc, atomALU.io.src1, atomALU.io.src2, moq(moqTailPtr).func, atomALU.io.isWordOp, moq(moqTailPtr).op, atomALU.io.result, moq(moqTailPtr).vaddr, moq(moqTailPtr).paddr)
 
   io.uopOut := DontCare
   io.isMMIO := moq(writebackSelect).isMMIO
@@ -922,11 +888,7 @@ class LSU extends NutCoreModule with HasLSUConst {
     }
   }
 
-  Debug(){
-    when(io.out.fire() && io.uopOut.decode.cf.redirect.valid){
-      printf("[LSU] rollback at pc %x\n", moq(writebackSelect).pc)
-    }
-  }
+  Debug(io.out.fire() && io.uopOut.decode.cf.redirect.valid, "rollback at pc %x\n", moq(writebackSelect).pc)
 
   BoringUtils.addSource(io.out.fire() && io.isMMIO, "perfCntCondMmmioInstr")
   BoringUtils.addSource(moqFull, "perfCntCondMmemqFull")
@@ -943,26 +905,19 @@ class LSU extends NutCoreModule with HasLSUConst {
   BoringUtils.addSource(storeHeadPtr, "perfCntSrcMpendingSReq")
 
   val reqpc = Mux(storeReadygo, storeQueue(0.U).pc, Mux(havePendingDmemReq, moq(moqDmemPtr).pc, Mux(dtlbEnable, moq(dtlbRespUser.moqidx).pc, moq(dtlbRespUser.moqidx).pc)))
-  Debug(){
-    printf("[DMEM] req v %x r %x addr %x data %x op %b id %x  resp v %x r %x data %x op %b id %x time %x\n",
-      dmem.req.valid, dmem.req.ready, dmem.req.bits.addr, dmem.req.bits.wdata, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).moqidx,
-      dmem.resp.valid, dmem.resp.ready, dmem.resp.bits.rdata, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).moqidx,
-      GTimer()
-    )
-    when(dmem.req.fire()){
-      printf("[LSU DREQ] ")
-      when(loadReadygo){printf("loadDMemReq")}
-      when(storeReadygo){printf("storeDMemReq")}
-      when((!loadReadygo && !storeReadygo)){printf("noDMemReq")}
-      printf(" pc %x addr 0x%x size %x wdata %x cmd %x moqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.moqidx, memReq.user.op, storeCmtPtr - 0.U, moqHeadPtr - moqDmemPtr, GTimer())
-    }
-    when(dmem.resp.fire()){
-      printf("[LSU DRESP] memdata %x fwddata %x:%b data %x moqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, moq(dmemUserOut.moqidx).fdata, moq(dmemUserOut.moqidx).fmask, rdataFwdSel, dmemUserOut.moqidx, dmemUserOut.op, lsuMMIO, GTimer())
-    }
-    when(dmem.req.fire() && !MEMOpID.needStore(opReq) && forwardWmask.orR){
-      printf("[LSU FWD] dataBack %x forwardWmask %b\n", dataBack, forwardWmask)
-    }
+  Debug("[DMEM] req v %x r %x addr %x data %x op %b id %x  resp v %x r %x data %x op %b id %x\n",
+    dmem.req.valid, dmem.req.ready, dmem.req.bits.addr, dmem.req.bits.wdata, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.req.bits.user.get.asTypeOf(new DCacheUserBundle).moqidx,
+    dmem.resp.valid, dmem.resp.ready, dmem.resp.bits.rdata, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).op, dmem.resp.bits.user.get.asTypeOf(new DCacheUserBundle).moqidx
+  )
+  when(dmem.req.fire()){
+    Debug("[DREQ] ")
+    Debug(false, loadReadygo, "loadDMemReq")
+    Debug(false, storeReadygo, "storeDMemReq")
+    Debug(false, !loadReadygo && !storeReadygo, "noDMemReq")
+    Debug(false, " pc %x addr 0x%x size %x wdata %x cmd %x moqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.moqidx, memReq.user.op, storeCmtPtr - 0.U, moqHeadPtr - moqDmemPtr, GTimer())
   }
+  Debug(dmem.resp.fire(), "[DRESP] memdata %x fwddata %x:%b data %x moqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, moq(dmemUserOut.moqidx).fdata, moq(dmemUserOut.moqidx).fmask, rdataFwdSel, dmemUserOut.moqidx, dmemUserOut.op, lsuMMIO, GTimer())
+  Debug(dmem.req.fire() && !MEMOpID.needStore(opReq) && forwardWmask.orR, "[FWD] dataBack %x forwardWmask %b\n", dataBack, forwardWmask)
 
   val printMemTrace = false
   val addrTrack = List(
@@ -971,18 +926,12 @@ class LSU extends NutCoreModule with HasLSUConst {
 
   when(printMemTrace.B || addrTrack.map(i => dmem.req.bits.addr === i).foldRight(false.B)((sum, i) => sum | i)){
     when(dmem.req.fire()){
-      printf("[LSU DREQ TRACE] ")
-      when(loadReadygo){printf("loadDMemReq")}
-      when(storeReadygo){printf("storeDMemReq")}
-      when((!loadReadygo && !storeReadygo)){printf("noDMemReq")}
-      printf(" pc %x addr 0x%x size %x wdata %x cmd %x moqidx %x memop %b spending %x lpending %x time %d\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.moqidx, memReq.user.op, storeCmtPtr - 0.U, moqHeadPtr - moqDmemPtr, GTimer())
-  }
-    when(dmem.resp.fire()){
-      printf("[LSU DRESP TRACE] memdata %x fwddata %x:%b data %x moqidx %x memop %b isMMIO %x time %d\n", dmem.resp.bits.rdata, moq(dmemUserOut.moqidx).fdata, moq(dmemUserOut.moqidx).fmask, rdataFwdSel, dmemUserOut.moqidx, dmemUserOut.op, lsuMMIO, GTimer())
-    }
-    when(dmem.req.fire() && !MEMOpID.needStore(opReq) && forwardWmask.orR){
-      printf("[LSU FWD TRACE] dataBack %x forwardWmask %b\n", dataBack, forwardWmask)
-    }
-  }
-
+      Debug("DREQ TRACE] ")
+      Debug(false, loadReadygo, "loadDMemReq")
+      Debug(false, storeReadygo, "storeDMemReq")
+      Debug(false, (!loadReadygo && !storeReadygo), "noDMemReq")
+      Debug(" pc %x addr 0x%x size %x wdata %x cmd %x moqidx %x memop %b spending %x lpending %x\n", reqpc, dmem.req.bits.addr, dmem.req.bits.size, dmem.req.bits.wdata, dmem.req.bits.cmd, memReq.user.moqidx, memReq.user.op, storeCmtPtr - 0.U, moqHeadPtr - moqDmemPtr)
+  }}
+    Debug(dmem.resp.fire(), "[LSU DRESP TRACE] memdata %x fwddata %x:%b data %x moqidx %x memop %b isMMIO %x\n", dmem.resp.bits.rdata, moq(dmemUserOut.moqidx).fdata, moq(dmemUserOut.moqidx).fmask, rdataFwdSel, dmemUserOut.moqidx, dmemUserOut.op, lsuMMIO)
+    Debug(dmem.req.fire() && !MEMOpID.needStore(opReq) && forwardWmask.orR, "[LSU FWD TRACE] dataBack %x forwardWmask %b\n", dataBack, forwardWmask)
 }

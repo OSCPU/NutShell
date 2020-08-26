@@ -138,19 +138,14 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     )
   }
 
-  Debug(){
-    when(io.out.fire()){printf("[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x id %d\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.prfDest)}
-  }
+  Debug(io.out.fire(), "[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x id %d\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.prfDest)
 
-  Debug(){
-    printf("[RS " + name + "] time %d\n", GTimer())
-    printf("[RS " + name + "] pc           v src1               src2\n")
-    for(i <- 0 to (size -1)){
-      printf("[RS " + name + "] 0x%x %x %x %x %x %x %d", decode(i).decode.cf.pc, valid(i), src1Rdy(i), src1(i), src2Rdy(i), src2(i), decode(i).prfDest)
-      when(valid(i)){printf("  valid")}
-      printf(" mask %x\n", brMask(i))
-      // printf("\n")
-    }
+  Debug("[RS " + name + "] pc           v src1               src2\n")
+  for(i <- 0 to (size -1)){
+    Debug("[RS " + name + "] 0x%x %x %x %x %x %x %d", decode(i).decode.cf.pc, valid(i), src1Rdy(i), src1(i), src2Rdy(i), src2(i), decode(i).prfDest)
+    Debug(valid(i), "  valid")
+    Debug(" mask %x\n", brMask(i))
+    // Debug("\n")
   }
 
   // fix unpipelined 
@@ -172,9 +167,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
     io.out.bits.brMask := brMaskPReg
-    Debug(){
-      printf("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire())
-    }
+    Debug("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire())
   }
 
   if(fifo){

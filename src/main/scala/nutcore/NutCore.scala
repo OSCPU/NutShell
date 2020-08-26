@@ -57,8 +57,8 @@ trait HasNutCoreConst extends HasNutCoreParameter {
   val IndependentBru = if (Settings.get("EnableOutOfOrderExec")) true else false
 }
 
-trait HasNutCoreLog { this: Module =>
-  implicit val _implicit_module = this
+trait HasNutCoreLog { this: RawModule =>
+  implicit val moduleName: String = this.name
 }
 
 abstract class NutCoreModule extends Module with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog
@@ -219,8 +219,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     dmemXbar.io.in(2) <> io.frontend
 
     io.mmio <> mmioXbar.io.out
-  } 
-  Debug() {
-    printf("------------------------ BACKEND : %d ------------------------\n", GTimer())
   }
+
+  Debug("------------------------ BACKEND ------------------------\n")
 }
