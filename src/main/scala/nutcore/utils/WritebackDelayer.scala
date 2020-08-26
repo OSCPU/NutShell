@@ -58,9 +58,7 @@ class WritebackDelayer(bru: Boolean = false, name: String = "unnamedDelayer") ex
     io.freeCheckpoint.get.valid := io.out.fire()
   }
 
-  Debug(){
-    when(valid){printf("[WBDelay-"+name+"] delayer valid: pc %x brMask %x\n", io.out.bits.decode.cf.pc, brMask)}
-  }
+  Debug(valid, "[WBDelay-"+name+"] delayer valid: pc %x brMask %x\n", io.out.bits.decode.cf.pc, brMask)
 }
 
 

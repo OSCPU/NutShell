@@ -51,19 +51,11 @@ class MOU extends NutCoreModule {
   io.redirect.rtype := 0.U
   val flushICache = valid && (func === MOUOpType.fencei)
   BoringUtils.addSource(flushICache, "MOUFlushICache")
-  Debug(){
-    when(flushICache){
-      printf("%d: [MOU] Flush I$ at %x\n", GTimer(), io.cfIn.pc)
-    }
-  }
+  Debug(flushICache, "Flush I$ at %x\n", io.cfIn.pc)
 
   val flushTLB = valid && (func === MOUOpType.sfence_vma)
   BoringUtils.addSource(flushTLB, "MOUFlushTLB")
-  Debug() {
-    when (flushTLB) {
-      printf("%d: [MOU] Flush TLB at %x\n", GTimer(), io.cfIn.pc)
-    }
-  }
+  Debug(flushTLB, "Sfence.vma at %x\n", io.cfIn.pc)
 
   io.out.bits := 0.U
   io.in.ready := true.B

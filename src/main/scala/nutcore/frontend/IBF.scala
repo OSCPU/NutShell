@@ -90,14 +90,12 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
     when(enqueueFire(2)){ibufWrite(2, shiftSize)}
     when(enqueueFire(3)){ibufWrite(3, shiftSize)}
     ringBufferHead := ringBufferHead + enqueueSize
-    Debug(){
-      printf("[IBUF] ibuf enqueue at time %d :\n", GTimer())
-      printf("[IBUF] instValid %b brIdx %b isRVC %b needEnqueue %b enqueueSize %x shiftSize %x\n", instValid.asUInt,brIdx.asUInt,isRVC.asUInt,needEnqueue.asUInt,enqueueSize.asUInt,shiftSize.asUInt)
-      when(enqueueFire(0)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+0.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 0.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+0.U), io.in.bits.icachePF, shiftSize+0.U)}
-      when(enqueueFire(1)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+1.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 1.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+1.U), io.in.bits.icachePF, shiftSize+1.U)}
-      when(enqueueFire(2)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+2.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 2.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+2.U), io.in.bits.icachePF, shiftSize+2.U)}
-      when(enqueueFire(3)){printf("[IBUF]     inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+3.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 3.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+3.U), io.in.bits.icachePF, shiftSize+3.U)}
-    }
+    Debug("ibuf enqueue:\n")
+    Debug("instValid %b brIdx %b isRVC %b needEnqueue %b enqueueSize %x shiftSize %x\n", instValid.asUInt,brIdx.asUInt,isRVC.asUInt,needEnqueue.asUInt,enqueueSize.asUInt,shiftSize.asUInt)
+    Debug(enqueueFire(0), "inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+0.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 0.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+0.U), io.in.bits.icachePF, shiftSize+0.U)
+    Debug(enqueueFire(1), "inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+1.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 1.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+1.U), io.in.bits.icachePF, shiftSize+1.U)
+    Debug(enqueueFire(2), "inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+2.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 2.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+2.U), io.in.bits.icachePF, shiftSize+2.U)
+    Debug(enqueueFire(3), "inst %x pc %x npc %x br %x ipf %x eqsrc %x\n", instrVec(shiftSize+3.U), Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + 3.U, 0.U(1.W)), io.in.bits.pnpc, io.in.bits.brIdx(shiftSize+3.U), io.in.bits.icachePF, shiftSize+3.U)
   }
 
   io.in.ready := ringBufferAllowin || !io.in.valid// used to be !io.in.valid, do not know what's for
@@ -127,10 +125,8 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   io.out(0).bits.exceptionVec.map(_ => false.B)
   io.out(0).bits.exceptionVec(instrPageFault) := ipfRingMeta(ringBufferTail) || !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
   val dequeueSize1 = Mux(io.out(0).fire(), Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
-  Debug(){
-    when(io.out(0).fire()){printf("[IBUF] dequeue: bufferhead %x buffertail %x time %d\n", ringBufferHead, ringBufferTail, GTimer())}
-    when(io.out(0).fire()){printf("[IBUF]     dequeue1: inst %x pc %x npc %x br %x ipf %x(%x) time %d\n", io.out(0).bits.instr, io.out(0).bits.pc, io.out(0).bits.pnpc, io.out(0).bits.brIdx, io.out(0).bits.exceptionVec(instrPageFault), io.out(0).bits.crossPageIPFFix, GTimer())}
-  }
+    Debug(io.out(0).fire(), "dequeue: bufferhead %x buffertail %x\n", ringBufferHead, ringBufferTail)
+    Debug(io.out(0).fire(), "dequeue1: inst %x pc %x npc %x br %x ipf %x(%x)\n", io.out(0).bits.instr, io.out(0).bits.pc, io.out(0).bits.pnpc, io.out(0).bits.brIdx, io.out(0).bits.exceptionVec(instrPageFault), io.out(0).bits.crossPageIPFFix)
 
   //dequeue socket 2
   val inst2_StartIndex = ringBufferTail + dequeueSize1
@@ -152,9 +148,7 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   io.out(1).bits.exceptionVec.map(_ => false.B)
   io.out(1).bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex) || !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
   val dequeueSize2 = Mux(io.out(1).fire(), Mux(dequeueIsRVC(dequeueSize1), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
-  Debug(){
-    when(io.out(1).fire()){printf("[IBUF]     dequeue2: inst %x pc %x npc %x br %x ipf %x(%x) time %d\n", io.out(1).bits.instr, io.out(1).bits.pc, io.out(1).bits.pnpc, io.out(1).bits.brIdx, io.out(1).bits.exceptionVec(instrPageFault), io.out(1).bits.crossPageIPFFix, GTimer())}
-  }
+  Debug(io.out(1).fire(), "dequeue2: inst %x pc %x npc %x br %x ipf %x(%x)\n", io.out(1).bits.instr, io.out(1).bits.pc, io.out(1).bits.pnpc, io.out(1).bits.brIdx, io.out(1).bits.exceptionVec(instrPageFault), io.out(1).bits.crossPageIPFFix)
 
   val dequeueSize = dequeueSize1 +& dequeueSize2
 
@@ -166,9 +160,7 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
     when(dequeueSize >= 3.U){validRingMeta(2.U + ringBufferTail) := false.B}
     when(dequeueSize >= 4.U){validRingMeta(3.U + ringBufferTail) := false.B}
     ringBufferTail := ringBufferTail + dequeueSize;
-    Debug(){
-      printf("[IBUF] ibuf dequeue %x*16 bits\n", dequeueSize)
-    }
+    Debug("ibuf dequeue %x*16 bits\n", dequeueSize)
   }
 
   //flush control
