@@ -493,7 +493,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
               loadPF := req.isRead()
               storePF := req.isWrite() 
             }  
-            Debug("%d tlbException!!! ")
+            Debug("tlbException!!! ")
             Debug(false, p" req:${req}  Memreq:${io.mem.req}  MemResp:${io.mem.resp}")
             Debug(false, " level:%d",level)
             Debug(false, "\n")

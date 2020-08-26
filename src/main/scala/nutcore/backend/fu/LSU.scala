@@ -428,7 +428,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   val haveUnfinishedStore = 0.U =/= storeHeadPtr
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
   io.haveUnfinishedStore := haveUnfinishedStore
-  Debug(storeCmtPtr > storeHeadPtr, "%d retired store should be less than valid store\n")
+  Debug(storeCmtPtr > storeHeadPtr, "retired store should be less than valid store\n")
     
   // assert(storeCmtPtr <= storeHeadPtr, "retired store should be less than valid store")
 
