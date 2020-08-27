@@ -51,7 +51,7 @@ object LogUtil {
   def apply(debugLevel: LogLevel)
            (prefix: Boolean, cond: Bool, pable: Printable)
            (implicit name: String): Any = {
-    val commonInfo = p"[${GTimer()}] $name: "
+    val commonInfo = p"[$debugLevel][time=${GTimer()}] $name: "
     when (cond && displayLog) {
       if(prefix) printf(commonInfo)
       printf(pable)
