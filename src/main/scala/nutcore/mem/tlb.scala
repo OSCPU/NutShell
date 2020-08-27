@@ -410,7 +410,7 @@ object NBTLB {
     tlb.io.requestor(0).req.bits.cmd   := Mux(ifecth, TlbCmd.exec, Mux(in.req.bits.isRead, TlbCmd.read, TlbCmd.write)) // TODO: need check AMO
     tlb.io.requestor(0).req.bits.roqIdx := DontCare
     tlb.io.requestor(0).req.bits.debug := DontCare
-    in.req.ready := !tlb.io.requestor(0).resp.bits.miss
+    
 
     val pf = LookupTree(tlb.io.requestor(0).req.bits.cmd, List(
       TlbCmd.read -> tlb.io.requestor(0).resp.bits.excp.pf.ld,
@@ -422,6 +422,7 @@ object NBTLB {
     out.req.valid := Mux(pf, false.B, in.req.valid && !tlb.io.requestor(0).resp.bits.miss)
     out.req.bits := in.req.bits
     out.req.bits.addr := tlb.io.requestor(0).resp.bits.paddr
+    in.req.ready := !tlb.io.requestor(0).resp.bits.miss && out.req.ready
 
     val isAMO = WireInit(false.B)
     if (isDtlb) {
@@ -461,8 +462,8 @@ object OOTLB {
       TlbCmd.write -> tlb.io.requestor(0).resp.bits.excp.pf.st,
       TlbCmd.exec -> tlb.io.requestor(0).resp.bits.excp.pf.instr
     ))
-    in.req.ready := !tlb.io.requestor(0).resp.bits.miss
-    in.resp := DontCare
+    in.req.ready := !tlb.io.requestor(0).resp.bits.miss && in.resp.ready
+    in.resp := DontCare // FIXME
     in.resp.valid := tlb.io.requestor(0).resp.valid && !tlb.io.requestor(0).resp.bits.miss
     in.resp.bits.rdata := tlb.io.requestor(0).resp.bits.paddr
 
