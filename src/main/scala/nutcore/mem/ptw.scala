@@ -163,8 +163,8 @@ class PTW /*(implicit m: Module)*/ extends PtwModule {
   val csr    = WireInit(0.U.asTypeOf(new TlbCsrBundle))
   val satp   = csr.satp
   val priv   = csr.priv
-  // BoringUtils.addSink(sfence, "SfenceBundle")
-  // BoringUtils.addSink(csr, "TLBCSRIO")
+  BoringUtils.addSink(sfence, "SfenceBundle")
+  BoringUtils.addSink(csr, "TLBCSRIO")
 
   // two level: l2-tlb-cache && pde/pte-cache
   // l2-tlb-cache is ram-larger-edition tlb
@@ -375,7 +375,7 @@ class PTW /*(implicit m: Module)*/ extends PtwModule {
     when (state===state_wait_resp && !memRespFire) {
       sfenceLatch := true.B // NOTE: every req need a resp
     }
-    
+
     when (sfence.bits.rs1/*va*/) {
       when (sfence.bits.rs2) {
         // all va && all asid
