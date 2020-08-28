@@ -234,7 +234,7 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
   val priv   = csr.priv
   val ifecth = if (isDtlb) false.B else true.B
   val mode   = if (isDtlb) priv.dmode else priv.imode
-  val vmEnable = false.B //satp.mode === 8.U // && (mode < ModeM) // FIXME: fix me when boot xv6/linux...
+  val vmEnable = satp.mode === 8.U // && (mode < ModeM) // FIXME: fix me when boot xv6/linux...
   BoringUtils.addSink(sfence, "SfenceBundle")
   BoringUtils.addSink(csr, "TLBCSRIO")
 
@@ -323,7 +323,7 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
   // refill
   val refill = ptw.resp.fire()
   val randIdx = LFSR64()(log2Up(TlbEntrySize)-1,0)
-  val priorIdx = PriorityEncoder(~v)
+  val priorIdx = PriorityEncoder(~(v|pf))
   val refillIdx = Mux(ParallelAND((v|pf).asBools), randIdx, priorIdx)
   val pfRefill = WireInit(0.U(TlbEntrySize.W))
   when (refill) {
