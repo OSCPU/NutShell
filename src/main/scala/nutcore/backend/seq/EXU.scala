@@ -97,6 +97,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
     Mux(mou.io.redirect.valid, mou.io.redirect,
       Mux(csr.io.redirect.valid, csr.io.redirect, alu.io.redirect))
   
+  Debug(io.in.fire() || io.out.fire(), p"In(${io.in.valid} ${io.in.ready}) Out(${io.out.valid} ${io.out.ready}) pc:0x${Hexadecimal(io.in.bits.cf.pc)} instr:0x${Hexadecimal(io.in.bits.cf.instr)} fuType:b${Binary(fuType)} opType:b${Binary(fuOpType)} alu(${alu.io.in.valid} ${alu.io.in.ready})(${alu.io.out.valid} ${alu.io.out.ready}) lsu(${lsu.io.in.valid} ${lsu.io.in.ready})(${lsu.io.out.valid} ${lsu.io.out.ready}) mdu(${mdu.io.in.valid} ${mdu.io.in.ready})(${mdu.io.out.valid} ${mdu.io.out.ready}) csr(${csr.io.in.valid} ${csr.io.in.ready})(${csr.io.out.valid} ${csr.io.out.ready}) mou(${mou.io.in.valid} ${mou.io.in.ready})(${mou.io.out.valid} ${mou.io.out.ready})\n")
   Debug(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid, "[REDIRECT] mou %x csr %x alu %x \n", mou.io.redirect.valid, csr.io.redirect.valid, alu.io.redirect.valid)
   Debug(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid, "[REDIRECT] flush: %d mou %x csr %x alu %x\n", io.flush, mou.io.redirect.target, csr.io.redirect.target, alu.io.redirect.target)
 

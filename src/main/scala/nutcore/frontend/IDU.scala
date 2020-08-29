@@ -162,7 +162,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   // fix c_break
 
 
-  Debug(io.out.fire(), "issue: pc %x npc %x instr %x\n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr)
+  Debug(io.out.fire(), "pc %x npc %x instr %x isRVC %d fuType %b fuOpType %b \n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr, isRVC, io.out.bits.ctrl.fuType, io.out.bits.ctrl.fuOpType)
 
   val intrVec = WireInit(0.U(12.W))
   BoringUtils.addSink(intrVec, "intrVecIDU")
