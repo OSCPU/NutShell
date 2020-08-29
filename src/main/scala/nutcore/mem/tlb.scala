@@ -234,7 +234,7 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
   val priv   = csr.priv
   val ifecth = if (isDtlb) false.B else true.B
   val mode   = if (isDtlb) priv.dmode else priv.imode
-  val vmEnable = satp.mode === 8.U // && (mode < ModeM) // FIXME: fix me when boot xv6/linux...
+  val vmEnable = satp.mode === 8.U && (mode < ModeM)
   BoringUtils.addSink(sfence, "SfenceBundle")
   BoringUtils.addSink(csr, "TLBCSRIO")
 
@@ -395,17 +395,17 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
   }
   assert(!multiHit) // add multiHit here, later it should be removed (maybe), turn to miss and flush
 
-  for (i <- 0 until Width) {
-    Debug(resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr), p"vaddr:0x${Hexadecimal(req(i).bits.vaddr)} paddr:0x${Hexadecimal(resp(i).bits.paddr)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)}}\n")
-    when (resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr)) {
-      for (j <- 0 until TlbEntrySize) {
-        Debug(true.B, p"TLBEntry(${j.U}): v:${v(j)} ${entry(j)}\n")
-      }
-    } // FIXME: remove me when tlb may be ok
-    when(resp(i).valid && hit(i)) {
-      assert(req(i).bits.vaddr===resp(i).bits.paddr, "vaddr:0x%x paddr:0x%x hitVec:%x ", req(i).bits.vaddr, resp(i).bits.paddr, VecInit(hitVec(i)).asUInt)
-    } // FIXME: remove me when tlb may be ok
-  }
+  // for (i <- 0 until Width) {
+  //   Debug(resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr), p"vaddr:0x${Hexadecimal(req(i).bits.vaddr)} paddr:0x${Hexadecimal(resp(i).bits.paddr)} hitVec:0x${Hexadecimal(VecInit(hitVec(i)).asUInt)}}\n")
+  //   when (resp(i).valid && hit(i) && !(req(i).bits.vaddr===resp(i).bits.paddr)) {
+  //     for (j <- 0 until TlbEntrySize) {
+  //       Debug(true.B, p"TLBEntry(${j.U}): v:${v(j)} ${entry(j)}\n")
+  //     }
+  //   } // FIXME: remove me when tlb may be ok
+  //   when(resp(i).valid && hit(i)) {
+  //     assert(req(i).bits.vaddr===resp(i).bits.paddr, "vaddr:0x%x paddr:0x%x hitVec:%x ", req(i).bits.vaddr, resp(i).bits.paddr, VecInit(hitVec(i)).asUInt)
+  //   } // FIXME: remove me when tlb may be ok
+  // }
   
   assert((v&pf)===0.U, "v and pf can't be true at same time: v:0x%x pf:0x%x", v, pf)
 }
