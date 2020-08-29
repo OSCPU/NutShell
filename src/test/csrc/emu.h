@@ -124,7 +124,7 @@ class Emulator {
     dut_ptr->trace(tfp, 99);	// Trace 99 levels of hierarchy
     tfp->open("vlt_dump.vcd");	// Open the dump file
 #endif
-
+    int cnt = 0;
     while (!is_finish() && n > 0) {
       single_cycle();
       n --;
@@ -149,6 +149,7 @@ class Emulator {
 
       // difftest
       if (dut_ptr->io_difftest_commit && hascommit) {
+        if(cnt < 10000) { printf("Commit: cnt:%d pc:0x%x\n", cnt++, dut_ptr->io_difftest_thisPC); }
         rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
 
