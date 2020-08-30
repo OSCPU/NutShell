@@ -447,7 +447,7 @@ object NBTLB {
     in.resp <> out.resp
     if(!isDtlb) {
       when (pf) {
-        in.resp.valid := true.B
+        in.resp.valid := in.req.valid
         in.resp.bits.rdata := 0.U
         in.resp.bits.cmd := SimpleBusCmd.readLast
         in.resp.bits.user.map(_ := in.req.bits.user.getOrElse(0.U))
