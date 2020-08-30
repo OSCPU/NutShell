@@ -238,7 +238,7 @@ class PTW /*(implicit m: Module)*/ extends PtwModule {
     val ridx = l2addr(log2Up(PtwL2EntrySize)-1+log2Up(XLEN/8), log2Up(XLEN/8))
     val ramData = ptwl2.read(ridx, readRam)
     val vidx = RegEnable(l2v(ridx), readRam)
-    (ramData.hit(l2addr), ramData) // TODO: optimize tag
+    (ramData.hit(l2addr) && vidx, ramData) // TODO: optimize tag
   }
 
   /* ptwl3
@@ -406,12 +406,12 @@ class PTW /*(implicit m: Module)*/ extends PtwModule {
   Debug(validOneCycle, p"**New Ptw Req from ${arbChosen}: (v:${validOneCycle} r:${arb.io.out.ready}) vpn:0x${Hexadecimal(req.vpn)}\n")
   Debug(resp(arbChosen).fire(), p"**Ptw Resp to ${arbChosen}: (v:${resp(arbChosen).valid} r:${resp(arbChosen).ready}) entry:${resp(arbChosen).bits.entry} pf:${resp(arbChosen).bits.pf}\n")
 
-  Debug(sfence.valid, p"Sfence: sfence instr here ${sfence.bits}\n")
+  Debug(sfence.valid, p"Sfence: sfence instr here ${sfence}\n")
   Debug(valid, p"CSR: ${csr}\n")
-
+  Debug(valid, p"tlbv: ${Hexadecimal(tlbv)} tlbg:0x${Hexadecimal(tlbg)} l1v:0x${Hexadecimal(l1v)} l1g:0x${Hexadecimal(l1g)} l2v:0x${Hexadecimal(l2v)} l2g:0x${Hexadecimal(l2g)}\n")
   Debug(valid, p"vpn2:0x${Hexadecimal(getVpnn(req.vpn, 2))} vpn1:0x${Hexadecimal(getVpnn(req.vpn, 1))} vpn0:0x${Hexadecimal(getVpnn(req.vpn, 0))}\n")
-  Debug(valid, p"state:${state} level:${level} tlbHit:${tlbHit} l1addr:0x${Hexadecimal(l1addr)} l1Hit:${l1Hit} l2addr:0x${Hexadecimal(l2addr)} l2Hit:${l2Hit}  l3addr:0x${Hexadecimal(l3addr)} memReq(v:${memReqValid} r:${memReqReady})\n")
+  Debug(valid, p"state:${state} level:${level} tlbHit:${tlbHit} l1addr:0x${Hexadecimal(l1addr)} l1Hit:${l1Hit} l2addr:0x${Hexadecimal(l2addr)} l2Hit:${l2Hit}  l3addr:0x${Hexadecimal(l3addr)} memReq(v:${memReqValid} r:${memReqReady} addr:0x${Hexadecimal(memAddr)})\n")
 
-  Debug(memRespFire, p"mem req fire addr:0x${Hexadecimal(memAddr)}\n")
+  Debug(memReqFire, p"mem req fire addr:0x${Hexadecimal(memAddr)}\n")
   Debug(memRespFire, p"mem resp fire rdata:0x${Hexadecimal(memRdata)} Pte:${memPte}\n")
 }
