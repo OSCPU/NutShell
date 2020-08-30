@@ -171,7 +171,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   hasIntr := intrVec.orR
   Debug(io.out.fire() && hasIntr, p"hasInstr:${hasIntr} instrVec:${Hexadecimal(VecInit(intrVec).asUInt)} pc:0x${Hexadecimal(io.out.bits.cf.pc)} instr:0x${Hexadecimal(io.out.bits.cf.instr)}\n")
   val vmEnable = WireInit(false.B)
-  BoringUtils.addSink(vmEnable, "DTLBENABLE")
+  BoringUtils.addSink(vmEnable, "ITLBENABLE")
 
   io.out.bits.cf.exceptionVec.map(_ := false.B)
   io.out.bits.cf.exceptionVec(illegalInstr) := (instrType === InstrN && !hasIntr) && io.in.valid

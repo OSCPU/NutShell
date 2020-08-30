@@ -238,6 +238,12 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
   BoringUtils.addSink(sfence, "SfenceBundle")
   BoringUtils.addSink(csr, "TLBCSRIO")
 
+  if (isDtlb) {
+    BoringUtils.addSource(vmEnable, "DTLBENABLE")
+  } else {
+    BoringUtils.addSource(vmEnable, "ITLBENABLE")
+  }
+
   val reqAddr = req.map(_.bits.vaddr.asTypeOf(vaBundle))
   val cmd     = req.map(_.bits.cmd)
   val valid   = req.map(_.valid)

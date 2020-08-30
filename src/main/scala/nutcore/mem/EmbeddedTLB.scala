@@ -145,6 +145,8 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
     BoringUtils.addSource(tlbFinish, "DTLBFINISH")
     BoringUtils.addSource(io.csrMMU.isPF(), "DTLBPF")
     BoringUtils.addSource(vmEnable, "DTLBENABLE")
+  } else {
+    BoringUtils.addSource(vmEnable, "ITLBENABLE")
   }
 
   // instruction page fault
