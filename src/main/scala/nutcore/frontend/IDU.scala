@@ -28,12 +28,13 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
     val out = Decoupled(new DecodeIO)
     val isWFI = Output(Bool()) // require NutCoreSim to advance mtime when wfi to reduce the idle time in Linux
   })
-
   val hasIntr = Wire(Bool())
-  val instr = io.in.bits.instr
+  val instr = io.in.bits.instr(31,0) // TODO: change by zhangzifei, need check
   val decodeList = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val instrType :: fuType :: fuOpType :: Nil = // insert Instructions.DecodeDefault when interrupt comes
     Instructions.DecodeDefault.zip(decodeList).map{case (intr, dec) => Mux(hasIntr || io.in.bits.exceptionVec(instrPageFault) || io.out.bits.cf.exceptionVec(instrAccessFault), intr, dec)}
+  Debug(io.in.fire() || io.out.fire(), p"In(${io.in.valid} ${io.in.ready}) Out(${io.out.valid} ${io.out.ready}) pc:0x${Hexadecimal(io.in.bits.pc)} instr1:0x${Hexadecimal(io.in.bits.instr)} instr:0x${Hexadecimal(instr)} hasIntr:${hasIntr} instrPf:${io.in.bits.exceptionVec(instrPageFault)} instrAf:${io.out.bits.cf.exceptionVec(instrAccessFault)} instrType:b${Binary(instrType)} fuType:b${Binary(fuType)} fuOpType:b${Binary(fuOpType)}\n")
+
   // val instrType :: fuType :: fuOpType :: Nil = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val isRVC = if (HasCExtension) instr(1,0) =/= "b11".U else false.B
   val rvcImmType :: rvcSrc1Type :: rvcSrc2Type :: rvcDestType :: Nil =
@@ -168,7 +169,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   BoringUtils.addSink(intrVec, "intrVecIDU")
   io.out.bits.cf.intrVec.zip(intrVec.asBools).map{ case(x, y) => x := y }
   hasIntr := intrVec.orR
-
+  Debug(io.out.fire() && hasIntr, p"hasInstr:${hasIntr} instrVec:${Hexadecimal(VecInit(intrVec).asUInt)} pc:0x${Hexadecimal(io.out.bits.cf.pc)} instr:0x${Hexadecimal(io.out.bits.cf.instr)}\n")
   val vmEnable = WireInit(false.B)
   BoringUtils.addSink(vmEnable, "DTLBENABLE")
 

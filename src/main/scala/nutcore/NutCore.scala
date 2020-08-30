@@ -219,7 +219,8 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     dmemXbar.io.in(2) <> io.frontend
 
     io.mmio <> mmioXbar.io.out
+    Debug(io.mmio.req.valid || io.mmio.resp.valid, p"MMIO: Req(${io.mmio.req.valid} ${io.mmio.req.ready}) Resp(${io.mmio.resp.valid} ${io.mmio.resp.ready}) cmd:${io.mmio.req.bits.cmd} addr:0x${Hexadecimal(io.mmio.req.bits.addr)} wdata:0x${Hexadecimal(io.mmio.req.bits.wdata)} rdata:0x${Hexadecimal(io.mmio.resp.bits.rdata)}\n")
   }
 
-  Debug("------------------------ BACKEND ------------------------\n")
+  // Debug("------------------------ BACKEND ------------------------\n")
 }

@@ -149,7 +149,7 @@ class Emulator {
 
       // difftest
       if (dut_ptr->io_difftest_commit && hascommit) {
-        if(cnt < 10000) { printf("Commit: cnt:%d pc:0x%x\n", cnt++, dut_ptr->io_difftest_thisPC); }
+        // if(cnt < 10000) { printf("Commit: cnt:%d pc:0x%x\n", cnt++, dut_ptr->io_difftest_thisPC); }
         rtlreg_t reg[DIFFTEST_NR_REG];
         read_emu_regs(reg);
 

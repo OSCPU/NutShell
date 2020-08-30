@@ -607,7 +607,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
   BoringUtils.addSource(intrVec, "intrVecIDU")
   // val intrNO = PriorityEncoder(intrVec)
-  
+  Debug(intrVec.orR || mstatusStruct.ie.m || mipReg.orR || VecInit(mip).asUInt.orR, p"intrVec:0x${Hexadecimal(intrVec)} mie:0x${Hexadecimal(mie)} mipRaise:0x${Hexadecimal(VecInit(mipRaiseIntr).asUInt)} intrVecEnable:0x${Hexadecimal(intrVecEnable.asUInt)} ideleg:0x${Hexadecimal(ideleg)} privMode:b${Binary(priviledgeMode)} mstatusStruct.ie:b${Binary(VecInit(mstatusStruct.ie).asUInt)} mipWire:0x${Hexadecimal(VecInit(mipWire).asUInt)} mipReg:0x${Hexadecimal(mipReg)} mip:0x${Hexadecimal(VecInit(mip).asUInt)}\n")
   val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
   // val intrNO = PriorityEncoder(io.cfIn.intrVec)
   val raiseIntr = io.cfIn.intrVec.asUInt.orR

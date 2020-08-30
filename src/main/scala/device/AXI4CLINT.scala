@@ -22,13 +22,14 @@ import chisel3.util.experimental.BoringUtils
 
 import bus.axi4._
 import utils._
+import nutcore.HasNutCoreLog
 
 class ClintIO extends Bundle {
   val mtip = Output(Bool())
   val msip = Output(Bool())
 }
 
-class AXI4CLINT(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new ClintIO) {
+class AXI4CLINT(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new ClintIO) with HasNutCoreLog {
   val mtime = RegInit(0.U(64.W))  // unit: us
   val mtimecmp = RegInit(0.U(64.W))
   val msip = RegInit(0.U(64.W))
@@ -63,4 +64,7 @@ class AXI4CLINT(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new 
 
   io.extra.get.mtip := RegNext(mtime >= mtimecmp)
   io.extra.get.msip := RegNext(msip =/= 0.U)
+
+  Debug(p"mtime:0x${Hexadecimal(mtime)} mtimecmp:0x${Hexadecimal(mtimecmp)} msip:0x${Hexadecimal(msip)} freq:0x${Hexadecimal(freq)} inc:0x${Hexadecimal(inc)} cnt:0x${Hexadecimal(cnt)} raddr:0x${Hexadecimal(raddr)} goraddr:0x${Hexadecimal(getOffset(raddr))} rdata:0x${Hexadecimal(in.r.bits.data)}\n")
+  Debug(in.w.fire(), p"WriteClint: waddr:0x${Hexadecimal(waddr)} gowaddr:0x${Hexadecimal(getOffset(waddr))} wdata:0x${Hexadecimal(in.w.bits.data)} wmask:0x${Hexadecimal(MaskExpand(in.w.bits.strb))} strb:b${Binary(in.w.bits.strb)}\n")
 }
