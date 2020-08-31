@@ -234,7 +234,8 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
   val priv   = csr.priv
   val ifecth = if (isDtlb) false.B else true.B
   val mode   = if (isDtlb) priv.dmode else priv.imode
-  val vmEnable = satp.mode === 8.U && (mode < ModeM)
+  val vmEnable = satp.mode === 8.U && (mode < ModeM) // NOTE: normal mode
+  // val vmEnable = true.B // NOTE: tlb simple test use it
   BoringUtils.addSink(sfence, "SfenceBundle")
   BoringUtils.addSink(csr, "TLBCSRIO")
 
@@ -445,22 +446,25 @@ object NBTLB {
 
     excp.pf.ld := tlb.io.requestor(0).resp.bits.excp.pf.ld && !isAMO
     excp.pf.st := tlb.io.requestor(0).resp.bits.excp.pf.st && (tlb.io.requestor(0).resp.bits.excp.pf.ld && isAMO)
-    excp.pf.instr := tlb.io.requestor(0).resp.bits.excp.pf.instr
+    excp.pf.instr := false.B//tlb.io.requestor(0).resp.bits.excp.pf.instr
     excp.pf.addr := in.req.bits.addr
 
     assert(!(pf && out.req.valid))
     
     in.resp <> out.resp
     if(!isDtlb) {
-      when (pf) {
+      when (pf && cacheEmpty) {
         in.resp.valid := in.req.valid
         in.resp.bits.rdata := 0.U
         in.resp.bits.cmd := SimpleBusCmd.readLast
         in.resp.bits.user.map(_ := in.req.bits.user.getOrElse(0.U))
+        excp.pf.instr := true.B
+      }
+      when (pf) {
         in.req.ready := in.resp.ready && cacheEmpty
       }
     }
-    
+    Debug(in.req.valid && pf, p"PF: inReq(${in.req.valid} ${in.req.ready}) Resp(${in.resp.valid} ${in.resp.valid}) OutReq(${out.req.valid} ${out.req.ready}) Resp(${out.resp.valid} ${out.resp.ready}) paddr:0x${Hexadecimal(in.req.bits.addr)} vaddr:0x${Hexadecimal(out.req.bits.addr)} cacheEmpty:${cacheEmpty} cmd:${tlb.io.requestor(0).req.bits.cmd} tlbResp:${tlb.io.requestor(0).resp.bits}\n")(name = tlb.name)
 
     mem <> tlb.io.ptw
 

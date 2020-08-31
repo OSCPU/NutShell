@@ -341,7 +341,7 @@ class LSExecUnit extends NutCoreModule {
   val dtlbPF = WireInit(false.B)
   val dtlbEnable = WireInit(false.B)
   if (Settings.get("HasDTLB")) {
-    BoringUtils.addSink(dtlbFinish, "DTLBFINISH")
+    BoringUtils.addSink(dtlbFinish, "DTLBFINISH") // NOTE: new tlb will not use it
     BoringUtils.addSink(dtlbPF, "DTLBPF")
     BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
   }
@@ -349,18 +349,29 @@ class LSExecUnit extends NutCoreModule {
   io.dtlbPF := dtlbPF
 
   switch (state) {
-    is (s_idle) { 
-      when (dmem.req.fire() && dtlbEnable)  { state := s_wait_tlb  }
-      when (dmem.req.fire() && !dtlbEnable) { state := s_wait_resp } 
-      //when (dmem.req.fire()) { state := Mux(isStore, s_partialLoad, s_wait_resp) }
+    is (s_idle) { // TODO: may have long latency for addr has no reg-store, may store addr and add one pipeline here
+      when (dmem.req.fire()) { state := s_wait_resp }
+      when (dtlbEnable && dtlbPF && valid) { state := s_idle }
     }
-    is (s_wait_tlb) {
-      when (dtlbFinish && dtlbPF ) { state := s_idle }
-      when (dtlbFinish && !dtlbPF) { state := s_wait_resp/*Mux(isStore, s_partialLoad, s_wait_resp) */} 
+    is (s_wait_resp) {
+      when (dmem.resp.fire()) { state := Mux(partialLoad, s_partialLoad, s_idle) }
     }
-    is (s_wait_resp) { when (dmem.resp.fire()) { state := Mux(partialLoad, s_partialLoad, s_idle) } }
     is (s_partialLoad) { state := s_idle }
   }
+
+  // switch (state) {
+  //   is (s_idle) { 
+  //     when (dmem.req.fire() && dtlbEnable)  { state := s_wait_tlb  }
+  //     when (dmem.req.fire() && !dtlbEnable) { state := s_wait_resp } 
+  //     //when (dmem.req.fire()) { state := Mux(isStore, s_partialLoad, s_wait_resp) }
+  //   }
+  //   is (s_wait_tlb) {
+  //     when (dtlbFinish && dtlbPF ) { state := s_idle }
+  //     when (dtlbFinish && !dtlbPF) { state := s_wait_resp/*Mux(isStore, s_partialLoad, s_wait_resp) */} 
+  //   }
+  //   is (s_wait_resp) { when (dmem.resp.fire()) { state := Mux(partialLoad, s_partialLoad, s_idle) } }
+  //   is (s_partialLoad) { state := s_idle }
+  // }
 
   Debug(dmem.req.fire(), "[LSU] %x, size %x, wdata_raw %x, isStore %x\n", addr, func(1,0), io.wdata, isStore)
   Debug(dmem.req.fire(), "[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x\n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire(), dmem.resp.fire(), dmem.resp.bits.rdata)
@@ -383,6 +394,7 @@ class LSExecUnit extends NutCoreModule {
   io.in.ready := (state === s_idle) || dtlbPF
 
   Debug(io.out.fire(), "[LSU-EXECUNIT] state %x dresp %x dpf %x lm %x sm %x\n", state, dmem.resp.fire(), dtlbPF, io.loadAddrMisaligned, io.storeAddrMisaligned)
+  Debug(valid, p"In(${io.in.valid} ${io.in.ready}) Out(${io.out.valid} ${io.out.ready}) state:${state} dtlbEnable:${dtlbEnable} pf:${dtlbPF} memReq(${dmem.req.valid} ${dmem.req.ready}) memResp(${dmem.resp.valid} ${dmem.resp.ready}) addr:0x${Hexadecimal(reqAddr)} cmd:${dmem.req.bits.cmd} wdata:0x${Hexadecimal(reqWdata)} wmask:0x${Hexadecimal(reqWmask)} rdata:0x${Hexadecimal(dmem.resp.bits.rdata)} Res:0x${Hexadecimal(io.out.bits)}\n")
 
   val rdata = dmem.resp.bits.rdata
   val rdataLatch = RegNext(rdata)
