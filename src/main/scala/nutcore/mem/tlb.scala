@@ -133,7 +133,7 @@ class TlbEntry extends NBTlbBundle {
   def vpnHit(vpn: UInt):Bool = {
     val fullMask = VecInit((Seq.fill(vpnLen)(true.B))).asUInt
     val maskLevel = VecInit((Level-1 to 0 by -1).map{i => // NOTE: level 2 for 4KB, 1 for 2MB, 0 for 1GB
-      VecInit(Seq.fill(vpnLen-i*vpnnLen)(true.B) ++ Seq.fill(i*vpnnLen)(false.B)).asUInt})
+      Reverse(VecInit(Seq.fill(vpnLen-i*vpnnLen)(true.B) ++ Seq.fill(i*vpnnLen)(false.B)).asUInt)})
     val mask = maskLevel(level)
     (mask&this.vpn) === (mask&vpn)
   }
@@ -270,6 +270,17 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
     val pfHitSum = widthMap{ i => PopCount(pfHitVec(i)) }
     ParallelOR(widthMap{ i => !(hitSum(i)===0.U || hitSum(i)===1.U) || !(pfHitSum(i)===0.U || pfHitSum(i)===1.U)})
   }
+
+  // for (i <- 0 until Width) {
+  //   when (pfArray(i)) {
+  //     Debug(p"pfHitVec(${i.U}):${Binary(VecInit(pfHitVec(i)).asUInt)}\n")
+  //     for (j <- 0 until TlbEntrySize) {
+  //       // when (pfHitVec(i)(j) && valid(i) && vmEnable) {
+  //         Debug(p"pfHit: pfHitVec(${i.U})(${j.U}):${pfHitVec(i)(j)} Req(${i.U}) vpn:0x${Hexadecimal(reqAddr(i).vpn)} entry(${j.U}):${entry(j)} v:0x${Hexadecimal(v)} pf:0x${Hexadecimal(pf)} entryHitVec:0x${Hexadecimal(entryHitVec(i).asUInt)}\n")
+  //       // }
+  //     }
+  //   }
+  // }
 
   // resp  // TODO: A/D has not being concerned
   for(i <- 0 until Width) {
@@ -464,7 +475,7 @@ object NBTLB {
         in.req.ready := in.resp.ready && cacheEmpty
       }
     }
-    Debug(in.req.valid && pf, p"PF: inReq(${in.req.valid} ${in.req.ready}) Resp(${in.resp.valid} ${in.resp.valid}) OutReq(${out.req.valid} ${out.req.ready}) Resp(${out.resp.valid} ${out.resp.ready}) paddr:0x${Hexadecimal(in.req.bits.addr)} vaddr:0x${Hexadecimal(out.req.bits.addr)} cacheEmpty:${cacheEmpty} cmd:${tlb.io.requestor(0).req.bits.cmd} tlbResp:${tlb.io.requestor(0).resp.bits}\n")(name = tlb.name)
+    Debug(in.req.valid && pf, p"PF: inReq(${in.req.valid} ${in.req.ready}) Resp(${in.resp.valid} ${in.resp.valid}) OutReq(${out.req.valid} ${out.req.ready}) Resp(${out.resp.valid} ${out.resp.ready}) paddr:0x${Hexadecimal(out.req.bits.addr)} vaddr:0x${Hexadecimal(in.req.bits.addr)} cacheEmpty:${cacheEmpty} cmd:${tlb.io.requestor(0).req.bits.cmd} tlbResp:${tlb.io.requestor(0).resp.bits}\n")(name = tlb.name)
 
     mem <> tlb.io.ptw
 

@@ -569,13 +569,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     }.otherwise{
       stval := tval
     }
-    Debug("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    Debug("[PF] ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
   }
 
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
     mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
-    Debug("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    Debug("[ML] addr %x pc %x priviledgeMode %x\n", SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
   }
 
   // Exception and Intr

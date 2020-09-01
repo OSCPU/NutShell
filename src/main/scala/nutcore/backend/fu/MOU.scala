@@ -61,6 +61,7 @@ class MOU extends NutCoreModule {
   sfence.bits.rs2 := io.ctrlIn.rfSrc2===0.U
   sfence.bits.addr := src1
   BoringUtils.addSource(sfence, "SfenceBundle")
+  BoringUtils.addSource(flushTLB, "MOUFlushTLB")
   Debug(flushTLB, "Sfence.vma at %x\n", io.cfIn.pc)
 
   io.out.bits := 0.U
