@@ -307,7 +307,7 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
 
   switch (state) {
     is (state_idle) {
-      when (ParallelOR(miss).asBool) {
+      when (ParallelOR(miss).asBool && ptw.req.fire()) {
         state := state_wait
       }
       assert(!ptw.resp.valid)

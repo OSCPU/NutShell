@@ -157,7 +157,7 @@ class PTW /*(implicit m: Module)*/ extends PtwModule {
 
   val valid = ValidHold(arb.io.out.fire(), resp(arbChosen).fire())
   val validOneCycle = OneCycleValid(arb.io.out.fire())
-  arb.io.out.ready := !valid || resp(arbChosen).fire()
+  arb.io.out.ready := !valid
 
   val sfence = WireInit(0.U.asTypeOf(new SfenceBundle))
   val csr    = WireInit(0.U.asTypeOf(new TlbCsrBundle))

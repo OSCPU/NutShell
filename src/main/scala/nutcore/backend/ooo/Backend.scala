@@ -671,6 +671,7 @@ class Backend_seq(implicit val p: NutCoreConfig) extends NutCoreModule {
 
   PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire(), io.flush(0))
   PipelineConnect(exu.io.out, wbu.io.in, true.B, io.flush(1))
+  Debug(isu.io.in(0).valid || exu.io.in.valid || wbu.io.in.valid, p"isu(${isu.io.in(0).valid} ${isu.io.in(0).ready})(${isu.io.out.valid} ${isu.io.out.ready})(pc:0x${Hexadecimal(isu.io.in(0).bits.cf.pc)} instr:0x${Hexadecimal(isu.io.in(0).bits.cf.instr)}) exu(${exu.io.in.valid} ${exu.io.in.ready})(${exu.io.out.valid} ${exu.io.out.ready})(pc:0x${Hexadecimal(exu.io.in.bits.cf.pc)} instr:0x${Hexadecimal(exu.io.in.bits.cf.instr)}) wbu(${wbu.io.in.valid} ${wbu.io.in.ready})(${wbu.io.wb.rfWen} ${wbu.io.wb.rfDest} 0x${Hexadecimal(wbu.io.wb.rfData)})(pc:0x${Hexadecimal(wbu.io.in.bits.decode.cf.pc)} instr:0x${Hexadecimal(wbu.io.in.bits.decode.cf.instr)})flush0:${io.flush(0)} flush1:${io.flush(1)}\n")
 
   isu.io.in <> io.in
   

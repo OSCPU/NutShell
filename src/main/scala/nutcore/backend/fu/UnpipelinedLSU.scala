@@ -260,6 +260,8 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
       io.in.ready := true.B
     }
 
+  Debug(valid, p"state:${state} \n")
+
   Debug(io.out.fire(), "[LSU-AGU] state %x inv %x inr %x\n", state, io.in.valid, io.in.ready)
     // controled by FSM 
     // io.in.ready := lsExecUnit.io.in.ready
