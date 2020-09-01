@@ -507,32 +507,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val isIllegalAccess = !permitted
   val isIllegalPrivOp = illegalSModeSret
 
-  // MMU Permission Check
-
-  // def MMUPermissionCheck(ptev: Bool, pteu: Bool): Bool = ptev && !(priviledgeMode === ModeU && !pteu) && !(priviledgeMode === ModeS && pteu && mstatusStruct.sum.asBool)
-  // def MMUPermissionCheckLoad(ptev: Bool, pteu: Bool): Bool = ptev && !(priviledgeMode === ModeU && !pteu) && !(priviledgeMode === ModeS && pteu && mstatusStruct.sum.asBool) && (pter || (mstatusStruct.mxr && ptex))
-  // imem
-  // val imemPtev = true.B
-  // val imemPteu = true.B
-  // val imemPtex = true.B
-  // val imemReq = true.B
-  // val imemPermissionCheckPassed = MMUPermissionCheck(imemPtev, imemPteu)
-  // val hasInstrPageFault = imemReq && !(imemPermissionCheckPassed && imemPtex) 
-  // assert(!hasInstrPageFault)
-
-  // dmem
-  // val dmemPtev = true.B
-  // val dmemPteu = true.B
-  // val dmemReq = true.B
-  // val dmemPermissionCheckPassed = MMUPermissionCheck(dmemPtev, dmemPteu)
-  // val dmemIsStore = true.B
-
-  // val hasLoadPageFault  = dmemReq && !dmemIsStore && !(dmemPermissionCheckPassed) 
-  // val hasStorePageFault = dmemReq &&  dmemIsStore && !(dmemPermissionCheckPassed) 
-  // assert(!hasLoadPageFault)
-  // assert(!hasStorePageFault)
-
-  //TODO: Havn't test if io.dmemMMU.priviledgeMode is correct yet
+  // Signals needed by MMU Permission Check
   io.imemMMU.priviledgeMode := priviledgeMode
   io.dmemMMU.priviledgeMode := Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
   io.imemMMU.status_sum := mstatusStruct.sum.asBool
@@ -568,6 +543,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     dmemAddrMisalignedAddr := lsuAddr
   }
 
+  // Page Fault
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
     val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(VAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(VAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
     when(priviledgeMode === ModeM){
@@ -580,6 +556,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     }
   }
 
+  // Address Misaligned
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
     mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
@@ -616,10 +593,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
   val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
   BoringUtils.addSource(intrVec, "intrVecIDU")
-  // val intrNO = PriorityEncoder(intrVec)
   
   val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
-  // val intrNO = PriorityEncoder(io.cfIn.intrVec)
   val raiseIntr = io.cfIn.intrVec.asUInt.orR
 
   // exceptions
@@ -694,13 +669,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   ret := isMret || isSret || isUret
   trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
   retTarget := DontCare
-  // TODO redirect target
-  // val illegalEret = TODO
 
   when (valid && isMret) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
-    // mstatusNew.mpp.m := ModeU //TODO: add mode U
     mstatusNew.ie.m := mstatusOld.pie.m
     priviledgeMode := mstatusOld.mpp
     mstatusNew.pie.m := true.B
@@ -714,7 +686,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   when (valid && isSret && !illegalSModeSret) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
-    // mstatusNew.mpp.m := ModeU //TODO: add mode U
     mstatusNew.ie.s := mstatusOld.pie.s
     priviledgeMode := Cat(0.U(1.W), mstatusOld.spp)
     mstatusNew.pie.s := true.B
@@ -747,8 +718,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
       mstatusNew.pie.s := mstatusOld.ie.s
       mstatusNew.ie.s := false.B
       priviledgeMode := ModeS
-      when(tvalWen){stval := 0.U} // TODO: should not use =/=
-      // printf("[*] mstatusNew.spp %x\n", mstatusNew.spp)
+      when(tvalWen){stval := 0.U}
       // trapTarget := stvec(VAddrBits-1. 0)
     }.otherwise {
       mcause := causeNO
@@ -757,15 +727,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
       mstatusNew.pie.m := mstatusOld.ie.m
       mstatusNew.ie.m := false.B
       priviledgeMode := ModeM
-      when(tvalWen){mtval := 0.U} // TODO: should not use =/=
+      when(tvalWen){mtval := 0.U}
       // trapTarget := mtvec(VAddrBits-1. 0)
     }
-    // mstatusNew.pie.m := LookupTree(priviledgeMode, List(
-    //   ModeM -> mstatusOld.ie.m,
-    //   ModeH -> mstatusOld.ie.h, //ERROR
-    //   ModeS -> mstatusOld.ie.s,
-    //   ModeU -> mstatusOld.ie.u
-    // ))
 
     mstatus := mstatusNew.asUInt
   }
