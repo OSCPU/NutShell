@@ -474,8 +474,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // Writeable check is ingored.
   // Currently, write to illegal csr addr will be ignored
   MaskedRegMap.generate(mapping, addr, rdata, wen && permitted, wdata)
-  val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
-  val isIllegalAccess = !permitted
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
   io.out.bits := rdata
 
@@ -500,6 +498,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
       printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
     }
   }
+
+  // Illegal priviledged operation list
+  val illegalSModeSret = valid && isSret && priviledgeMode === ModeS && mstatusStruct.tsr.asBool
+
+  // Illegal priviledged instruction check
+  val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
+  val isIllegalAccess = !permitted
+  val isIllegalPrivOp = illegalSModeSret
 
   // MMU Permission Check
 
@@ -705,7 +711,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     retTarget := mepc(VAddrBits-1, 0)
   }
 
-  when (valid && isSret) {
+  when (valid && isSret && !illegalSModeSret) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     // mstatusNew.mpp.m := ModeU //TODO: add mode U
