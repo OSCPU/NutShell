@@ -9,7 +9,7 @@ MEM_GEN = ./scripts/vlsi_mem_gen
 USE_READY_TO_RUN_NEMU = true
 
 SIMTOP = top.TopMain
-IMAGE ?= ready-to-run/linux.bin
+IMAGE ?= ready-to-run/bbl.bin
 
 DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu4cg

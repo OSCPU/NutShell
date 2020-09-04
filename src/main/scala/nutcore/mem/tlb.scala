@@ -462,7 +462,7 @@ object NBTLB {
     }
 
     excp.pf.ld := tlb.io.requestor(0).resp.bits.excp.pf.ld && !isAMO
-    excp.pf.st := tlb.io.requestor(0).resp.bits.excp.pf.st && (tlb.io.requestor(0).resp.bits.excp.pf.ld && isAMO)
+    excp.pf.st := tlb.io.requestor(0).resp.bits.excp.pf.st || (tlb.io.requestor(0).resp.bits.excp.pf.ld && isAMO)
     excp.pf.instr := false.B//tlb.io.requestor(0).resp.bits.excp.pf.instr
     excp.pf.addr := in.req.bits.addr
 
@@ -480,8 +480,12 @@ object NBTLB {
       when (pf) {
         in.req.ready := in.resp.ready && cacheEmpty
       }
+    } else {
+      when (pf) {
+        in.resp.valid := in.req.valid
+      }
     }
-    Debug(in.req.valid && pf, p"PF: inReq(${in.req.valid} ${in.req.ready}) Resp(${in.resp.valid} ${in.resp.valid}) OutReq(${out.req.valid} ${out.req.ready}) Resp(${out.resp.valid} ${out.resp.ready}) paddr:0x${Hexadecimal(out.req.bits.addr)} vaddr:0x${Hexadecimal(in.req.bits.addr)} cacheEmpty:${cacheEmpty} cmd:${tlb.io.requestor(0).req.bits.cmd} tlbResp:${tlb.io.requestor(0).resp.bits}\n")(name = tlb.name)
+    Debug(in.req.valid && pf, p"PF: inReq(${in.req.valid} ${in.req.ready}) Resp(${in.resp.valid} ${in.resp.ready}) OutReq(${out.req.valid} ${out.req.ready}) Resp(${out.resp.valid} ${out.resp.ready}) paddr:0x${Hexadecimal(out.req.bits.addr)} vaddr:0x${Hexadecimal(in.req.bits.addr)} cacheEmpty:${cacheEmpty} cmd:${tlb.io.requestor(0).req.bits.cmd} tlbResp:${tlb.io.requestor(0).resp.bits}\n")(name = tlb.name)
 
     mem <> tlb.io.ptw
 

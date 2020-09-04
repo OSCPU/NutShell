@@ -341,11 +341,15 @@ class LSExecUnit extends NutCoreModule {
 
   val dtlbFinish = WireInit(false.B)
   val dtlbPF = WireInit(false.B)
+  val dtlbExcp = WireInit(0.U.asTypeOf(new TlbExcpBundle))
   val dtlbEnable = WireInit(false.B)
   if (Settings.get("HasDTLB")) {
     BoringUtils.addSink(dtlbFinish, "DTLBFINISH") // NOTE: new tlb will not use it
-    BoringUtils.addSink(dtlbPF, "DTLBPF")
+    BoringUtils.addSink(dtlbPF, "DTLBPF") // NOTE: new tlb will not use it
+    BoringUtils.addSink(dtlbExcp, "DTlbExcpIO")
     BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
+
+    dtlbPF := dtlbExcp.pf.ld || dtlbExcp.pf.st
   }
 
   io.dtlbPF := dtlbPF
