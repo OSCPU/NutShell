@@ -459,7 +459,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   ))
 
   val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException
-  // Debug(){when(wen){printf("[CSR] addr %x wdata %x func %x rdata %x\n", addr, wdata, func, rdata)}}
+  // Debug(wen, "addr %x wdata %x func %x rdata %x\n", addr, wdata, func, rdata)
   MaskedRegMap.generate(mapping, addr, rdata, wen, wdata)
   val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
@@ -481,12 +481,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val isSret = addr === privSret   && func === CSROpType.jmp && !io.isBackendException
   val isUret = addr === privUret   && func === CSROpType.jmp && !io.isBackendException
 
-  Debug(false){
-    when(wen){
-      printf("[CSR] csr write: pc %x addr %x rdata %x wdata %x func %x\n", io.cfIn.pc, addr, rdata, wdata, func)
-      printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    }
-  }
+  Debug(wen, "csr write: pc %x addr %x rdata %x wdata %x func %x\n", io.cfIn.pc, addr, rdata, wdata, func)
+  Debug(wen, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
 
   // MMU Permission Check
 
@@ -556,17 +552,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     }.otherwise{
       stval := tval
     }
-    Debug(){
-      printf("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
-    }
+    Debug("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
   }
 
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
     mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
-    Debug(){
-      printf("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
-    }
+    Debug("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
   }
 
   // Exception and Intr
@@ -631,37 +623,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   io.redirect.rtype := 0.U
   io.redirect.target := Mux(resetSatp, io.cfIn.pc + 4.U, Mux(raiseExceptionIntr, trapTarget, retTarget))
 
-  Debug(){
-    when(raiseExceptionIntr){
-      printf("[CSR] excin %b excgen %b", csrExceptionVec.asUInt(), iduExceptionVec.asUInt())
-      printf("[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-      printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    }
-    when(io.redirect.valid){
-      printf("[CSR] redirect to %x\n", io.redirect.target)
-    }
-    when(resetSatp){
-      printf("[CSR] satp reset at %x\n", GTimer())
-    }
-  }
-
-  // Debug(false){
-    // when(raiseExceptionIntr){
-    //   printf("[CSR] raiseExceptionIntr!\n[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-    //   printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    // }
-
-    // when(valid && isMret){
-    //   printf("[CSR] Mret to %x!\n[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",retTarget, io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-    //   printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    // }
-
-    // when(valid && isSret){
-    //   printf("[CSR] Sret to %x!\n[CSR] int/exc: pc %x int (%d):%x exc: (%d):%x\n",retTarget, io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-    //   printf("[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
-    // }
-    //printf("[CSR] Red(%d, %x) raiseExcepIntr:%d valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, valid, io.instrValid)
-  // }
+  Debug(raiseExceptionIntr, "excin %b excgen %b", csrExceptionVec.asUInt(), iduExceptionVec.asUInt())
+  Debug(raiseExceptionIntr, "int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
+  Debug(raiseExceptionIntr, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
+  Debug(io.redirect.valid, "redirect to %x\n", io.redirect.target)
+  Debug(resetSatp, "satp reset\n")
 
   // Branch control
 
@@ -749,17 +715,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   io.in.ready := true.B
   io.out.valid := valid
-
-  Debug(false) {
-    printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x delegs:%d deleg:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, delegS, deleg, io.cfIn.pc, valid, io.instrValid)
-  }
-
-  Debug(false) {
-    when(raiseExceptionIntr && delegS ) {
-      printf("[CSR2] Red(%d, %x) raiseExcepIntr:%d isSret:%d retTarget:%x sepc:%x delegs:%d deleg:%x cfInpc:%x valid:%d instrValid:%x \n", io.redirect.valid, io.redirect.target, raiseExceptionIntr, isSret, retTarget, sepc, delegS, deleg, io.cfIn.pc, valid, io.instrValid)
-      printf("[CSR3] sepc is writen!!! pc:%x time:%d\n", io.cfIn.pc, GTimer())
-    }
-  }
 
   // perfcnt
 
