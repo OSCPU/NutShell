@@ -1,3 +1,11 @@
+# core setting
+DATAWIDTH ?= 64
+BOARD ?= sim  # sim  pynq  axu4cg
+CORE  ?= seq  # seq  ooo  small
+
+# enable USE_READY_TO_RUN_NEMU to use pre-compiled NEMU for difftest`
+USE_READY_TO_RUN_NEMU = true
+
 TOP = TopMain
 FPGATOP = NutShellFPGATop
 BUILD_DIR = ./build
@@ -6,14 +14,8 @@ SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 MEM_GEN = ./scripts/vlsi_mem_gen
 
-USE_READY_TO_RUN_NEMU = true
-
 SIMTOP = top.TopMain
 IMAGE ?= ready-to-run/linux.bin
-
-DATAWIDTH ?= 64
-BOARD ?= sim  # sim  pynq  axu4cg
-CORE  ?= seq  # seq  ooo  small
 
 .DEFAULT_GOAL = verilog
 
@@ -22,7 +24,7 @@ help:
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-	mill chiselModule.runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE)
+	mill chiselModule.runMain top.$(TOP) -X verilog -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE)
 	$(MEM_GEN) $(@D)/$(@F).conf >> $@
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
@@ -45,6 +47,7 @@ verilog: $(TOP_V)
 
 SIM_TOP = NutShellSimTop
 SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
+SIM_ARGS =
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
@@ -60,13 +63,15 @@ EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized -D__RV$(DATAWIDTH)__
 EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
 # dump vcd: --debug --trace
-# +define+RANDOMIZE_REG_INIT \
-# +define+RANDOMIZE_MEM_INIT
 VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   +define+RV$(DATAWIDTH)=1 \
   +define+VERILATOR=1 \
   +define+PRINTF_COND=1 \
+  +define+RANDOMIZE_REG_INIT \
+  +define+RANDOMIZE_MEM_INIT \
   --assert \
+  --savable \
+  --stats-vars \
   --output-split 5000 \
   --output-split-cfuncs 5000 \
   -I$(abspath $(BUILD_DIR)) \
@@ -92,18 +97,29 @@ $(REF_SO):
 endif
 
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS) $(REF_SO)
-	CPPFLAGS=-DREF_SO=\\\"$(REF_SO)\\\" $(MAKE) VM_PARALLEL_BUILDS=1 -C $(dir $(EMU_MK)) -f $(abspath $(EMU_MK))
+	CPPFLAGS=-DREF_SO=\\\"$(REF_SO)\\\" time $(MAKE) VM_PARALLEL_BUILDS=1 OPT_FAST="-O3" -C $(dir $(EMU_MK)) -f $(abspath $(EMU_MK))
 
-SEED = -s $(shell seq 1 10000 | shuf | head -n 1)
+SEED ?= $(shell shuf -i 1-10000 -n 1)
 
-# log will only be printed when (LOG_BEGIN<=GTimer<=LOG_END) && (LOG_LEVEL < loglevel)
+# log will only be printed when (B<=GTimer<=E)
 # use 'emu -h' to see more details
-LOG_BEGIN ?= 0
-LOG_END ?= 0
-LOG_LEVEL ?= ALL
+B ?= 0
+E ?= 0
+SNAPSHOT ?=
+
+# enable this runtime option if you want to generate a vcd file
+# use 'emu -h' to see more details
+#WAVEFORM = --dump-wave
+ifeq ($(SNAPSHOT),)
+SNAPSHOT_OPTION = 
+else
+SNAPSHOT_OPTION = --load-snapshot=$(SNAPSHOT)
+endif
+
+EMU_FLAGS = -s $(SEED) -b $(B) -e $(E) $(SNAPSHOT_OPTION) $(WAVEFORM)
 
 emu: $(EMU)
-	@$(EMU) -i $(IMAGE) $(SEED) -b $(LOG_BEGIN) -e $(LOG_END) -v $(LOG_LEVEL)
+	@$(EMU) -i $(IMAGE) $(EMU_FLAGS)
 
 cache:
 	$(MAKE) emu IMAGE=Makefile
