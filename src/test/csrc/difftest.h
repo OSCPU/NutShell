@@ -34,12 +34,12 @@ enum {
 
 struct DiffState {
   int commit;
-  uint64_t *reg_scala;
+  rtlreg_t *reg_scala;
   uint32_t this_inst;
   int skip;
   int isRVC;
-  uint64_t *wpc;
-  uint64_t *wdata;
+  rtlreg_t *wpc;
+  rtlreg_t *wdata;
   uint32_t *wdst;
   int wen;
   uint64_t intrNO;

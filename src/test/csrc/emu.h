@@ -65,7 +65,7 @@ class Emulator {
     reset_ncycles(10);
   }
 
-  inline void read_emu_regs(uint64_t *r) {
+  inline void read_emu_regs(rtlreg_t *r) {
 #define macro(x) r[x] = dut_ptr->io_difftest_r_##x
   macro(0); macro(1); macro(2); macro(3); macro(4); macro(5); macro(6); macro(7);
   macro(8); macro(9); macro(10); macro(11); macro(12); macro(13); macro(14); macro(15);
@@ -86,7 +86,7 @@ class Emulator {
 #endif
   }
 
-  inline void read_wb_info(uint64_t *wpc, uint64_t *wdata, uint32_t *wdst) {
+  inline void read_wb_info(rtlreg_t *wpc, rtlreg_t *wdata, uint32_t *wdst) {
 #define dut_ptr_wpc(x)  wpc[x] = dut_ptr->io_difftest_wpc_##x
 #define dut_ptr_wdata(x) wdata[x] = dut_ptr->io_difftest_wdata_##x
 #define dut_ptr_wdst(x)  wdst[x] = dut_ptr->io_difftest_wdst_##x

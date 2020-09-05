@@ -506,10 +506,9 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1) && !instRedirect(0)
-  val firstValidInst = Mux(valid(ringBufferTail)(0), 0.U, 1.U)
   BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
   BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
-  val retirePC = SignExt(decode(ringBufferTail)(firstValidInst).cf.pc, AddrBits)
+  val retirePC = SignExt(decode(ringBufferTail)(0).cf.pc, AddrBits)
   
   if (!p.FPGAPlatform) {
     // generate needSkip vector
@@ -543,14 +542,14 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     // send debug signal to sim top
     BoringUtils.addSource(RegNext(retireATerm.asUInt +& retireMultiTerms.asUInt), "DIFFTEST_commit")
     BoringUtils.addSource(RegNext(retirePC), "DIFFTEST_thisPC")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "DIFFTEST_thisINST")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(0).cf.instr), "DIFFTEST_thisINST")
     BoringUtils.addSource(RegNext(skipVec.asUInt), "DIFFTEST_skip")
     BoringUtils.addSource(RegNext(wenVec.asUInt), "DIFFTEST_wen")
     BoringUtils.addSource(RegNext(wdataVec), "DIFFTEST_wdata")
     BoringUtils.addSource(RegNext(wdstVec), "DIFFTEST_wdst")
     BoringUtils.addSource(RegNext(wpcVec), "DIFFTEST_wpc")
     BoringUtils.addSource(RegNext(isRVCVec.asUInt), "DIFFTEST_isRVC")
-    BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "DIFFTEST_intrNO")
+    BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(0)), "DIFFTEST_intrNO")
   } else {
     BoringUtils.addSource(retireATerm, "ilaWBUvalid")
     BoringUtils.addSource(retirePC, "ilaWBUpc")
