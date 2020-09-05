@@ -8,7 +8,12 @@
 # error Please define REF_SO to the path of NEMU shared object file
 #endif
 
+#define selectBit(src, x) (src & (1 << x))
+#define DEBUG_RETIRE_TRACE_SIZE 16
+#define DEBUG_WB_TRACE_SIZE 16
+
 void (*ref_difftest_memcpy_from_dut)(paddr_t dest, void *src, size_t n) = NULL;
+void (*ref_difftest_memcpy_from_ref)(void *dest, paddr_t src, size_t n) = NULL;
 void (*ref_difftest_getregs)(void *c) = NULL;
 void (*ref_difftest_setregs)(const void *c) = NULL;
 void (*ref_difftest_exec)(uint64_t n) = NULL;
@@ -37,10 +42,14 @@ void difftest_skip_dut() {
 void init_difftest(rtlreg_t *reg) {
   void *handle;
   handle = dlopen(REF_SO, RTLD_LAZY | RTLD_DEEPBIND);
+  puts("Using " REF_SO " for difftest");
   assert(handle);
 
   ref_difftest_memcpy_from_dut = (void (*)(paddr_t, void *, size_t))dlsym(handle, "difftest_memcpy_from_dut");
   assert(ref_difftest_memcpy_from_dut);
+
+  ref_difftest_memcpy_from_ref = (void (*)(void *, paddr_t, size_t))dlsym(handle, "difftest_memcpy_from_ref");
+  // assert(ref_difftest_memcpy_from_ref);
 
   ref_difftest_getregs = (void (*)(void *))dlsym(handle, "difftest_getregs");
   assert(ref_difftest_getregs);
@@ -79,121 +88,109 @@ static const char *reg_name[DIFFTEST_NR_REG] = {
 #endif
 };
 
-int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
-  int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, 
-  int isMultiCommit
-  ) {
+static rtlreg_t nemu_this_pc = 0x80000000;
+static rtlreg_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+static uint32_t retire_cnt_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
+static int pc_retire_pointer = DEBUG_RETIRE_TRACE_SIZE-1;
+static rtlreg_t pc_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
+static uint64_t wen_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
+static uint32_t wdst_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
+static rtlreg_t wdata_wb_queue[DEBUG_WB_TRACE_SIZE] = {0};
+static int wb_pointer = 0;
 
-  // Note:
-  // reg_scala[DIFFTEST_THIS_PC] is the first PC commited by CPU-WB
-  // ref_r[DIFFTEST_THIS_PC] is NEMU's next PC
-  // To skip the compare of an instruction, replace NEMU reg value with CPU's regfile value,
-  // then set NEMU's PC to next PC to be run
+uint64_t get_nemu_this_pc() { return nemu_this_pc; }
+void set_nemu_this_pc(uint64_t pc) { nemu_this_pc = pc; }
 
-  #define DEBUG_RETIRE_TRACE_SIZE 16
+void difftest_display(uint8_t mode) {
+  printf("\n==============Retire Trace==============\n");
+  int j;
+  for(j = 0; j < DEBUG_RETIRE_TRACE_SIZE; j++){
+    printf("retire trace [%x]: pc %010lx inst %08x cmtcnt %d %s\n",
+        j, pc_retire_queue[j], inst_retire_queue[j], retire_cnt_queue[j], (j==pc_retire_pointer)?"<--":"");
+  }
+  printf("\n==============  WB Trace  ==============\n");
+  for(j = 0; j < DEBUG_WB_TRACE_SIZE; j++){
+    printf("wb trace [%x]: pc %010lx wen %x dst %08x data %016lx %s\n",
+        j, pc_wb_queue[j], wen_wb_queue[j]!=0, wdst_wb_queue[j], wdata_wb_queue[j], (j==((wb_pointer-1)%DEBUG_WB_TRACE_SIZE))?"<--":"");
+  }
+  printf("\n==============  Reg Diff  ==============\n");
+  ref_isa_reg_display();
+  printf("priviledgeMode: %d\n", mode);
+}
+
+int difftest_step(DiffState *s) {
+#ifdef NO_DIFFTEST
+  return 0;
+#endif
 
   rtlreg_t ref_r[DIFFTEST_NR_REG];
-  rtlreg_t this_pc = reg_scala[DIFFTEST_THIS_PC];
+  rtlreg_t this_pc = s->reg_scala[DIFFTEST_THIS_PC];
   // ref_difftest_getregs() will get the next pc,
   // therefore we must keep track this one
-  static rtlreg_t nemu_this_pc = 0x80000000;
-  static rtlreg_t pc_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
-  static uint32_t inst_retire_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
-  static uint32_t multi_commit_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
-  static uint32_t skip_queue[DEBUG_RETIRE_TRACE_SIZE] = {0};
-  static int pc_retire_pointer = 7;
-  static int need_copy_pc = 0;
-  #ifdef NO_DIFFTEST
-  return 0;
-  #endif
 
-  if (need_copy_pc) {
-    need_copy_pc = 0;
-    ref_difftest_getregs(&ref_r); // get rf info saved in former cycle
-    nemu_this_pc = reg_scala[DIFFTEST_THIS_PC]; // we assume target's pc is right
-    ref_r[DIFFTEST_THIS_PC] = reg_scala[DIFFTEST_THIS_PC];
-    ref_difftest_setregs(ref_r);
+  if (s->intrNO) {
+    ref_difftest_raise_intr(s->intrNO);
+    // ref_difftest_exec(1);//TODO
   }
-
-  if (isMMIO) {
-    // printf("diff pc: %x isRVC %x\n", this_pc, isRVC);
-    // MMIO accessing should not be a branch or jump, just +2/+4 to get the next pc
-    int pc_skip = 0;
-    pc_skip += isRVC ? 2 : 4;
-    pc_skip += isMultiCommit ? (isRVC2 ? 2 : 4) : 0;
-    reg_scala[DIFFTEST_THIS_PC] += pc_skip;
-    nemu_this_pc += pc_skip;
-    // to skip the checking of an instruction, just copy the reg state to reference design
-    ref_difftest_setregs(reg_scala);
-    pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
-    pc_retire_queue[pc_retire_pointer] = this_pc;
-    inst_retire_queue[pc_retire_pointer] = this_inst;
-    multi_commit_queue[pc_retire_pointer] = isMultiCommit;
-    skip_queue[pc_retire_pointer] = isMMIO;
-    need_copy_pc = 1;
-    return 0;
+  else {
+    assert(s->commit > 0 && s->commit <= 6);
+    for(int i = 0; i < s->commit; i++){
+      pc_wb_queue[wb_pointer] = s->wpc[i];
+      wen_wb_queue[wb_pointer] = selectBit(s->wen, i);
+      wdst_wb_queue[wb_pointer] = s->wdst[i];
+      wdata_wb_queue[wb_pointer] = s->wdata[i];
+      wb_pointer = (wb_pointer+1) % DEBUG_WB_TRACE_SIZE;
+      if(selectBit(s->skip, i)){
+        // MMIO accessing should not be a branch or jump, just +2/+4 to get the next pc
+        // printf("SKIP %d\n", i);
+        // to skip the checking of an instruction, just copy the reg state to reference design
+        ref_difftest_getregs(&ref_r);
+        ref_r[DIFFTEST_THIS_PC] += selectBit(s->isRVC, i) ? 2 : 4;
+        if(selectBit(s->wen, i)){
+          if(s->wdst[i] != 0){
+            ref_r[s->wdst[i]] = s->wdata[i];
+          }
+        }
+        ref_difftest_setregs(ref_r);
+      }else{
+        ref_difftest_exec(1);
+      }
+    }
   }
-
-
-  if (intrNO) {
-    ref_difftest_raise_intr(intrNO);
-  } else {
-    ref_difftest_exec(1);
-  }
-
-  if (isMultiCommit) {    
-    ref_difftest_exec(1);
-    // exec 1 more cycle
-  }
-
   ref_difftest_getregs(&ref_r);
 
-  rtlreg_t next_pc = ref_r[32];
+  rtlreg_t next_pc = ref_r[DIFFTEST_THIS_PC];
   pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
   pc_retire_queue[pc_retire_pointer] = this_pc;
-  inst_retire_queue[pc_retire_pointer] = this_inst;
-  multi_commit_queue[pc_retire_pointer] = isMultiCommit;
-  skip_queue[pc_retire_pointer] = isMMIO;
+  inst_retire_queue[pc_retire_pointer] = s->this_inst;
+  retire_cnt_queue[pc_retire_pointer] = s->commit;
   
-  int isCSR = ((this_inst & 0x7f) ==  0x73);
-  int isCSRMip = ((this_inst >> 20) == 0x344) && isCSR;
-  if (isCSRMip) {
-    // We can not handle NEMU.mip.mtip since it is driven by CLINT,
-    // which is not accessed in NEMU due to MMIO.
-    // Just sync the state of NEMU from NutCore.
-    reg_scala[DIFFTEST_THIS_PC] = next_pc;
-    nemu_this_pc = next_pc;
-    ref_difftest_setregs(reg_scala);
-    return 0;
-  }
+  // TODO: fix mip.mtip
+  // It should be done in Chisel: inst reads mip.mtip should be marked as "should skip"
+  // int isCSR = ((this_inst & 0x7f) ==  0x73);
+  // int isCSRMip = ((this_inst >> 20) == 0x344) && isCSR;
+  // if (isCSRMip) {
+  //   // We can not handle NEMU.mip.mtip since it is driven by CLINT,
+  //   // which is not accessed in NEMU due to MMIO.
+  //   // Just sync the state of NEMU from NOOP.
+  //   reg_scala[DIFFTEST_THIS_PC] = next_pc;
+  //   nemu_this_pc = next_pc;
+  //   ref_difftest_setregs(reg_scala);
+  //   return 0;
+  // }
 
   // replace with "this pc" for checking
   ref_r[DIFFTEST_THIS_PC] = nemu_this_pc;
   nemu_this_pc = next_pc;
 
-  ref_r[0] = 0;
-
-  if (memcmp(reg_scala, ref_r, sizeof(ref_r)) != 0) {
-    printf("\n==============Retire Trace==============\n");
-    int j;
-    for(j = 0; j < DEBUG_RETIRE_TRACE_SIZE; j++){
-      printf("retire trace [%x]: pc %010lx inst %08x %s %s %s\n", j, 
-        pc_retire_queue[j], 
-        inst_retire_queue[j], 
-        (multi_commit_queue[j])?"MC":"  ", 
-        (skip_queue[j])?"SKIP":"    ", 
-        (j==pc_retire_pointer)?"<--":""
-      );
-    }
-    printf("\n==============  Reg Diff  ==============\n");
-    ref_isa_reg_display();
-    printf("priviledgeMode = %d\n", priviledgeMode);
-    puts("");
+  if (memcmp(s->reg_scala, ref_r, sizeof(ref_r)) != 0) {
+    difftest_display(s->priviledgeMode);
     int i;
     for (i = 0; i < DIFFTEST_NR_REG; i ++) {
-      if (reg_scala[i] != ref_r[i]) {
+      if (s->reg_scala[i] != ref_r[i]) {
         printf("%s different at pc = 0x%010lx, right= 0x%016lx, wrong = 0x%016lx\n",
-            reg_name[i], this_pc, ref_r[i], reg_scala[i]);
+            reg_name[i], this_pc, ref_r[i], s->reg_scala[i]);
       }
     }
     return 1;

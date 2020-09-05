@@ -100,6 +100,6 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   BoringUtils.addSource(io.out.fire(), "perfCntCondISUIssue")
 
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")
+    BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "DIFFTEST_r")
   }
 }

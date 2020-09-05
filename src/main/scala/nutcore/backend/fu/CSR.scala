@@ -919,13 +919,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     }
 
     // for differential testing
-    BoringUtils.addSource(RegNext(priviledgeMode), "difftestMode")
-    BoringUtils.addSource(RegNext(mstatus), "difftestMstatus")
-    BoringUtils.addSource(RegNext(mstatus & sstatusRmask), "difftestSstatus")
-    BoringUtils.addSource(RegNext(mepc), "difftestMepc")
-    BoringUtils.addSource(RegNext(sepc), "difftestSepc")
-    BoringUtils.addSource(RegNext(mcause), "difftestMcause")
-    BoringUtils.addSource(RegNext(scause), "difftestScause")
+    BoringUtils.addSource(RegNext(priviledgeMode), "DIFFTEST_priviledgeMode")
+    BoringUtils.addSource(RegNext(mstatus), "DIFFTEST_mstatus")
+    BoringUtils.addSource(RegNext(mstatus & sstatusRmask), "DIFFTEST_sstatus")
+    BoringUtils.addSource(RegNext(mepc), "DIFFTEST_mepc")
+    BoringUtils.addSource(RegNext(sepc), "DIFFTEST_sepc")
+    BoringUtils.addSource(RegNext(mcause), "DIFFTEST_mcause")
+    BoringUtils.addSource(RegNext(scause), "DIFFTEST_scause")
   } else {
     if (!p.FPGAPlatform) {
       BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")

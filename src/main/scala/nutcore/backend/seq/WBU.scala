@@ -46,14 +46,42 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   BoringUtils.addSource(falseWire, "perfCntCondMultiCommit")
   
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(RegNext(io.in.valid), "difftestCommit")
-    BoringUtils.addSource(falseWire, "difftestMultiCommit")
-    BoringUtils.addSource(RegNext(SignExt(io.in.bits.decode.cf.pc, AddrBits)), "difftestThisPC")
-    BoringUtils.addSource(RegNext(io.in.bits.decode.cf.instr), "difftestThisINST")
-    BoringUtils.addSource(RegNext(io.in.bits.isMMIO), "difftestIsMMIO")
-    BoringUtils.addSource(RegNext(io.in.bits.decode.cf.instr(1,0)=/="b11".U), "difftestIsRVC")
-    BoringUtils.addSource(falseWire, "difftestIsRVC2")
-    BoringUtils.addSource(RegNext(io.in.bits.intrNO), "difftestIntrNO")
+    // generate needSkip vector
+    // fix mip.mtip
+    val isCSR = (io.in.bits.decode.cf.instr & "h7f".U) === "h73".U
+    val isCSRMip = (io.in.bits.decode.cf.instr(31,20) === "h344".U) && isCSR
+    val needSkip = io.in.bits.isMMIO || isCSRMip
+
+    // define debug vector
+    val skipVec = WireInit(VecInit(0.U(DifftestWidth.W).asBools))
+    val wenVec = WireInit(VecInit(0.U(DifftestWidth.W).asBools))
+    val wdataVec = Wire(Vec(DifftestWidth, UInt(XLEN.W)))
+    val wdstVec = Wire(Vec(DifftestWidth, UInt(32.W)))
+    val wpcVec = Wire(Vec(DifftestWidth, UInt(VAddrBits.W)))
+    val isRVCVec = WireInit(VecInit(0.U(DifftestWidth.W).asBools))
+    wdataVec := DontCare
+    wdstVec := DontCare
+    wpcVec := DontCare
+
+    // assign debug vector
+    skipVec(0) := needSkip
+    wenVec(0) := io.wb.rfWen
+    wdataVec(0) := io.wb.rfData
+    wdstVec(0) := io.wb.rfDest
+    wpcVec(0) := SignExt(io.in.bits.decode.cf.pc, XLEN)
+    isRVCVec(0) := io.in.bits.decode.cf.instr(1,0)=/="b11".U
+
+    // send debug signal to sim top
+    BoringUtils.addSource(RegNext(io.in.valid).asUInt, "DIFFTEST_commit")
+    BoringUtils.addSource(RegNext(SignExt(io.in.bits.decode.cf.pc, XLEN)), "DIFFTEST_thisPC")
+    BoringUtils.addSource(RegNext(io.in.bits.decode.cf.instr), "DIFFTEST_thisINST")
+    BoringUtils.addSource(RegNext(skipVec.asUInt), "DIFFTEST_skip")
+    BoringUtils.addSource(RegNext(wenVec.asUInt), "DIFFTEST_wen")
+    BoringUtils.addSource(RegNext(wdataVec), "DIFFTEST_wdata")
+    BoringUtils.addSource(RegNext(wdstVec), "DIFFTEST_wdst")
+    BoringUtils.addSource(RegNext(wpcVec), "DIFFTEST_wpc")
+    BoringUtils.addSource(RegNext(isRVCVec.asUInt), "DIFFTEST_isRVC")
+    BoringUtils.addSource(RegNext(io.in.bits.intrNO), "DIFFTEST_intrNO")
   } else {
     BoringUtils.addSource(io.in.valid, "ilaWBUvalid")
     BoringUtils.addSource(io.in.bits.decode.cf.pc, "ilaWBUpc")

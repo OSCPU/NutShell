@@ -28,17 +28,19 @@ import device.AXI4RAM
 import nutcore._
 import utils.GTimer
 
-class DiffTestIO extends Bundle {
-  val r = Output(Vec(32, UInt(64.W)))
-  val commit = Output(Bool())
-  val isMultiCommit = Output(Bool())
-  val thisPC = Output(UInt(64.W))
-  val thisINST = Output(UInt(32.W))
-  val isMMIO = Output(Bool())
-  val isRVC = Output(Bool())
-  val isRVC2 = Output(Bool())
-  val intrNO = Output(UInt(64.W))
-  
+class DiffTestIO extends NutCoreBundle {
+  val r = Output(Vec(32, UInt(XLEN.W)))                  // Regfile
+  val commit = Output(UInt(32.W))                        // number of insts committed in current cycle
+  val thisPC = Output(UInt(XLEN.W))                      // PC for the 1st inst committed in this cycle
+  val thisINST = Output(UInt(32.W))                      // Raw instruction for the 1st inst committed in this cycle
+  val skip = Output(UInt(32.W))                          // If an inst should be skipped in difftest (Vector)
+  val wen = Output(UInt(32.W))                           // Regfile.wen (Vector)
+  val wdata = Output(Vec(DifftestWidth, UInt(XLEN.W)))   // Regfile.wdata (Vector)
+  val wdst = Output(Vec(DifftestWidth, UInt(32.W)))      // Regfile.wdst (Vector)
+  val wpc = Output(Vec(DifftestWidth, UInt(XLEN.W)))     // PC for insts committed in this cycle (Vector)
+  val isRVC = Output(Bool())                             // Insts committed in this cycle is RVC (Vector)
+  val intrNO = Output(UInt(64.W))                        // Int/exc number
+
   val priviledgeMode = Output(UInt(2.W))
   val mstatus = Output(UInt(64.W))
   val sstatus = Output(UInt(64.W))
@@ -78,22 +80,25 @@ class NutShellSimTop extends Module {
   soc.io.meip := mmio.io.meip
 
   val difftest = WireInit(0.U.asTypeOf(new DiffTestIO))
-  BoringUtils.addSink(difftest.commit, "difftestCommit")
-  BoringUtils.addSink(difftest.isMultiCommit, "difftestMultiCommit")
-  BoringUtils.addSink(difftest.thisPC, "difftestThisPC")
-  BoringUtils.addSink(difftest.thisINST, "difftestThisINST")
-  BoringUtils.addSink(difftest.isMMIO, "difftestIsMMIO")
-  BoringUtils.addSink(difftest.isRVC, "difftestIsRVC")
-  BoringUtils.addSink(difftest.isRVC2, "difftestIsRVC2")
-  BoringUtils.addSink(difftest.intrNO, "difftestIntrNO")
-  BoringUtils.addSink(difftest.r, "difftestRegs")
-  BoringUtils.addSink(difftest.priviledgeMode, "difftestMode")
-  BoringUtils.addSink(difftest.mstatus, "difftestMstatus")
-  BoringUtils.addSink(difftest.sstatus, "difftestSstatus") 
-  BoringUtils.addSink(difftest.mepc, "difftestMepc")
-  BoringUtils.addSink(difftest.sepc, "difftestSepc")
-  BoringUtils.addSink(difftest.mcause, "difftestMcause")
-  BoringUtils.addSink(difftest.scause, "difftestScause")
+  BoringUtils.addSink(difftest.r, "DIFFTEST_r")
+  BoringUtils.addSink(difftest.commit, "DIFFTEST_commit")
+  BoringUtils.addSink(difftest.thisPC, "DIFFTEST_thisPC")
+  BoringUtils.addSink(difftest.thisINST, "DIFFTEST_thisINST")
+  BoringUtils.addSink(difftest.skip, "DIFFTEST_skip")
+  BoringUtils.addSink(difftest.wen, "DIFFTEST_wen")
+  BoringUtils.addSink(difftest.wdata, "DIFFTEST_wdata")
+  BoringUtils.addSink(difftest.wdst, "DIFFTEST_wdst")
+  BoringUtils.addSink(difftest.wpc, "DIFFTEST_wpc")
+  BoringUtils.addSink(difftest.isRVC, "DIFFTEST_isRVC")
+  BoringUtils.addSink(difftest.intrNO, "DIFFTEST_intrNO")
+
+  BoringUtils.addSink(difftest.priviledgeMode, "DIFFTEST_priviledgeMode")
+  BoringUtils.addSink(difftest.mstatus, "DIFFTEST_mstatus")
+  BoringUtils.addSink(difftest.sstatus, "DIFFTEST_sstatus") 
+  BoringUtils.addSink(difftest.mepc, "DIFFTEST_mepc")
+  BoringUtils.addSink(difftest.sepc, "DIFFTEST_sepc")
+  BoringUtils.addSink(difftest.mcause, "DIFFTEST_mcause")
+  BoringUtils.addSink(difftest.scause, "DIFFTEST_scause")
   io.difftest := difftest
 
   val log_begin, log_end, log_level = WireInit(0.U(64.W))

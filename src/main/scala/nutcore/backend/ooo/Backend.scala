@@ -649,7 +649,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   BoringUtils.addSource(!io.in(0).valid, "perfCntCondMdpNoInst")
 
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")
+    BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "DIFFTEST_r")
   }
 
   if (!p.FPGAPlatform) {
