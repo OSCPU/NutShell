@@ -103,10 +103,13 @@ class NutShellSimTop extends Module {
 
   assert(log_begin <= log_end)
   BoringUtils.addSource((GTimer() >= log_begin) && (GTimer() < log_end), "DISPLAY_ENABLE")
+  BoringUtils.addSource(WireInit(GTimer()), "LOG_TIMESTAMP") // use bare GTimer() in addSource will cause type error
 
-  // make BoringUtils not report boring exception when EnableDebug is set to false
-  val dummyWire = WireInit(false.B)
-  BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
+  // make BoringUtils not report boring exception
+  val dummyWire1 = WireInit(false.B)
+  val dummyWire2 = WireInit(0.U(64.W))
+  BoringUtils.addSink(dummyWire1, "DISPLAY_ENABLE")
+  BoringUtils.addSink(dummyWire2, "LOG_TIMESTAMP")
 
   io.difftestCtrl <> mmio.io.difftestCtrl
 }

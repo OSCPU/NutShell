@@ -42,6 +42,12 @@ object LogUtil {
     enableDisplay
   }
 
+  def logGTimer: UInt = {
+    val logTimestamp = WireInit(0.U(64.W))
+    BoringUtils.addSink(logTimestamp, "LOG_TIMESTAMP")
+    logTimestamp
+  }
+
   // def LogLevel: UInt = {
   //   val log_level = WireInit(0.U(64.W))
   //   BoringUtils.addSink(log_level, "DISPLAY_LOG_LEVEL")
@@ -51,7 +57,7 @@ object LogUtil {
   def apply(debugLevel: LogLevel)
            (cond: Bool, pable: Printable)
            (implicit m: Module): Any = {
-    val commonInfo = p"[${GTimer()}] ${m.name}: "
+    val commonInfo = p"[${logGTimer}] ${m.name}: "
     when (cond && displayLog) {
       printf(commonInfo + pable)
     }
