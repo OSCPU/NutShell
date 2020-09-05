@@ -37,13 +37,31 @@ object SignExt {
   def apply(a: UInt, len: Int) = {
     val aLen = a.getWidth
     val signBit = a(aLen-1)
-    if (aLen >= len) a(len-1,0) else Cat(Fill(len - aLen, signBit), a)
+    if (aLen == len) a else Cat(Fill(len - aLen, signBit), a)
   }
 }
 
 object ZeroExt {
   def apply(a: UInt, len: Int) = {
     val aLen = a.getWidth
-    if (aLen >= len) a(len-1,0) else Cat(0.U((len - aLen).W), a)
+    if (aLen == len) a else Cat(0.U((len - aLen).W), a)
+  }
+}
+
+object LowerMask {
+  def apply(a: UInt, len: Int) = {
+    (0 until len).map(i => a >> i.U).reduce(_|_)
+  }
+}
+
+object LowestBit {
+  def apply(a: UInt, len: Int) = {
+    Mux(a(0), 1.U(len.W), Reverse(((0 until len).map(i => Reverse(a(len - 1, 0)) >> i.U).reduce(_|_) + 1.U) >> 1.U))
+  }
+}
+
+object HighestBit {
+  def apply(a: UInt, len: Int) = {
+    Reverse(LowestBit(Reverse(a), len))
   }
 }
