@@ -512,14 +512,45 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val retirePC = SignExt(decode(ringBufferTail)(firstValidInst).cf.pc, AddrBits)
   
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(RegNext(retireATerm), "difftestCommit")
-    BoringUtils.addSource(RegNext(retireMultiTerms), "difftestMultiCommit")
-    BoringUtils.addSource(RegNext(retirePC), "difftestThisPC")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "difftestThisINST")
-    BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0) && valid(ringBufferTail)(0) || isMMIO(ringBufferTail)(1) && valid(ringBufferTail)(1) && !(valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid)), "difftestIsMMIO")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.isRVC), "difftestIsRVC")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.isRVC), "difftestIsRVC2")
-    BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
+    // generate needSkip vector
+    // fix mip.mtip
+    val isCSRMip = (0 until robWidth).map(i => 
+      (decode(ringBufferTail)(i).cf.instr & "h7f".U) === "h73".U &&
+      (decode(ringBufferTail)(i).cf.instr(31,20) === "h344".U)
+    )
+
+    // define debug vector
+    val skipVec = WireInit(VecInit(0.U(DifftestWidth.W).asBools))
+    val wenVec = WireInit(VecInit(0.U(DifftestWidth.W).asBools))
+    val wdataVec = Wire(Vec(DifftestWidth, UInt(XLEN.W)))
+    val wdstVec = Wire(Vec(DifftestWidth, UInt(32.W)))
+    val wpcVec = Wire(Vec(DifftestWidth, UInt(VAddrBits.W)))
+    val isRVCVec = WireInit(VecInit(0.U(DifftestWidth.W).asBools))
+    wdataVec := DontCare
+    wdstVec := DontCare
+    wpcVec := DontCare
+
+    // assign debug vector
+    (0 until robWidth).map(i => {
+      skipVec(i) := isMMIO(ringBufferTail)(i) || isCSRMip(i)
+      wenVec(i) := io.wb(i).rfWen
+      wdataVec(i) := io.wb(i).rfData
+      wdstVec(i) := io.wb(i).rfDest
+      wpcVec(i) := SignExt(decode(ringBufferTail)(i).cf.pc, XLEN)
+      isRVCVec(i) := decode(ringBufferTail)(i).cf.isRVC
+    })
+
+    // send debug signal to sim top
+    BoringUtils.addSource(RegNext(retireATerm.asUInt +& retireMultiTerms.asUInt), "DIFFTEST_commit")
+    BoringUtils.addSource(RegNext(retirePC), "DIFFTEST_thisPC")
+    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "DIFFTEST_thisINST")
+    BoringUtils.addSource(RegNext(skipVec.asUInt), "DIFFTEST_skip")
+    BoringUtils.addSource(RegNext(wenVec.asUInt), "DIFFTEST_wen")
+    BoringUtils.addSource(RegNext(wdataVec), "DIFFTEST_wdata")
+    BoringUtils.addSource(RegNext(wdstVec), "DIFFTEST_wdst")
+    BoringUtils.addSource(RegNext(wpcVec), "DIFFTEST_wpc")
+    BoringUtils.addSource(RegNext(isRVCVec.asUInt), "DIFFTEST_isRVC")
+    BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "DIFFTEST_intrNO")
   } else {
     BoringUtils.addSource(retireATerm, "ilaWBUvalid")
     BoringUtils.addSource(retirePC, "ilaWBUpc")
