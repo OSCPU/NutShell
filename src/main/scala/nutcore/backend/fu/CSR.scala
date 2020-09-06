@@ -421,7 +421,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
     MaskedRegMap(Mstatus, mstatus, "hffffffffffffffff".U, mstatusUpdateSideEffect),
     MaskedRegMap(Misa, misa), // now MXL, EXT is not changeable
-    MaskedRegMap(Medeleg, medeleg, "hbbff".U),
+    MaskedRegMap(Medeleg, medeleg, "hf3ff".U),
     MaskedRegMap(Mideleg, mideleg, "h222".U),
     MaskedRegMap(Mie, mie),
     MaskedRegMap(Mtvec, mtvec),
