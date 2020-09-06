@@ -171,12 +171,12 @@ trait HasExceptionNO {
       illegalInstr,
       instrAddrMisaligned,
       ecallM, ecallS, ecallU,
-      storeAddrMisaligned,
-      loadAddrMisaligned,
       storePageFault,
       loadPageFault,
       storeAccessFault,
-      loadAccessFault
+      loadAccessFault,
+      storeAddrMisaligned,
+      loadAddrMisaligned
   )
 }
 
