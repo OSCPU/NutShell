@@ -125,7 +125,7 @@ object Compare {
 class TlbEntry extends NBTlbBundle {
   val vpn = UInt(vpnLen.W) // tag is vpn
   val ppn = UInt(ppnLen.W)
-  val level = UInt(log2Up(Level).W) // 0 for 4KB, 1 for 2MB, 2 for 1GB
+  val level = UInt(log2Up(Level).W) // 2 for 4KB, 1 for 2MB, 0 for 1GB
   // val asid = UInt(asidLen.W), asid maybe expensive to support, but useless
   // val v = Bool() // v&g is special, may need sperate storage?
   val perm = new PermBundle(hasV = false)
@@ -287,9 +287,9 @@ class NBTLB(Width: Int, isDtlb: Boolean)/*(implicit m: Module)*/ extends NBTlbMo
   for(i <- 0 until Width) {
     resp(i).valid := valid(i)
     val paddr = LookupTreeDefault(hitLevel(i), Cat(hitppn(i), reqAddr(i).off), List(
-      // 2.U -> Cat(hitppn(i)(ppnLen - 1, 2*vpnnLen), reqAddr(i).vpn(2*vpnnLen - 1, 0), reqAddr(i).off),
+      0.U -> Cat(hitppn(i)(ppnLen - 1, 2*vpnnLen), reqAddr(i).vpn(2*vpnnLen - 1, 0), reqAddr(i).off),
       1.U -> Cat(hitppn(i)(ppnLen - 1, vpnnLen), reqAddr(i).vpn(vpnnLen - 1, 0), reqAddr(i).off),
-      0.U -> Cat(hitppn(i), reqAddr(i).off)
+      2.U -> Cat(hitppn(i), reqAddr(i).off)
     ))
     resp(i).bits.paddr := Mux(vmEnable, paddr, SignExt(req(i).bits.vaddr, PAddrBits))
     resp(i).bits.miss := miss(i)
