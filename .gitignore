@@ -314,6 +314,7 @@ xcuserdata
 .cache
 .history
 .lib/
+.coursier/
 dist/*
 target/
 lib_managed/

@@ -32,4 +32,18 @@ enum {
   DIFFTEST_NR_REG
 };
 
+struct DiffState {
+  int commit;
+  rtlreg_t *reg_scala;
+  uint32_t this_inst;
+  int skip;
+  int isRVC;
+  rtlreg_t *wpc;
+  rtlreg_t *wdata;
+  uint32_t *wdst;
+  int wen;
+  uint64_t intrNO;
+  int priviledgeMode;
+};
+
 #endif

@@ -1,8 +1,17 @@
-ARCH = ARCH=riscv64-nutshell
-NANOS_HOME ?= $(AM_HOME)/../nanos-lite
-SINGLETEST = ALL=recursion
-RVTEST_TARGET = towers
+# ------------------------------------------------------------------
+# test settings
+# ------------------------------------------------------------------
 
+LOG_BEGIN ?= 0
+LOG_END ?= 0
+
+ARCH = ARCH=riscv64-noop
+# ------------------------------------------------------------------
+
+SINGLETEST = recursion
+RVTEST_TARGET = towers
+NANOS_HOME ?= $(AM_HOME)/../nanos-lite
+EMU_ARGS = LOG_BEGIN=$(LOG_BEGIN) LOG_END=$(LOG_END)
 CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
 MB_RESULT = $(shell cat microbench.log | grep IPC)
 MBT_RESULT = $(shell cat microbench-train.log | grep IPC)
@@ -13,14 +22,14 @@ CM_RESULT = $(shell cat coremark.log | grep IPC)
 # ------------------------------------------------------------------
 
 cpu:
-	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) ALL=dummy run
+	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) $(EMU_ARGS) ALL=dummy run
 
 # ------------------------------------------------------------------
 # unit tests
 # ------------------------------------------------------------------
 
 cputest:
-	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) run 2>&1 | tee > cpu.log
+	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) $(EMU_ARGS) run 2>&1 | tee > cpu.log
 	# cat cpu.log | grep different
 ifeq ($(CPU_TEST_RESULT),)
 	@echo "simple CPU test passed"
@@ -29,17 +38,27 @@ else
 	@echo "simple CPU test failed"
 endif
 
+rvtest-ui:
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64ui ENV=p
+
+rvtest:
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64ui ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64um ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64uc ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64si ENV=p
+	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64mi ENV=p
+
 bputest:
-	$(MAKE) -C $(AM_HOME)/tests/bputest $(ARCH) ALL=forcall2 run 2>&1 | tee > bpu.log
+	$(MAKE) -C $(AM_HOME)/tests/bputest $(ARCH) $(EMU_ARGS) ALL=forcall2 run 2>&1 | tee > bpu.log
 	cat bpu.log | grep Mbp
 
 unittest:
-	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) $(SINGLETEST) run 2>&1 | tee > test.log
+	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) $(EMU_ARGS) ALL=$(SINGLETEST) run 2>&1 | tee > test.log
 	cat test.log | grep -E "different|stuck|GOOD"
 	cat test.log | grep ISU > isu.log
 
 microbench:
-	$(MAKE) -C $(AM_HOME)/apps/microbench $(ARCH) mainargs=test run 2>&1 | tee > microbench.log
+	$(MAKE) -C $(AM_HOME)/apps/microbench $(ARCH) $(EMU_ARGS) mainargs=test run 2>&1 | tee > microbench.log
 	cat microbench.log | grep IPC
 	@date >> history.log
 	@git log --pretty=format:"%h %an %ad %s" -1 >> history.log
@@ -48,11 +67,11 @@ microbench:
 	@echo -e "" >> history.log
 
 microbench-train:
-	$(MAKE) -C $(AM_HOME)/apps/microbench $(ARCH) mainargs=train run 2>&1 | tee > microbench-train.log
+	$(MAKE) -C $(AM_HOME)/apps/microbench $(ARCH) $(EMU_ARGS) mainargs=train run 2>&1 | tee > microbench-train.log
 	cat microbench-train.log | grep IPC
 
 coremark:
-	$(MAKE) -C $(AM_HOME)/apps/coremark $(ARCH) mainargs=test run 2>&1 | tee > coremark.log
+	$(MAKE) -C $(AM_HOME)/apps/coremark $(ARCH) $(EMU_ARGS) mainargs=test run 2>&1 | tee > coremark.log
 	cat coremark.log | grep IPC
 	@date >> cm_history.log
 	@git log --pretty=format:"%h %an %ad %s" -1 >> cm_history.log
@@ -62,15 +81,11 @@ coremark:
 
 
 dhrystone:
-	$(MAKE) -C $(AM_HOME)/apps/dhrystone $(ARCH) mainargs=test run 2>&1 | tee > dhrystone.log
+	$(MAKE) -C $(AM_HOME)/apps/dhrystone $(ARCH) $(EMU_ARGS) mainargs=test run 2>&1 | tee > dhrystone.log
 	cat dhrystone.log | grep IPC
 
-rvtest:
-	$(MAKE) -C $(AM_HOME)/tests/riscv-test/benchmarks/$(RVTEST_TARGET) $(ARCH) run
-	# usage: make rvtest RVTEST_TARGET=dhrystone
-
 xj:
-	$(MAKE) -C $(NANOS_HOME) $(ARCH) run
+	$(MAKE) -C $(NANOS_HOME) $(ARCH) $(EMU_ARGS) run
 
 xjnemu:
 	$(MAKE) -C $(NANOS_HOME) ARCH=riscv64-nemu run
@@ -100,18 +115,21 @@ linux-debug:
 # test set
 # ------------------------------------------------------------------
 
-smoke-test: cpu cputest microbench
+smoke-test: cpu cputest microbench coremark
 	@echo "Smoke Test Passed"
 
-regression-test: smoke-test linux
+regression-test: smoke-test coremark linux
 	@echo "Regression Test Passed"
 
-perf-test: smoke-test microbench-train coremark
+perf-test: smoke-test microbench-train
 	@echo "Perf Test Finished"
 
 # ------------------------------------------------------------------
 # get disassembled test src
 # ------------------------------------------------------------------
+
+disassemble-unittest:
+	cp $(AM_HOME)/tests/cputest/build/$(SINGLETEST)-riscv64-noop.txt ./d-unittest.log
 
 disassemble-rttos:
 	cp $(RTTOS_HOME)/bsp/riscv64-nutshell/build/code.txt ./d-rttos.log
@@ -122,3 +140,9 @@ disassemble-freertos:
 disassemble-xv6:
 	cp $(XV6_HOME)/build/code.txt ./d-xv6.log
 
+# ------------------------------------------------------------------
+# chore
+# ------------------------------------------------------------------
+
+clean:
+	$(MAKE) -C .. clean

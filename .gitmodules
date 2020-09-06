@@ -1,0 +1,3 @@
+[submodule "ready-to-run"]
+	path = ready-to-run
+	url = https://github.com/OSCPU/ready-to-run.git

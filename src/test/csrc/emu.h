@@ -13,6 +13,7 @@
 #include <verilated_vcd_c.h>	// Trace file format header
 #endif
 
+#define DIFFTEST_WIDTH 6
 
 class Emulator {
   const char *image;
@@ -24,35 +25,20 @@ class Emulator {
   // emu control variable
   uint32_t seed;
   uint64_t max_cycles, cycles;
+  uint64_t log_begin, log_end, log_level;
 
   std::vector<const char *> parse_args(int argc, const char *argv[]);
 
   static const struct option long_options[];
   static void print_help(const char *file);
 
-  void read_emu_regs(rtlreg_t *r) {
-#define macro(x) r[x] = dut_ptr->io_difftest_r_##x
-    macro(0); macro(1); macro(2); macro(3); macro(4); macro(5); macro(6); macro(7);
-    macro(8); macro(9); macro(10); macro(11); macro(12); macro(13); macro(14); macro(15);
-    macro(16); macro(17); macro(18); macro(19); macro(20); macro(21); macro(22); macro(23);
-    macro(24); macro(25); macro(26); macro(27); macro(28); macro(29); macro(30); macro(31);
-    r[DIFFTEST_THIS_PC] = dut_ptr->io_difftest_thisPC;
-#ifndef __RV32__
-    r[DIFFTEST_MSTATUS] = dut_ptr->io_difftest_mstatus;
-    r[DIFFTEST_SSTATUS] = dut_ptr->io_difftest_sstatus;
-    r[DIFFTEST_MEPC   ] = dut_ptr->io_difftest_mepc;
-    r[DIFFTEST_SEPC   ] = dut_ptr->io_difftest_sepc;
-    r[DIFFTEST_MCAUSE ] = dut_ptr->io_difftest_mcause;
-    r[DIFFTEST_SCAUSE ] = dut_ptr->io_difftest_scause;
-#endif
-  }
-
   public:
   // argv decay to the secondary pointer
   Emulator(int argc, const char *argv[]):
     image(nullptr),
     dut_ptr(new std::remove_reference<decltype(*dut_ptr)>::type),
-    seed(0), max_cycles(-1), cycles(0)
+    seed(0), max_cycles(-1), cycles(0),
+    log_begin(0), log_end(-1), log_level(LOG_ALL)
   {
     // init emu
     auto args = parse_args(argc, argv);
@@ -61,6 +47,11 @@ class Emulator {
     srand(seed);
     srand48(seed);
     Verilated::randReset(2);
+
+    // set log time range and log level
+    dut_ptr->io_logCtrl_log_begin = log_begin;
+    dut_ptr->io_logCtrl_log_end = log_end;
+    dut_ptr->io_logCtrl_log_level = log_level;
 
     // init ram
     extern void init_ram(const char *img);
@@ -72,6 +63,39 @@ class Emulator {
 
     // init core
     reset_ncycles(10);
+  }
+
+  inline void read_emu_regs(rtlreg_t *r) {
+#define macro(x) r[x] = dut_ptr->io_difftest_r_##x
+  macro(0); macro(1); macro(2); macro(3); macro(4); macro(5); macro(6); macro(7);
+  macro(8); macro(9); macro(10); macro(11); macro(12); macro(13); macro(14); macro(15);
+  macro(16); macro(17); macro(18); macro(19); macro(20); macro(21); macro(22); macro(23);
+  macro(24); macro(25); macro(26); macro(27); macro(28); macro(29); macro(30); macro(31);
+  // macro(32); macro(33); macro(34); macro(35); macro(36); macro(37); macro(38); macro(39);
+  // macro(40); macro(41); macro(42); macro(43); macro(44); macro(45); macro(46); macro(47);
+  // macro(48); macro(49); macro(50); macro(51); macro(52); macro(53); macro(54); macro(55);
+  // macro(56); macro(57); macro(58); macro(59); macro(60); macro(61); macro(62); macro(63);
+  r[DIFFTEST_THIS_PC] = dut_ptr->io_difftest_thisPC;
+#ifndef __RV32__
+    r[DIFFTEST_MSTATUS] = dut_ptr->io_difftest_mstatus;
+    r[DIFFTEST_SSTATUS] = dut_ptr->io_difftest_sstatus;
+    r[DIFFTEST_MEPC   ] = dut_ptr->io_difftest_mepc;
+    r[DIFFTEST_SEPC   ] = dut_ptr->io_difftest_sepc;
+    r[DIFFTEST_MCAUSE ] = dut_ptr->io_difftest_mcause;
+    r[DIFFTEST_SCAUSE ] = dut_ptr->io_difftest_scause;
+#endif
+  }
+
+  inline void read_wb_info(rtlreg_t *wpc, rtlreg_t *wdata, uint32_t *wdst) {
+#define dut_ptr_wpc(x)  wpc[x] = dut_ptr->io_difftest_wpc_##x
+#define dut_ptr_wdata(x) wdata[x] = dut_ptr->io_difftest_wdata_##x
+#define dut_ptr_wdst(x)  wdst[x] = dut_ptr->io_difftest_wdst_##x
+    dut_ptr_wpc(0); dut_ptr_wdata(0); dut_ptr_wdst(0); 
+    dut_ptr_wpc(1); dut_ptr_wdata(1); dut_ptr_wdst(1); 
+    dut_ptr_wpc(2); dut_ptr_wdata(2); dut_ptr_wdst(2); 
+    dut_ptr_wpc(3); dut_ptr_wdata(3); dut_ptr_wdst(3); 
+    dut_ptr_wpc(4); dut_ptr_wdata(4); dut_ptr_wdst(4); 
+    dut_ptr_wpc(5); dut_ptr_wdata(5); dut_ptr_wdst(5); 
   }
 
   void reset_ncycles(size_t cycles) {
@@ -110,6 +134,16 @@ class Emulator {
     int hascommit = 0;
     const int stuck_limit = 2000;
 
+    uint32_t wdst[DIFFTEST_WIDTH];
+    rtlreg_t wdata[DIFFTEST_WIDTH];
+    rtlreg_t wpc[DIFFTEST_WIDTH];
+    rtlreg_t reg[DIFFTEST_NR_REG];
+    DiffState diff;
+    diff.reg_scala = reg;
+    diff.wpc = wpc;
+    diff.wdata = wdata;
+    diff.wdst = wdst;
+
 #if VM_TRACE
     Verilated::traceEverOn(true);	// Verilator must compute traced signals
     VL_PRINTF("Enabling waves...\n");
@@ -141,17 +175,22 @@ class Emulator {
       }
 
       // difftest
-      if (dut_ptr->io_difftest_commit && hascommit) {
-        rtlreg_t reg[DIFFTEST_NR_REG];
-        read_emu_regs(reg);
-
-        extern int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
-          int isMMIO, int isRVC, int isRVC2, uint64_t intrNO, int priviledgeMode, int isMultiCommit);
+      if (dut_ptr->io_difftest_commit >= 1 && hascommit) {
+        extern int difftest_step(DiffState *s);
         if (dut_ptr->io_difftestCtrl_enable) {
-          if (difftest_step(reg, dut_ptr->io_difftest_thisINST,
-              dut_ptr->io_difftest_isMMIO, dut_ptr->io_difftest_isRVC, dut_ptr->io_difftest_isRVC2,
-              dut_ptr->io_difftest_intrNO, dut_ptr->io_difftest_priviledgeMode, 
-              dut_ptr->io_difftest_isMultiCommit)) {
+          read_emu_regs(reg);
+          read_wb_info(wpc, wdata, wdst);
+          diff.commit = dut_ptr->io_difftest_commit;
+          diff.this_inst = dut_ptr->io_difftest_thisINST;
+          diff.skip = dut_ptr->io_difftest_skip;
+          diff.isRVC = dut_ptr->io_difftest_isRVC;
+          diff.wen = dut_ptr->io_difftest_wen;
+          diff.intrNO = dut_ptr->io_difftest_intrNO;
+          diff.priviledgeMode = dut_ptr->io_difftest_priviledgeMode;
+
+          assert(!(diff.commit > 1 && diff.intrNO));
+
+          if (difftest_step(&diff)) {
 #if VM_TRACE
             tfp->close();
 #endif
