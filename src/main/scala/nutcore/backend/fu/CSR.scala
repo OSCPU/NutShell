@@ -240,6 +240,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val ie = new Priv
   }
 
+  class SatpStruct extends Bundle {
+    val mode = UInt(4.W)
+    val asid = UInt(16.W)
+    val ppn  = UInt(44.W)
+  }
+
   class Interrupt extends Bundle {
     val e = new Priv
     val t = new Priv
@@ -471,10 +477,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     CSROpType.clri -> (rdata & ~csri)
   ))
 
-  val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException
+  // satp wen check
+  val satpLegalMode = (wdata.asTypeOf(new SatpStruct).mode===0.U) || (wdata.asTypeOf(new SatpStruct).mode===8.U)	  
+
+  // general CSR wen check
+  val wen = valid && func =/= CSROpType.jmp && (addr=/=Satp.U || satpLegalMode) && !io.isBackendException
   val permitted = csrAccessPermissionCheck(addr, false.B, priviledgeMode) 
-  // Writeable check is ingored.
-  // Currently, write to illegal csr addr will be ignored
   MaskedRegMap.generate(mapping, addr, rdata, wen && permitted, wdata)
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
   io.out.bits := rdata
