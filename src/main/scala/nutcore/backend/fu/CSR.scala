@@ -339,6 +339,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val sipMask  = "h222".U & mideleg
   // val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
   val satp = RegInit(UInt(XLEN.W), 0.U)
+  val satpMask = "h80000fffffffffff".U // disable asid, mode can only be 8 / 0 
   val sepc = RegInit(UInt(XLEN.W), 0.U)
   val scause = RegInit(UInt(XLEN.W), 0.U)
   val stval = Reg(UInt(XLEN.W))
@@ -421,7 +422,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Sip, mip.asUInt, sipMask, MaskedRegMap.Unwritable, sipMask),
 
     // Supervisor Protection and Translation
-    MaskedRegMap(Satp, satp),
+    MaskedRegMap(Satp, satp, satpMask, MaskedRegMap.NoSideEffect, satpMask),
 
     // Machine Information Registers 
     MaskedRegMap(Mvendorid, mvendorid, 0.U, MaskedRegMap.Unwritable), 
