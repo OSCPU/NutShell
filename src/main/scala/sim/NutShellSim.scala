@@ -38,7 +38,7 @@ class DiffTestIO extends NutCoreBundle {
   val wdata = Output(Vec(DifftestWidth, UInt(XLEN.W)))   // Regfile.wdata (Vector)
   val wdst = Output(Vec(DifftestWidth, UInt(32.W)))      // Regfile.wdst (Vector)
   val wpc = Output(Vec(DifftestWidth, UInt(XLEN.W)))     // PC for insts committed in this cycle (Vector)
-  val isRVC = Output(Bool())                             // Insts committed in this cycle is RVC (Vector)
+  val isRVC = Output(UInt(DifftestWidth.W))                             // Insts committed in this cycle is RVC (Vector)
   val intrNO = Output(UInt(64.W))                        // Int/exc number
 
   val priviledgeMode = Output(UInt(2.W))
