@@ -507,72 +507,95 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // Alternatively, FUs can be divided into different groups.
   // For each group, only one inst can be commited to ROB in a single cycle.
 
-  val nullCommit = Wire(new OOCommitIO)
-  nullCommit := DontCare
+  require(CommitWidth == 2 || CommitWidth == 4)
 
-  // CDB arbit
-  val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU, srcNone) = (0, 1, 2, 3, 4, 5, 6, 7)
-  val commit = List(brucommitdelayed, alu1.io.out.bits, alu2.io.out.bits, lsucommit, mducommitdelayed, csrcommit, moucommit, nullCommit)
-  val commitValid = List(bruDelayer.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mduDelayer.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
+  if(CommitWidth == 2){
+    val nullCommit = Wire(new OOCommitIO)
+    nullCommit := DontCare
 
-  val WritebackPriority = Seq(
-    srcCSR,
-    srcMOU,
-    srcLSU,
-    srcMDU,
-    srcBRU,
-    srcALU1,
-    srcALU2,
-    srcNone
-  )
+    // CDB arbit
+    val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU, srcNone) = (0, 1, 2, 3, 4, 5, 6, 7)
+    val commit = List(brucommitdelayed, alu1.io.out.bits, alu2.io.out.bits, lsucommit, mducommitdelayed, csrcommit, moucommit, nullCommit)
+    val commitValid = List(bruDelayer.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mduDelayer.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
 
-  // select 2 CDB commit request with highest priority
-  val commitPriority = VecInit(WritebackPriority.map(i => commit(i)))
-  val commitValidPriority = VecInit(WritebackPriority.map(i => commitValid(i)))
-  // val secondValidMask = VecInit((0 until WritebackPriority.size).map(i => WritebackPriority(0 until i).map(j => commitValid(j)).reduceLeft(_ ^ _)))
-  val notFirstMask = Wire(Vec(WritebackPriority.size, Bool()))
-  notFirstMask(0) := false.B
-  for(i <- 0 until WritebackPriority.size){
-    if(i != 0){notFirstMask(i) := notFirstMask(i-1) | commitValidPriority(i-1)}
+    val WritebackPriority = Seq(
+      srcCSR,
+      srcMOU,
+      srcLSU,
+      srcMDU,
+      srcBRU,
+      srcALU1,
+      srcALU2,
+      srcNone
+    )
+
+    // select 2 CDB commit request with highest priority
+    val commitPriority = VecInit(WritebackPriority.map(i => commit(i)))
+    val commitValidPriority = VecInit(WritebackPriority.map(i => commitValid(i)))
+    // val secondValidMask = VecInit((0 until WritebackPriority.size).map(i => WritebackPriority(0 until i).map(j => commitValid(j)).reduceLeft(_ ^ _)))
+    val notFirstMask = Wire(Vec(WritebackPriority.size, Bool()))
+    notFirstMask(0) := false.B
+    for(i <- 0 until WritebackPriority.size){
+      if(i != 0){notFirstMask(i) := notFirstMask(i-1) | commitValidPriority(i-1)}
+    }
+    val secondCommitValid = commitValidPriority.asUInt & notFirstMask.asUInt
+    val notSecondMask = Wire(Vec(WritebackPriority.size, Bool()))
+    notSecondMask(0) := false.B
+    for(i <- 0 until WritebackPriority.size){
+      if(i != 0){notSecondMask(i) := notSecondMask(i-1) | secondCommitValid(i-1)}
+    }
+    val commitValidVec = commitValidPriority.asUInt & ~notSecondMask.asUInt
+
+    Debug("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
+
+    val cdbSrc1 = PriorityMux(commitValidPriority, commitPriority)
+    val cdbSrc1Valid = PriorityMux(commitValidPriority, commitValidPriority)
+    val cdbSrc2 = PriorityMux(secondCommitValid, commitPriority)
+    val cdbSrc2Valid = PriorityMux(secondCommitValid, commitValidPriority)
+
+    val cmtStrHaz = List(
+      PopCount(commitValidPriority.asUInt) === 0.U,
+      PopCount(commitValidPriority.asUInt) === 1.U,
+      PopCount(commitValidPriority.asUInt) === 2.U,
+      PopCount(commitValidPriority.asUInt) === 3.U,
+      PopCount(commitValidPriority.asUInt) > 3.U
+    )
+    val commitValidPriorityUInt = commitValidPriority.asUInt
+    assert(!(PopCount(commitValidPriorityUInt(3,0)) > 2.U))
+
+    cdb(0).valid := cdbSrc1Valid
+    cdb(0).bits := cdbSrc1
+    cdb(1).valid := cdbSrc2Valid
+    cdb(1).bits := cdbSrc2
+
+    mduWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcMDU))
+    bruWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcBRU))
+    alu1.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU1))
+    alu2.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU2))
   }
-  val secondCommitValid = commitValidPriority.asUInt & notFirstMask.asUInt
-  val notSecondMask = Wire(Vec(WritebackPriority.size, Bool()))
-  notSecondMask(0) := false.B
-  for(i <- 0 until WritebackPriority.size){
-    if(i != 0){notSecondMask(i) := notSecondMask(i-1) | secondCommitValid(i-1)}
+
+  if(CommitWidth == 4){
+    cdb(0).valid := bruDelayer.io.out.valid
+    cdb(0).bits := brucommitdelayed
+    cdb(1).valid := lsu.io.out.valid
+    cdb(1).bits := lsucommit
+    cdb(2).valid := alu1.io.out.valid
+    cdb(2).bits := alu1.io.out.bits
+    cdb(3).valid := csr.io.out.valid || mou.io.out.valid || alu2.io.out.valid || mduDelayer.io.out.valid
+    cdb(3).bits := PriorityMux(
+      List(
+        csr.io.out.valid -> csrcommit,
+        mou.io.out.valid -> moucommit,
+        mduDelayer.io.out.valid -> mducommitdelayed,
+        alu2.io.out.valid -> alu2.io.out.bits
+      )
+    )
+
+    mduWritebackReady  := true.B
+    bruWritebackReady  := true.B
+    alu1.io.out.ready := true.B
+    alu2.io.out.ready := !(csr.io.out.valid || mou.io.out.valid || mduDelayer.io.out.valid)
   }
-  val commitValidVec = commitValidPriority.asUInt & ~notSecondMask.asUInt
-
-  Debug("[CDB Arb] %b %b %b %b %b\n", commitValidPriority.asUInt, notFirstMask.asUInt, secondCommitValid, notSecondMask.asUInt, commitValidVec)
-
-  val cdbSrc1 = PriorityMux(commitValidPriority, commitPriority)
-  val cdbSrc1Valid = PriorityMux(commitValidPriority, commitValidPriority)
-  val cdbSrc2 = PriorityMux(secondCommitValid, commitPriority)
-  val cdbSrc2Valid = PriorityMux(secondCommitValid, commitValidPriority)
-
-  val cmtStrHaz = List(
-    PopCount(commitValidPriority.asUInt) === 0.U,
-    PopCount(commitValidPriority.asUInt) === 1.U,
-    PopCount(commitValidPriority.asUInt) === 2.U,
-    PopCount(commitValidPriority.asUInt) === 3.U,
-    PopCount(commitValidPriority.asUInt) > 3.U
-  )
-  val commitValidPriorityUInt = commitValidPriority.asUInt
-  assert(!(PopCount(commitValidPriorityUInt(3,0)) > 2.U))
-
-  cdb(0).valid := cdbSrc1Valid
-  cdb(0).bits := cdbSrc1
-  cdb(1).valid := cdbSrc2Valid
-  cdb(1).bits := cdbSrc2
-  // cdb(2).valid := false.B
-  // cdb(2).bits := cdbSrc2
-  // cdb(3).valid := false.B
-  // cdb(3).bits := cdbSrc2
-
-  mduWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcMDU))
-  bruWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcBRU))
-  alu1.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU1))
-  alu2.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU2))
 
   brurs.io.out.ready  := bru.io.in.ready
   alu1rs.io.out.ready := alu1.io.in.ready
@@ -599,11 +622,11 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   BoringUtils.addSource(lsurs.io.out.fire(), "perfCntCondMlsuIssue")
   BoringUtils.addSource(mdurs.io.out.fire(), "perfCntCondMmduIssue")
   BoringUtils.addSource(rob.io.empty, "perfCntCondMrobEmpty")
-  BoringUtils.addSource(cmtStrHaz(0), "perfCntCondMcmtCnt0")
-  BoringUtils.addSource(cmtStrHaz(1), "perfCntCondMcmtCnt1")
-  BoringUtils.addSource(cmtStrHaz(2), "perfCntCondMcmtCnt2")
-  BoringUtils.addSource(cmtStrHaz(3), "perfCntCondMcmtStrHaz1")
-  BoringUtils.addSource(cmtStrHaz(4), "perfCntCondMcmtStrHaz2")
+  // BoringUtils.addSource(cmtStrHaz(0), "perfCntCondMcmtCnt0")
+  // BoringUtils.addSource(cmtStrHaz(1), "perfCntCondMcmtCnt1")
+  // BoringUtils.addSource(cmtStrHaz(2), "perfCntCondMcmtCnt2")
+  // BoringUtils.addSource(cmtStrHaz(3), "perfCntCondMcmtStrHaz1")
+  // BoringUtils.addSource(cmtStrHaz(4), "perfCntCondMcmtStrHaz2")
   BoringUtils.addSource(alu2.io.out.fire(), "perfCntCondMaluInstr2")
   BoringUtils.addSource(!(rob.io.in(0).fire() | rob.io.in(1).fire()), "perfCntCondMdispatch0")
   BoringUtils.addSource(rob.io.in(0).fire() ^ rob.io.in(1).fire(), "perfCntCondMdispatch1")
