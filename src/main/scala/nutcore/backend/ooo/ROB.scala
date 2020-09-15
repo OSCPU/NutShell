@@ -33,7 +33,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
     val brMaskIn = Input(Vec(robWidth, UInt(checkpointSize.W)))
-    val cdb = Vec(CommitWidth, Flipped(Valid(new OOCommitIO)))
+    val cdb = Vec(WritebackWidth, Flipped(Valid(new OOCommitIO)))
     val mispredictRec = Flipped(new MisPredictionRecIO)
     val wb = Vec(robWidth, new WriteBackIO)
     val redirect = new RedirectIO
@@ -63,7 +63,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   require(robSize >= 2 && isPow2(robSize))
 
   require(robWidth == 2) // current version only supports robWidth 2
-  require(RetireWidth == robWidth)
+  require(CommitWidth == robWidth)
 
   def needMispredictionRecovery(brMask: UInt) = {
     io.mispredictRec.valid && io.mispredictRec.redirect.valid && brMask(io.mispredictRec.checkpoint)
@@ -77,7 +77,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val decode = Reg(Vec(robSize, Vec(robWidth, new DecodeIO)))
   val brMask = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(0.U(checkpointSize.W))))))
   val valid = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
-  val commited = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Commited to CDB (i.e. writebacked)
+  val writebacked = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Commited to CDB (i.e. writebacked)
   val canceled = Reg(Vec(robSize, Vec(robWidth, Bool()))) // for debug
   val redirect = Reg(Vec(robSize, Vec(robWidth, new RedirectIO)))
   val exception = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Backend exception
@@ -129,8 +129,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     io.rprf(2*i+1)      := prf(io.aprf(2*i+1))
     io.rvalid(2*i)      := rmtValid(io.in(i).bits.ctrl.rfSrc1)
     io.rvalid(2*i+1)    := rmtValid(io.in(i).bits.ctrl.rfSrc2)
-    io.rcommited(2*i)   := commited(io.aprf(2*i)>>1)(io.aprf(2*i)(0)) && valid(io.aprf(2*i)>>1)(io.aprf(2*i)(0))
-    io.rcommited(2*i+1) := commited(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0)) && valid(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0))
+    io.rcommited(2*i)   := writebacked(io.aprf(2*i)>>1)(io.aprf(2*i)(0)) && valid(io.aprf(2*i)>>1)(io.aprf(2*i)(0))
+    io.rcommited(2*i+1) := writebacked(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0)) && valid(io.aprf(2*i+1)>>1)(io.aprf(2*i+1)(0))
   })
 
   //---------------------------------------------------------
@@ -139,7 +139,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
 
   // commit to ROB
   // ROB listens to CDB (common data bus), i.e. CommitIO
-  // An ROB term will be marked as commited after that inst was commited to CDB
+  // An ROB term will be marked as writebacked after that inst was writebacked to CDB
   // This will always success
 
   // if ROB index == commit index && bank index == commit bank index
@@ -148,13 +148,13 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   for(i <- (0 to robSize - 1)){
     for(j <- (0 to robWidth - 1)){
       val robIdx = Cat(i.asUInt(log2Up(robSize).W), j.asUInt(log2Up(robWidth).W))
-      for(k <- (0 until CommitWidth)){
+      for(k <- (0 until WritebackWidth)){
         when(valid(i)(j) && io.cdb(k).bits.prfidx === robIdx && io.cdb(k).valid){
         // when(true.B){
-          Debug(commited(i)(j), "[ERROR] double commit robidx %d pc %x inst %x pcin %x instin %x\n", robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
+          Debug(writebacked(i)(j), "[ERROR] double commit robidx %d pc %x inst %x pcin %x instin %x\n", robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
           Debug(io.cdb(k).bits.decode.cf.pc =/= decode(i)(j).cf.pc, "[ERROR] commit pc not match robidx %d pc %x inst %x pcin %x instin %x\n", robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
           assert(io.cdb(k).bits.decode.cf.pc === decode(i)(j).cf.pc)
-          assert(!commited(i)(j), "double commit")
+          assert(!writebacked(i)(j), "double commit")
         }
       }
       when(valid(i)(j) && needMispredictionRecovery(brMask(i)(j))){
@@ -167,14 +167,14 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   // writeback to physical RF, update ROB control bits
-  for(k <- 0 until CommitWidth){
+  for(k <- 0 until WritebackWidth){
     val prfidx = io.cdb(k).bits.prfidx
     val index = prfidx(log2Up(robSize), log2Up(robWidth))
     val bank = prfidx(log2Up(robWidth)-1, 0)
     when(io.cdb(k).valid){
-      // Mark an ROB term as commited
+      // Mark an ROB term as writebacked
       when(!io.cdb(k).bits.exception){
-        commited(index)(bank) := true.B
+        writebacked(index)(bank) := true.B
       }
       // Write result to ROB-PRF
       prf(prfidx) := io.cdb(k).bits.commits
@@ -200,10 +200,10 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // We write back at most #bank reg results back to arch-rf.
   // Then we mark those ROB terms as finished, i.e. `!valid`
   // No more than robWidth insts can retire from ROB in a single cycle.
-  val tailBankNotUsed = List.tabulate(robWidth)(i => !valid(ringBufferTail)(i) || valid(ringBufferTail)(i) && commited(ringBufferTail)(i))
+  val tailBankNotUsed = List.tabulate(robWidth)(i => !valid(ringBufferTail)(i) || valid(ringBufferTail)(i) && writebacked(ringBufferTail)(i))
   val tailTermEmpty = List.tabulate(robWidth)(i => !valid(ringBufferTail)(i)).reduce(_ && _)
   // TODO: refactor retire logic
-  val skipException = valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid && commited(ringBufferTail)(0) && exception(ringBufferTail)(1)
+  val skipException = valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid && writebacked(ringBufferTail)(0) && exception(ringBufferTail)(1)
   val retireATerm = tailBankNotUsed.reduce(_ && _) && !tailTermEmpty || skipException
   val recycleATerm = tailTermEmpty && (ringBufferTail =/= ringBufferHead)
   when(retireATerm || recycleATerm){
@@ -253,8 +253,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // retire: trigger redirect
   // exception/interrupt/branch mispredict redirect is raised by ROB
   val redirectBank = PriorityMux(
-    (0 until RetireWidth).map(i => redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i)),
-    (0 until RetireWidth).map(_.U)
+    (0 until CommitWidth).map(i => redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i)),
+    (0 until CommitWidth).map(_.U)
   )
   io.redirect := redirect(ringBufferTail)(redirectBank)
   io.redirect.valid := retireATerm && List.tabulate(robWidth)(i => 
@@ -267,23 +267,23 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // Other exception/interrupt will be stalled by Dispatch Unit until ROB is empty
 
   // Currently, AGU(LSU) will send exception to CDB and commit this inst.
-  // However, commit with backend exception will not set commited to `true`.
+  // However, commit with backend exception will not set writebacked to `true`.
   // When ROB detected a backend exception at the tail of ROB, a `trigger exception`
   // signal will be sent to CSR. CSR gets info about this inst from a special reg.
-  // The inst which caused exception will be commited by CSR.
+  // The inst which caused exception will be writebacked by CSR.
 
   // By doing this, we can treat CSR module as a single cycle FU.
 
   // TODO: delay 1 cycle for better timing performance
   io.exception := 
     valid(ringBufferTail)(0) && exception(ringBufferTail)(0) ||
-    valid(ringBufferTail)(1) && exception(ringBufferTail)(1) && (!valid(ringBufferTail)(0) || commited(ringBufferTail)(0) && !redirect(ringBufferTail)(0).valid)
+    valid(ringBufferTail)(1) && exception(ringBufferTail)(1) && (!valid(ringBufferTail)(0) || writebacked(ringBufferTail)(0) && !redirect(ringBufferTail)(0).valid)
 
   // setup beUop for CSR
   // `beUop` stands for `backend exception uop`
   val exceptionSelect = PriorityMux(
-    (0 until RetireWidth).map(i => exception(ringBufferTail)(i)),
-    (0 until RetireWidth).map(_.U)
+    (0 until CommitWidth).map(i => exception(ringBufferTail)(i)),
+    (0 until CommitWidth).map(_.U)
   )
   io.beUop := DontCare
   // io.beUop.decode := decode(ringBufferTail)(exceptionSelect)
@@ -327,7 +327,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
         exception(ringBufferTail)(1))
 
   // For debug:
-  // check if store mem req is from a commited store
+  // check if store mem req is from a retired store
   val lsupc = Wire(UInt(VAddrBits.W))
   val storeTBCV = Wire(Bool())
   val Q1 = Module(new Queue(UInt(VAddrBits.W), 32, pipe = true, flow = true))
@@ -368,8 +368,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   // fix wen
-  val instRedirect = (0 until RetireWidth).map(i => redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i))
-  (1 until RetireWidth).map(i => {
+  val instRedirect = (0 until CommitWidth).map(i => redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i))
+  (1 until CommitWidth).map(i => {
     when(instRedirect.take(i).reduce(_ || _)){
       io.wb(i).rfWen := false.B
     }
@@ -389,7 +389,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       valid(ringBufferHead)(i) := io.in(i).valid
       load(ringBufferHead)(i) := io.in(i).bits.ctrl.fuType === FuType.lsu && LSUOpType.needMemRead(io.in(i).bits.ctrl.fuOpType)
       store(ringBufferHead)(i) := io.in(i).bits.ctrl.fuType === FuType.lsu && LSUOpType.needMemWrite(io.in(i).bits.ctrl.fuOpType)
-      commited(ringBufferHead)(i) := false.B
+      writebacked(ringBufferHead)(i) := false.B
       canceled(ringBufferHead)(i) := false.B
       redirect(ringBufferHead)(i).valid := false.B
       exception(ringBufferHead)(i) := false.B
@@ -440,7 +440,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     for(i <- 0 until DispatchWidth){
       Debug(io.in(i).fire(), "[DISPATCH"+ i +"] pc = 0x%x inst %x wen %x wdst %x\n", io.in(i).bits.cf.pc, io.in(i).bits.cf.instr, io.in(i).bits.ctrl.rfWen, io.in(i).bits.ctrl.rfDest)
     }
-    for(i <- 0 until CommitWidth){
+    for(i <- 0 until WritebackWidth){
       Debug(io.cdb(i).valid, "[COMMIT"+ i +"] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(i).bits.decode.cf.pc, io.cdb(i).bits.decode.cf.instr, io.cdb(i).bits.decode.ctrl.rfWen, io.cdb(i).bits.decode.ctrl.rfDest, io.cdb(i).bits.commits)
     }
     Debug(retireATerm && valid(ringBufferTail)(0), "[RETIRE1] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", decode(ringBufferTail)(0).cf.pc, decode(ringBufferTail)(0).cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, isMMIO(ringBufferTail)(0), intrNO(ringBufferTail)(0))
@@ -449,11 +449,11 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   Debug(){
     Debug("[ROB] ")
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(0) && commited(i)(0)){Debug(false, "c")}.elsewhen(valid(i)(0)){Debug(false, "v")}.otherwise{Debug(false, "-")}
+      when(valid(i)(0) && writebacked(i)(0)){Debug(false, "w")}.elsewhen(valid(i)(0)){Debug(false, "v")}.otherwise{Debug(false, "-")}
     }
     Debug("\n[ROB] ")
     for(i <- 0 to (robSize - 1)){
-      when(valid(i)(1) && commited(i)(1)){Debug("c")}.elsewhen(valid(i)(1)){Debug("v")}.otherwise{Debug("-")}
+      when(valid(i)(1) && writebacked(i)(1)){Debug("w")}.elsewhen(valid(i)(1)){Debug("v")}.otherwise{Debug("-")}
     }
     Debug("\n[ROB] ")
     for(i <- 0 to (robSize - 1)){
@@ -465,8 +465,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     Debug("[ROB] pc           v w c r e   pc           v w c r e\n")
     for(i <- 0 to (robSize - 1)){
       Debug("[ROB] 0x%x %d %d %d %d %d   0x%x %d %d %d %d %d  " + i, 
-        decode(i)(0).cf.pc, valid(i)(0), commited(i)(0), canceled(i)(0), redirect(i)(0).valid && valid(i)(0), exception(i)(0),
-        decode(i)(1).cf.pc, valid(i)(1), commited(i)(1), canceled(i)(1), redirect(i)(1).valid && valid(i)(1), exception(i)(1)
+        decode(i)(0).cf.pc, valid(i)(0), writebacked(i)(0), canceled(i)(0), redirect(i)(0).valid && valid(i)(0), exception(i)(0),
+        decode(i)(1).cf.pc, valid(i)(1), writebacked(i)(1), canceled(i)(1), redirect(i)(1).valid && valid(i)(1), exception(i)(1)
       )
       when(valid(i)(0) || valid(i)(1)){Debug("  valid")}
       when(ringBufferHead === i.U){Debug("  head")}
@@ -486,7 +486,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     // for(i <- 0 to (NRReg - 1)){
     //  // if(i % 6 == 0)Debug("\n")
     //   when(rmtValid(i)){
-    //     Debug("%d -> %d %b  ", i.U, rmtMap(i), commited(i.U>>1)(i.U(0)))
+    //     Debug("%d -> %d %b  ", i.U, rmtMap(i), writebacked(i.U>>1)(i.U(0)))
     //   }
     // }
     // Debug("\n")

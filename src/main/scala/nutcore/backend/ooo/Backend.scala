@@ -33,8 +33,8 @@ trait HasBackendConst{
   val prfAddrWidth = log2Up(robSize) + log2Up(robWidth) // physical rf addr width
 
   val DispatchWidth = 2
+  val WritebackWidth = 2
   val CommitWidth = 2
-  val RetireWidth = 2
 
   val enableCheckpoint = true
 }
@@ -59,7 +59,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // There is only 1 BRU
   // There is only 1 LSU
 
-  val cdb = Wire(Vec(CommitWidth, Valid(new OOCommitIO)))
+  val cdb = Wire(Vec(WritebackWidth, Valid(new OOCommitIO)))
   val rf = new RegFile
   val rob = Module(new ROB)
 
@@ -156,7 +156,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   // check dependency for insts at commit stage
   List.tabulate(DispatchWidth)(i => {
-    List.tabulate(CommitWidth)(j => {
+    List.tabulate(WritebackWidth)(j => {
       when(inst(i).prfSrc1 === cdb(j).bits.prfidx && cdb(j).valid && cdb(j).bits.decode.ctrl.rfWen && rob.io.rvalid(2*i)){
         inst(i).src1Rdy := true.B
         inst(i).decode.data.src1 := cdb(j).bits.commits
@@ -507,9 +507,9 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   // Alternatively, FUs can be divided into different groups.
   // For each group, only one inst can be commited to ROB in a single cycle.
 
-  require(CommitWidth == 2 || CommitWidth == 4)
+  require(WritebackWidth == 2 || WritebackWidth == 4)
 
-  if(CommitWidth == 2){
+  if(WritebackWidth == 2){
     val nullCommit = Wire(new OOCommitIO)
     nullCommit := DontCare
 
@@ -574,7 +574,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     alu2.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU2))
   }
 
-  if(CommitWidth == 4){
+  if(WritebackWidth == 4){
     cdb(0).valid := bruDelayer.io.out.valid
     cdb(0).bits := brucommitdelayed
     cdb(1).valid := lsu.io.out.valid

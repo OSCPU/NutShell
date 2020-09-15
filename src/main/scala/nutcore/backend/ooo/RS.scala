@@ -27,7 +27,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new RenamedDecodeIO))
     val out = Decoupled(new RenamedDecodeIO)
-    val cdb = Vec(CommitWidth, Flipped(Valid(new OOCommitIO)))
+    val cdb = Vec(WritebackWidth, Flipped(Valid(new OOCommitIO)))
     val mispredictRec = Flipped(new MisPredictionRecIO)
     val flush = Input(Bool())
     val empty = Output(Bool())
@@ -75,13 +75,13 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
 
   List.tabulate(rsSize)(i => 
     when(valid(i)){
-      List.tabulate(CommitWidth)(j =>
+      List.tabulate(WritebackWidth)(j =>
         when(!src1Rdy(i) && prfSrc1(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
             src1Rdy(i) := true.B
             src1(i) := io.cdb(j).bits.commits
         }
       )
-      List.tabulate(CommitWidth)(j =>
+      List.tabulate(WritebackWidth)(j =>
         when(!src2Rdy(i) && prfSrc2(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
             src2Rdy(i) := true.B
             src2(i) := io.cdb(j).bits.commits
