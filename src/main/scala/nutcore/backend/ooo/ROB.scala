@@ -33,7 +33,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val io = IO(new Bundle {
     val in = Vec(robWidth, Flipped(Decoupled(new DecodeIO)))
     val brMaskIn = Input(Vec(robWidth, UInt(checkpointSize.W)))
-    val cdb = Vec(robWidth, Flipped(Valid(new OOCommitIO)))
+    val cdb = Vec(CommitWidth, Flipped(Valid(new OOCommitIO)))
     val mispredictRec = Flipped(new MisPredictionRecIO)
     val wb = Vec(robWidth, new WriteBackIO)
     val redirect = new RedirectIO
@@ -148,7 +148,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   for(i <- (0 to robSize - 1)){
     for(j <- (0 to robWidth - 1)){
       val robIdx = Cat(i.asUInt(log2Up(robSize).W), j.asUInt(log2Up(robWidth).W))
-      for(k <- (0 to robWidth - 1)){
+      for(k <- (0 until CommitWidth)){
         when(valid(i)(j) && io.cdb(k).bits.prfidx === robIdx && io.cdb(k).valid){
         // when(true.B){
           Debug(commited(i)(j), "[ERROR] double commit robidx %d pc %x inst %x pcin %x instin %x\n", robIdx, decode(i)(j).cf.pc, decode(i)(j).cf.instr, io.cdb(k).bits.decode.cf.pc, io.cdb(k).bits.decode.cf.instr)
@@ -167,7 +167,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   // writeback to physical RF, update ROB control bits
-  for(k <- 0 until robWidth){
+  for(k <- 0 until CommitWidth){
     val prfidx = io.cdb(k).bits.prfidx
     val index = prfidx(log2Up(robSize), log2Up(robWidth))
     val bank = prfidx(log2Up(robWidth)-1, 0)
@@ -437,10 +437,12 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   // Generate Debug Info
-    Debug(io.in(0).fire(), "[DISPATCH1] pc = 0x%x inst %x wen %x wdst %x\n", io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)
-    Debug(io.in(1).fire(), "[DISPATCH2] pc = 0x%x inst %x wen %x wdst %x\n", io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)
-    Debug(io.cdb(0).valid, "[COMMIT1] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(0).bits.decode.cf.pc, io.cdb(0).bits.decode.cf.instr, io.cdb(0).bits.decode.ctrl.rfWen, io.cdb(0).bits.decode.ctrl.rfDest, io.cdb(0).bits.commits)
-    Debug(io.cdb(1).valid, "[COMMIT2] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(1).bits.decode.cf.pc, io.cdb(1).bits.decode.cf.instr, io.cdb(1).bits.decode.ctrl.rfWen, io.cdb(1).bits.decode.ctrl.rfDest, io.cdb(1).bits.commits)
+    for(i <- 0 until DispatchWidth){
+      Debug(io.in(i).fire(), "[DISPATCH"+ i +"] pc = 0x%x inst %x wen %x wdst %x\n", io.in(i).bits.cf.pc, io.in(i).bits.cf.instr, io.in(i).bits.ctrl.rfWen, io.in(i).bits.ctrl.rfDest)
+    }
+    for(i <- 0 until CommitWidth){
+      Debug(io.cdb(i).valid, "[COMMIT"+ i +"] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(i).bits.decode.cf.pc, io.cdb(i).bits.decode.cf.instr, io.cdb(i).bits.decode.ctrl.rfWen, io.cdb(i).bits.decode.ctrl.rfDest, io.cdb(i).bits.commits)
+    }
     Debug(retireATerm && valid(ringBufferTail)(0), "[RETIRE1] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", decode(ringBufferTail)(0).cf.pc, decode(ringBufferTail)(0).cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, isMMIO(ringBufferTail)(0), intrNO(ringBufferTail)(0))
     Debug(retireATerm && valid(ringBufferTail)(1), "[RETIRE2] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", decode(ringBufferTail)(1).cf.pc, decode(ringBufferTail)(1).cf.instr, io.wb(1).rfWen, io.wb(1).rfDest, io.wb(1).rfData, isMMIO(ringBufferTail)(1), intrNO(ringBufferTail)(1))
 

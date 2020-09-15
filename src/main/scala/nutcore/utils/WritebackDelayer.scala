@@ -21,7 +21,7 @@ import chisel3.util._
 
 import utils._
 
-class WritebackDelayer(bru: Boolean = false, name: String = "unnamedDelayer") extends NutCoreModule with HasRSConst with HasBackendConst {
+class WritebackDelayer(bru: Boolean = false, name: String = "unnamedDelayer") extends NutCoreModule with HasBackendConst {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new OOCommitIO))
     val out = Decoupled(new OOCommitIO)

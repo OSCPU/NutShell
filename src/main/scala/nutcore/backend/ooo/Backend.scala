@@ -562,10 +562,12 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   cdb(0).valid := cdbSrc1Valid
   cdb(0).bits := cdbSrc1
-  // cdb(0).ready := true.B
   cdb(1).valid := cdbSrc2Valid
   cdb(1).bits := cdbSrc2
-  // cdb(1).ready := true.B
+  // cdb(2).valid := false.B
+  // cdb(2).bits := cdbSrc2
+  // cdb(3).valid := false.B
+  // cdb(3).bits := cdbSrc2
 
   mduWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcMDU))
   bruWritebackReady  := commitValidVec(WritebackPriority.indexOf(srcBRU))
