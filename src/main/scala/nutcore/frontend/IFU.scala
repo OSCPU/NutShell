@@ -36,7 +36,7 @@ class ICacheUserBundle extends NutCoreBundle {
 }
 // Note: update ICacheUserBundleWidth when change ICacheUserBundle
 
-class IFU extends NutCoreModule with HasResetVector {
+class IFU_ooo extends NutCoreModule with HasResetVector {
   val io = IO(new Bundle {
 
     val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
@@ -59,7 +59,7 @@ class IFU extends NutCoreModule with HasResetVector {
   // Note: we define instline as 8 Byte aligned data from icache 
 
   // Next-line branch predictor
-  val nlp = Module(new NLP)
+  val nlp = Module(new BPU_ooo)
 
   // nlpxxx_latch is used for the situation when I$ is disabled
   val nlpvalidreg = RegInit(false.B)
@@ -167,7 +167,7 @@ class IFU extends NutCoreModule with HasResetVector {
     (mcpResultQueue.io.deq.bits.brIdx.asUInt & io.imem.resp.bits.user.get(VAddrBits*2 + 7, VAddrBits*2 + 4)).orR //mcp reports a valid branch
 
 
-  //val bp2 = Module(new BPU2)
+  //val bp2 = Module(new BPU_nodelay)
   //bp2.io.in.bits := io.out.bits
   //bp2.io.in.valid := io.imem.resp.fire()
 
@@ -255,7 +255,7 @@ class IFU extends NutCoreModule with HasResetVector {
   BoringUtils.addSource(io.flushVec.orR, "perfCntCondMifuFlush")
 }
 
-class IFU_dummy extends NutCoreModule with HasResetVector {
+class IFU_embedded extends NutCoreModule with HasResetVector {
   val io = IO(new Bundle {
     val imem = new SimpleBusUC(userBits = 64, addrBits = VAddrBits)
     val out = Decoupled(new CtrlFlowIO)
@@ -270,7 +270,7 @@ class IFU_dummy extends NutCoreModule with HasResetVector {
   val pcUpdate = io.redirect.valid || io.imem.req.fire()
   val snpc = pc + 4.U  // sequential next pc
 
-  val bpu = Module(new BPU1)
+  val bpu = Module(new BPU_embedded)
 
   // predicted next pc
   val pnpc = bpu.io.out.target
@@ -322,7 +322,7 @@ class IFU_inorder extends NutCoreModule with HasResetVector {
   val pcUpdate = io.redirect.valid || io.imem.req.fire()
   val snpc = Mux(pc(1), pc + 2.U, pc + 4.U)  // sequential next pc
 
-  val bp1 = Module(new BPU3)
+  val bp1 = Module(new BPU_inorder)
 
   val crosslineJump = bp1.io.crosslineJump
   val crosslineJumpLatch = RegInit(false.B) 
