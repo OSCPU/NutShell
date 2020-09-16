@@ -40,7 +40,7 @@ trait HasBackendConst{
 }
 
 // NutShell/Argo Out Of Order Execution Backend
-class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFileParameter with HasBackendConst{
+class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFileParameter with HasBackendConst{
 
   val io = IO(new Bundle {
     // EXU
@@ -662,7 +662,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   
 }
 
-class Backend_seq(implicit val p: NutCoreConfig) extends NutCoreModule {
+class Backend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
   val io = IO(new Bundle {
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
     val flush = Input(UInt(2.W))

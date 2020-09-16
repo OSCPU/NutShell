@@ -23,7 +23,7 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 import bus.simplebus._
 
-class Frontend(implicit val p: NutCoreConfig) extends NutCoreModule {
+class Frontend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule {
   val io = IO(new Bundle {
     val out = Vec(2, Decoupled(new DecodeIO))
     val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
@@ -38,7 +38,7 @@ class Frontend(implicit val p: NutCoreConfig) extends NutCoreModule {
     right <> FlushableQueue(left, isFlush,  entries = entries, pipe = pipe)
   }
 
-  val ifu  = Module(new IFU)
+  val ifu  = Module(new IFU_ooo)
   val ibf = Module(new IBF)
   val idu  = Module(new IDU)
 
@@ -63,7 +63,7 @@ class Frontend(implicit val p: NutCoreConfig) extends NutCoreModule {
   Debug(idu.io.in(1).valid, "IDU2: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in(1).bits.pc, idu.io.in(1).bits.instr, idu.io.in(1).bits.pnpc)
 }
 
-class Frontend_dummy(implicit val p: NutCoreConfig) extends NutCoreModule {
+class Frontend_embedded(implicit val p: NutCoreConfig) extends NutCoreModule {
   val io = IO(new Bundle {
     val out = Vec(2, Decoupled(new DecodeIO))
     val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
@@ -73,7 +73,7 @@ class Frontend_dummy(implicit val p: NutCoreConfig) extends NutCoreModule {
     val redirect = Flipped(new RedirectIO)
   })
 
-  val ifu  = Module(new IFU_dummy)
+  val ifu  = Module(new IFU_embedded)
   val idu  = Module(new IDU)
 
   PipelineConnect(ifu.io.out, idu.io.in(0), idu.io.out(0).fire(), ifu.io.flushVec(0))

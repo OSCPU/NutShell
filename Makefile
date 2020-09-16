@@ -12,8 +12,8 @@ SIMTOP = top.TopMain
 IMAGE ?= ready-to-run/linux.bin
 
 DATAWIDTH ?= 64
-BOARD ?= sim  # sim  pynq  axu4cg
-CORE  ?= seq  # seq  ooo  small
+BOARD ?= sim  # sim  pynq  axu3cg
+CORE  ?= inorder  # inorder  ooo  embedded
 
 .DEFAULT_GOAL = verilog
 

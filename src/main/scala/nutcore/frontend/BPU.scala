@@ -58,7 +58,7 @@ class BPUUpdateReq extends NutCoreBundle {
 }
 
 // nextline predicter generates NPC from current NPC in 1 cycle
-class NLP extends NutCoreModule {
+class BPU_ooo extends NutCoreModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
     val out = new RedirectIO 
@@ -190,7 +190,7 @@ class NLP extends NutCoreModule {
   // ROCKET uses a 32 bit instline, and its IDU logic is more simple than this implentation.
 }
 
-class BPU1 extends NutCoreModule {
+class BPU_embedded extends NutCoreModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(32.W)))) }
     val out = new RedirectIO
@@ -277,53 +277,7 @@ class BPU1 extends NutCoreModule {
   io.out.rtype := 0.U
 }
 
-
-class BPU2 extends NutCoreModule {
-  val io = IO(new Bundle {
-    val in = Flipped(Valid(new CtrlFlowIO))
-    val out = new RedirectIO
-  })
-
-  val instr = io.in.bits.instr
-  val immJ = SignExt(Cat(instr(31), instr(19, 12), instr(20), instr(30, 21), 0.U(1.W)), XLEN)
-  val immB = SignExt(Cat(instr(31), instr(7), instr(30, 25), instr(11, 8), 0.U(1.W)), XLEN)
-  val table = Array(
-    RV32I_BRUInstr.JAL  -> List(immJ, true.B),
-    RV32I_BRUInstr.BNE  -> List(immB, instr(31)),
-    RV32I_BRUInstr.BEQ  -> List(immB, instr(31)),
-    RV32I_BRUInstr.BLT  -> List(immB, instr(31)),
-    RV32I_BRUInstr.BGE  -> List(immB, instr(31)),
-    RV32I_BRUInstr.BLTU -> List(immB, instr(31)),
-    RV32I_BRUInstr.BGEU -> List(immB, instr(31))
-  )
-  val default = List(immB, false.B)
-  val offset :: predict :: Nil = ListLookup(instr, default, table)
-
-  io.out.target := io.in.bits.pc + offset
-  io.out.valid := io.in.valid && predict(0)
-  io.out.rtype := 0.U
-}
-
-// multi-cycle predicter must generates NPC from current NPC in no more than 3 cycles
-class DummyPredicter extends NutCoreModule {
-  val io = IO(new Bundle {
-    val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
-    val out = new RedirectIO
-    val valid = Output(Bool())
-    val flush = Input(Bool())
-    val ignore = Input(Bool())
-    val brIdx = Output(Vec(4, Bool()))
-  })
-  // Note: when io.ignore, io.out.valid must be false.B for this pc
-  // This limitation is for cross instline inst fetch logic
-  io.valid := io.in.pc.valid // Predicter is returning a result
-  io.out.valid := false.B // Need redirect
-  io.out.target := DontCare // Redirect target
-  io.out.rtype := DontCare // Predicter does not need to care about it 
-  io.brIdx := VecInit(Seq.fill(4)(false.B)) // Which inst triggers jump
-}
-
-class BPU3 extends NutCoreModule {
+class BPU_inorder extends NutCoreModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
     val out = new RedirectIO
@@ -473,3 +427,50 @@ class BPU3 extends NutCoreModule {
   // by using `instline`, we mean a 64 bit instfetch result from imem
   // ROCKET uses a 32 bit instline, and its IDU logic is more simple than this implentation.
 }
+
+class DummyPredicter extends NutCoreModule {
+  val io = IO(new Bundle {
+    val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
+    val out = new RedirectIO
+    val valid = Output(Bool())
+    val flush = Input(Bool())
+    val ignore = Input(Bool())
+    val brIdx = Output(Vec(4, Bool()))
+  })
+  // Note: when io.ignore, io.out.valid must be false.B for this pc
+  // This limitation is for cross instline inst fetch logic
+  io.valid := io.in.pc.valid // Predicter is returning a result
+  io.out.valid := false.B // Need redirect
+  io.out.target := DontCare // Redirect target
+  io.out.rtype := DontCare // Predicter does not need to care about it 
+  io.brIdx := VecInit(Seq.fill(4)(false.B)) // Which inst triggers jump
+}
+
+//---- Legacy BPUs ----
+/*
+class BPU_nodelay extends NutCoreModule {
+  val io = IO(new Bundle {
+    val in = Flipped(Valid(new CtrlFlowIO))
+    val out = new RedirectIO
+  })
+
+  val instr = io.in.bits.instr
+  val immJ = SignExt(Cat(instr(31), instr(19, 12), instr(20), instr(30, 21), 0.U(1.W)), XLEN)
+  val immB = SignExt(Cat(instr(31), instr(7), instr(30, 25), instr(11, 8), 0.U(1.W)), XLEN)
+  val table = Array(
+    RV32I_BRUInstr.JAL  -> List(immJ, true.B),
+    RV32I_BRUInstr.BNE  -> List(immB, instr(31)),
+    RV32I_BRUInstr.BEQ  -> List(immB, instr(31)),
+    RV32I_BRUInstr.BLT  -> List(immB, instr(31)),
+    RV32I_BRUInstr.BGE  -> List(immB, instr(31)),
+    RV32I_BRUInstr.BLTU -> List(immB, instr(31)),
+    RV32I_BRUInstr.BGEU -> List(immB, instr(31))
+  )
+  val default = List(immB, false.B)
+  val offset :: predict :: Nil = ListLookup(instr, default, table)
+
+  io.out.target := io.in.bits.pc + offset
+  io.out.valid := io.in.valid && predict(0)
+  io.out.rtype := 0.U
+}
+*/

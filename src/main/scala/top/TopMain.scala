@@ -50,9 +50,9 @@ object TopMain extends App {
     case "axu3cg" => Axu3cgSettings()
     case "PXIe"   => PXIeSettings()
   } ) ++ ( core match {
-    case "seq"  => InOrderSettings()
+    case "inorder"  => InOrderSettings()
     case "ooo"  => OOOSettings()
-    case "small"=> EmbededSettings()
+    case "embedded"=> EmbededSettings()
   } )
   s.foreach{Settings.settings += _} // add and overwrite DefaultSettings
   println("====== Settings = (" + board + ", " +  core + ") ======")
