@@ -1,9 +1,9 @@
 
-# Preparing BOOT.BIN
+# Prepare SD Card
 
-Refer to www.wiki.xilinx.com/Fetch+Sources for more information.
+This doc is used to prepare SD card for PS (Processing System) on FPGA. Refer to www.wiki.xilinx.com/Fetch+Sources for more information.
 
-To prepare BOOT.BIN in stand-alone mode (like on PYNQ), plase refer to [this doc](standalone.md).
+To prepare SD card for PL (Programmable Logic) in stand-alone mode (like on PYNQ), plase refer to [this doc](standalone.md).
 
 ## Build bl31.elf - Arm Trusted Firmware
 

@@ -1,10 +1,14 @@
 # Stand-Alone Mode
 
-In stand-alone mode, control is directly transferred to PL through fsbl (first stage bootloader) after the board is powered on, so that PL has access to on-board peripherals such as SD card, Ethernet, etc., which is necessary to boot Debian.
+In stand-alone mode, control is directly transferred to PL (Program Logic) through FSBL (First Stage BootLoader) after the board is powered on, so that PL has access to on-board peripherals such as SD card, Ethernet, etc., which is necessary to boot Debian and other OS.
 
-We use PYNQ-Z2  board as example to demonstrate how to prepare boot files in stand-alone mode.
+We use PYNQ-Z2  board as example to demonstrate how to prepare SD card in stand-alone mode.
 
 ## Build BOOT.BIN
+
+BOOT.bin is the default filename of packaged hardware-related binary files. [Here](pynq/BOOT.BIN) is a pre-built and currently-used BOOT.BIN.
+
+You can also build it yourself. Please refer to the following process.
 
 * create a project in Vivado and generate bitstream
 
@@ -56,10 +60,10 @@ RV_BOOT.bin is the default filename of linux-kernel image. [Here](pynq/RV_BOOT.b
 
 * New an `ext4` partition `mmcblk0p2` in SD card. Refer to the step of [here](https://wiki.debian.org/InstallingDebianOn/Xilinx/ZC702/wheezy#SD_Card_root) before executing `debootstrap`.
 
-* download the debian base system to `mmcblk0p2` with `qemu-debootstrap`.
+* Download the debian base system to `mmcblk0p2` with `qemu-debootstrap`.
 
 ```
-sudo qemu-debootstrap --arch riscv64 stable /mnt http://ftp.debian.org/debian
+sudo qemu-debootstrap --arch riscv64 unstable /mnt http://deb.debian.org/debian-ports
 sudo chroot /mnt /bin/bash
 passwd
 apt-get update
