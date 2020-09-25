@@ -47,7 +47,7 @@ trait HasNutCoreParameter {
   val EnableMultiIssue = Settings.get("EnableMultiIssue")
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableMultiCyclePredictor = false // false unless a customized condition branch predictor is included
-  val EnableOutOfOrderMemAccess = false // enable out of order mem access will improve OoO backend's performance
+  val EnableOutOfOrderMemAccess = true // enable out of order mem access will improve OoO backend's performance
   // Parameter for Difftest
   val DifftestWidth = 6
 }
