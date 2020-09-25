@@ -64,6 +64,7 @@ trait HasNutCoreLog { this: RawModule =>
 }
 
 abstract class NutCoreModule extends Module with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog
+abstract class NutCoreMultiIOModule extends MultiIOModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog
 abstract class NutCoreBundle extends Bundle with HasNutCoreParameter with HasNutCoreConst with HasBackendConst
 
 case class NutCoreConfig (

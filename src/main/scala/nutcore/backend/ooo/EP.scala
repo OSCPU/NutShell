@@ -7,6 +7,8 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 
 // Out of Order Execution Pipeline for NutShell/Argo
+// 
+// It also serves as a wrapper to adept in-order fu for OoO core
 
 class ExecutionPipelineIO extends NutCoreBundle {
   val in = Flipped(Decoupled(new RenamedDecodeIO))
@@ -15,7 +17,7 @@ class ExecutionPipelineIO extends NutCoreBundle {
   val flush = Input(Bool())
 }
 
-class ExecutionPipeline extends NutCoreModule {
+class ExecutionPipeline extends NutCoreMultiIOModule {
   val io = IO(new ExecutionPipelineIO)
   def access(uop: Data): Data = {
     this.io.in := uop
