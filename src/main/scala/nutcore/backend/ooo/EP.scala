@@ -53,4 +53,54 @@ class ALUEP extends ExecutionPipeline {
   io.out.valid := alu.io.out.valid
 }
 
+class BRUEP extends ExecutionPipeline {
+  val bruio = IO(new Bundle{
+    val mispredictRec = Output(new MisPredictionRecIO)
+    val recoverCheckpoint = Input(Valid(UInt(log2Up(checkpointSize).W))) // brurs.io.recoverCheckpoint.get.bits
+    val bruRedirect = Output(new RedirectIO)
+    val freeCheckpoint = Output(Valid(UInt(brTagWidth.W))) // bruDelayer.io.freeCheckpoint.get
+  })
 
+  val bru = Module(new ALU(hasBru = true))
+  val bruDelayer = Module(new WritebackDelayer(bru = true))
+
+  bru.io.in.valid := io.in.valid
+  bru.io.in.bits.src1 := io.in.bits.decode.data.src1
+  bru.io.in.bits.src2 := io.in.bits.decode.data.src2
+  bru.io.in.bits.func := io.in.bits.decode.ctrl.fuOpType
+  bru.io.cfIn := io.in.bits.decode.cf
+  bru.io.offset := io.in.bits.decode.data.imm
+  bru.io.out.ready := bruDelayer.io.in.ready
+
+  val brucommit = Wire(new OOCommitIO)
+  brucommit.decode := io.in.bits.decode
+  brucommit.isMMIO := false.B
+  brucommit.intrNO := 0.U
+  brucommit.commits := bru.io.out.bits
+  brucommit.prfidx := io.in.bits.prfDest
+  brucommit.brMask := io.in.bits.brMask
+  brucommit.decode.cf.redirect := bru.io.redirect
+  brucommit.exception := false.B
+  brucommit.store := false.B
+
+  bruDelayer.io.in.bits := brucommit
+  bruDelayer.io.in.valid := bru.io.out.valid
+  bruDelayer.io.out.ready := io.out.ready
+  bruDelayer.io.mispredictRec := bruio.mispredictRec
+  bruDelayer.io.flush := io.flush
+  bruDelayer.io.checkpointIn.get := bruio.recoverCheckpoint.bits
+  io.out.bits := bruDelayer.io.out.bits
+
+  // commit redirect
+  bruio.bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
+  bruio.bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire()
+  bruio.mispredictRec.valid := bruDelayer.io.out.fire()
+  bruio.mispredictRec.checkpoint := bruDelayer.io.freeCheckpoint.get.bits
+  bruio.mispredictRec.prfidx := bruDelayer.io.out.bits.prfidx
+  bruio.mispredictRec.redirect := bruio.bruRedirect
+
+  bruio.freeCheckpoint := bruDelayer.io.freeCheckpoint.get
+
+  io.in.ready := bru.io.in.ready
+  io.out.valid := bruDelayer.io.out.valid
+}
