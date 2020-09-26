@@ -29,14 +29,7 @@ cpu:
 # ------------------------------------------------------------------
 
 cputest:
-	$(MAKE) -C $(AM_HOME)/tests/cputest $(ARCH) $(EMU_ARGS) run 2>&1 | tee > cpu.log
-	# cat cpu.log | grep different
-ifeq ($(CPU_TEST_RESULT),)
-	@echo "simple CPU test passed"
-else
-	@echo $(CPU_TEST_RESULT)
-	@echo "simple CPU test failed"
-endif
+	bash cputest.sh
 
 rvtest-ui:
 	$(MAKE) -C $(RVTEST_HOME)/isa noop_run LOG_LEVEL=OFF SUITES=rv64ui ENV=p
