@@ -19,8 +19,10 @@ class ExecutionPipelineIO extends NutCoreBundle {
 
 class ExecutionPipeline extends NutCoreMultiIOModule {
   val io = IO(new ExecutionPipelineIO)
-  def access(uop: Data): Data = {
+  def access(uop: Data, mispredictRec: Data, flush: Data): Data = {
     this.io.in := uop
+    this.io.mispredictRec := mispredictRec
+    this.io.flush := flush
     io.out
   }
   def updateBrMask(brMask: UInt) = {
@@ -103,4 +105,44 @@ class BRUEP extends ExecutionPipeline {
 
   io.in.ready := bru.io.in.ready
   io.out.valid := bruDelayer.io.out.valid
+}
+
+class MDUEP extends ExecutionPipeline {
+  val mduio = IO(new Bundle{
+    val mdufinish = Output(Bool())
+  })
+
+  val mdu = Module(new MDU)
+  val mducommit = Wire(new OOCommitIO)
+
+  val mduDelayer = Module(new WritebackDelayer())
+
+  mdu.io.in.valid := io.in.valid
+  mdu.io.in.bits.src1 := io.in.bits.decode.data.src1
+  mdu.io.in.bits.src2 := io.in.bits.decode.data.src2
+  mdu.io.in.bits.func := io.in.bits.decode.ctrl.fuOpType
+
+  mdu.io.out.ready := mduDelayer.io.in.ready
+  mducommit.decode := io.in.bits.decode
+  mducommit.isMMIO := false.B
+  mducommit.intrNO := 0.U
+  mducommit.commits := mdu.io.out.bits
+  mducommit.prfidx := io.in.bits.prfDest
+  mducommit.decode.cf.redirect.valid := false.B
+  mducommit.decode.cf.redirect.rtype := DontCare
+  mducommit.exception := false.B
+  mducommit.store := false.B
+  mducommit.brMask := io.in.bits.brMask
+
+  mduio.mdufinish := mdu.io.out.valid
+
+  mduDelayer.io.in.bits := mducommit
+  mduDelayer.io.in.valid := mdu.io.out.valid && io.in.valid
+  mduDelayer.io.out.ready := io.out.ready
+  mduDelayer.io.mispredictRec := io.mispredictRec
+  mduDelayer.io.flush := io.flush
+  io.out.bits := mduDelayer.io.out.bits
+
+  io.in.ready := mdu.io.in.ready
+  io.out.valid := mduDelayer.io.out.valid
 }
