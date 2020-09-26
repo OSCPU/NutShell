@@ -35,8 +35,6 @@ trait HasBackendConst{
   val DispatchWidth = 2
   val WritebackWidth = 2
   val CommitWidth = 2
-
-  val enableCheckpoint = true
 }
 
 // NutShell/Argo Out Of Order Execution Backend
@@ -79,17 +77,12 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
   val mispredictRec = Wire(new MisPredictionRecIO)
-  val flushBackend = if(enableCheckpoint){
-    io.flush 
-  } else {
-    io.flush || rob.io.redirect.valid && rob.io.redirect.rtype === 1.U
-  }
 
   io.redirect := Mux(rob.io.redirect.valid && rob.io.redirect.rtype === 0.U, rob.io.redirect, bruRedirect)
 
   rob.io.cdb <> cdb
   rob.io.mispredictRec := mispredictRec
-  rob.io.flush := flushBackend
+  rob.io.flush := io.flush
   when (rob.io.wb(0).rfWen) { rf.write(rob.io.wb(0).rfDest, rob.io.wb(0).rfData) }
   when (rob.io.wb(1).rfWen) { rf.write(rob.io.wb(1).rfDest, rob.io.wb(1).rfData) }
   List.tabulate(DispatchWidth)(i => {
@@ -101,12 +94,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   brurs.io.updateCheckpoint.get <> rob.io.updateCheckpoint
   rob.io.recoverCheckpoint.bits := bru.bruio.freeCheckpoint.bits
   brurs.io.freeCheckpoint.get <> bru.bruio.freeCheckpoint
-  if(enableCheckpoint){
-    rob.io.recoverCheckpoint.valid := io.redirect.valid && io.redirect.rtype === 1.U
-  } else {
-    rob.io.recoverCheckpoint.valid := false.B
-    rob.io.updateCheckpoint.valid := false.B
-  }
+  rob.io.recoverCheckpoint.valid := io.redirect.valid && io.redirect.rtype === 1.U
 
   // ------------------------------------------------
   // Backend stage 1
@@ -208,18 +196,10 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   val blockReg = RegInit(false.B)
   val haveUnfinishedStore = Wire(Bool())
-  when((rob.io.empty || flushBackend) && !haveUnfinishedStore){ blockReg := false.B }
+  when((rob.io.empty || io.flush) && !haveUnfinishedStore){ blockReg := false.B }
   when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire()){ blockReg := true.B }
-  val mispredictionRecoveryReg = RegInit(false.B)
-  when(io.redirect.valid && io.redirect.rtype === 1.U){ mispredictionRecoveryReg := true.B }
-  when(rob.io.empty || flushBackend){ mispredictionRecoveryReg := false.B }
-  val mispredictionRecovery = if(enableCheckpoint){
-    io.redirect.valid && io.redirect.rtype === 1.U
-  } else {
-    mispredictionRecoveryReg && !rob.io.empty || io.redirect.valid && io.redirect.rtype === 1.U // waiting for misprediction recovery or misprediction detected
-  }
+  val mispredictionRecovery = io.redirect.valid && io.redirect.rtype === 1.U
 
-  Debug(flushBackend, "flushbackend\n")
   Debug(io.redirect.valid && io.redirect.rtype === 1.U, "[REDIRECT] bpr start, redirect to %x\n", io.redirect.target)
   Debug(io.redirect.valid && io.redirect.rtype === 0.U, "[REDIRECT]special redirect to %x\n", io.redirect.target)
 
@@ -276,9 +256,8 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   brMask(1) := brMaskGen | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(0).fire() && isBranch(0)))
   brMask(2) := DontCare
   brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire() && isBranch(1)))
-  brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bru.io.out.bits.brMask), brMask(3)))
+  brMaskReg := Mux(io.flush, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bru.io.out.bits.brMask), brMask(3)))
 
-  Debug("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
 
   val rs = List(brurs, alu1rs, alu2rs, csrrs, lsurs, mdurs)
   val rsInstSel = List(bruInst, alu1Inst, alu2Inst, csrInst, lsuInst, mduInst)
@@ -287,7 +266,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     rs(i).io.in.bits := inst(rsInstSel(i)) 
     rs(i).io.in.bits.brMask := brMask(rsInstSel(i))
     rs(i).io.cdb <> cdb
-    rs(i).io.flush := flushBackend
+    rs(i).io.flush := io.flush
     rs(i).io.mispredictRec := mispredictRec
   })
 
@@ -304,7 +283,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
   // Backend exception regs
 
-  val raiseBackendException = WireInit(false.B)
   val commitBackendException = WireInit(false.B)
 
   commitBackendException := rob.io.exception
@@ -349,7 +327,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   lsu.io.mispredictRec := mispredictRec
   lsu.io.scommit := rob.io.scommit
   haveUnfinishedStore := lsu.io.haveUnfinishedStore
-  lsu.io.flush := flushBackend
+  lsu.io.flush := io.flush
   lsu.io.wdata := lsuUop.decode.data.src2
   // lsu.io.instr := lsuUop.decode.cf.instr
   io.dmem <> lsu.io.dmem
@@ -368,7 +346,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
   // backend exceptions only come from LSU
-  raiseBackendException := lsucommit.exception && lsu.io.out.fire()
   // for backend exceptions, we reuse 'intrNO' field in ROB
   // when ROB.exception(x) === 1, intrNO(x) represents backend exception vec for this inst
   lsucommit.intrNO := lsucommit.decode.cf.exceptionVec.asUInt
@@ -421,7 +398,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     func = csrUop.decode.ctrl.fuOpType
   )
   csr.io.cfIn := csrUop.decode.cf
-  csr.io.instrValid := csrVaild && !flushBackend
+  csr.io.instrValid := csrVaild && !io.flush
   csr.io.isBackendException := commitBackendException
   csr.io.out.ready := true.B
   csrcommit.decode := csrUop.decode
@@ -576,7 +553,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   lsurs.io.out.ready := lsu.io.in.ready
   mdurs.io.out.ready := mdu.io.in.ready
 
-  Debug(flushBackend, "[FLUSH]\n")
   Debug(io.redirect.valid, "[RDIRECT] target 0x%x\n", io.redirect.target)
 
   // Performance Counter
