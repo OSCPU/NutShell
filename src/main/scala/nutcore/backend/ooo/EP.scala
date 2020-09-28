@@ -146,3 +146,73 @@ class MDUEP extends ExecutionPipeline {
   io.in.ready := mdu.io.in.ready
   io.out.valid := mduDelayer.io.out.valid
 }
+
+class CSREP(implicit val p: NutCoreConfig) extends ExecutionPipeline {
+  val csrio = IO(new Bundle{
+    val isBackendException = Input(Bool())
+    val memMMU = Flipped(new MemMMUIO)
+  })
+
+  // CSR
+
+  val csr = Module(new CSR)
+  val csrcommit = Wire(new OOCommitIO)
+
+  csr.io.in.valid := io.in.valid && io.in.bits.decode.ctrl.fuType === FuType.csr || csrio.isBackendException
+  csr.io.in.bits.src1 := io.in.bits.decode.data.src1
+  csr.io.in.bits.src2 := io.in.bits.decode.data.src2
+  csr.io.in.bits.func := io.in.bits.decode.ctrl.fuOpType
+  csr.io.cfIn := io.in.bits.decode.cf
+  csr.io.out.ready := true.B
+
+  csr.io.instrValid := io.in.valid && !io.flush
+  csr.io.isBackendException := csrio.isBackendException
+
+  csrcommit.decode := io.in.bits.decode
+  csrcommit.isMMIO := false.B
+  csrcommit.intrNO := csr.io.intrNO
+  csrcommit.commits := csr.io.out.bits
+  csrcommit.prfidx := io.in.bits.prfDest
+  csrcommit.decode.cf.redirect := csr.io.redirect
+  csrcommit.exception := false.B
+  csrcommit.store := false.B
+  csrcommit.brMask := DontCare //FIXIT
+  // fix wen
+  when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
+
+  csr.io.imemMMU <> csrio.memMMU.imem
+  csr.io.dmemMMU <> csrio.memMMU.dmem
+
+  // MOU
+
+  val mou = Module(new MOU)
+  val moucommit = Wire(new OOCommitIO)
+  // mou does not write register
+
+  mou.io.in.valid := io.in.valid && io.in.bits.decode.ctrl.fuType === FuType.mou
+  mou.io.in.bits.src1 := io.in.bits.decode.data.src1
+  mou.io.in.bits.src2 := io.in.bits.decode.data.src2
+  mou.io.in.bits.func := io.in.bits.decode.ctrl.fuOpType
+
+  mou.io.cfIn := io.in.bits.decode.cf
+  mou.io.out.ready := true.B // mou will stall the pipeline
+
+  moucommit.decode := io.in.bits.decode
+  moucommit.isMMIO := false.B
+  moucommit.intrNO := 0.U
+  moucommit.commits := DontCare
+  moucommit.prfidx := io.in.bits.prfDest
+  moucommit.decode.cf.redirect := mou.io.redirect
+  moucommit.exception := false.B
+  moucommit.store := false.B
+  moucommit.brMask := DontCare //FIXIT
+
+  // Output mux
+
+  io.out.bits := Mux(csr.io.in.valid, csrcommit, moucommit)
+  assert(!(csr.io.in.valid && mou.io.in.valid))
+
+  io.in.ready := csr.io.in.ready
+  io.out.valid := csr.io.out.valid || mou.io.out.valid
+}
+

@@ -356,61 +356,14 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   mdu.io.mispredictRec := mispredictRec
   mdurs.io.commit.get := mdu.mduio.mdufinish
 
-  val csr = Module(new CSR)
+  val csr = Module(new CSREP)
   assert(!(csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr && commitBackendException))
-  val csrVaild = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr || commitBackendException
-  val csrUop = WireInit(csrrs.io.out.bits)
-  when(commitBackendException){
-    csrUop := rob.io.beUop
-  }
-  val csrcommit = Wire(new OOCommitIO)
-  val csrOut = csr.access(
-    valid = csrVaild, 
-    src1 = csrUop.decode.data.src1, 
-    src2 = csrUop.decode.data.src2, 
-    func = csrUop.decode.ctrl.fuOpType
-  )
-  csr.io.cfIn := csrUop.decode.cf
-  csr.io.instrValid := csrVaild && !io.flush
-  csr.io.isBackendException := commitBackendException
-  csr.io.out.ready := true.B
-  csrcommit.decode := csrUop.decode
-  csrcommit.isMMIO := false.B
-  csrcommit.intrNO := csr.io.intrNO
-  csrcommit.commits := csrOut
-  csrcommit.prfidx := csrUop.prfDest
-  csrcommit.decode.cf.redirect := csr.io.redirect
-  csrcommit.exception := false.B
-  csrcommit.store := false.B
-  csrcommit.brMask := DontCare //FIXIT
-  // fix wen
-  when(csr.io.wenFix){csrcommit.decode.ctrl.rfWen := false.B}
-
-  csr.io.imemMMU <> io.memMMU.imem
-  csr.io.dmemMMU <> io.memMMU.dmem
-
-  Debug(csrVaild && commitBackendException, "[BACKEND EXC] pc %x inst %x evec %b\n", csrUop.decode.cf.pc, csrUop.decode.cf.instr, csrUop.decode.cf.exceptionVec.asUInt)
-
-  val mou = Module(new MOU)
-  val moucommit = Wire(new OOCommitIO)
-  // mou does not write register
-  mou.access(
-    valid = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.mou, 
-    src1 = csrrs.io.out.bits.decode.data.src1, 
-    src2 = csrrs.io.out.bits.decode.data.src2, 
-    func = csrrs.io.out.bits.decode.ctrl.fuOpType
-  )
-  mou.io.cfIn := csrrs.io.out.bits.decode.cf
-  mou.io.out.ready := true.B // mou will stall the pipeline
-  moucommit.decode := csrrs.io.out.bits.decode
-  moucommit.isMMIO := false.B
-  moucommit.intrNO := 0.U
-  moucommit.commits := DontCare
-  moucommit.prfidx := csrrs.io.out.bits.prfDest
-  moucommit.decode.cf.redirect := mou.io.redirect
-  moucommit.exception := false.B
-  moucommit.store := false.B
-  moucommit.brMask := DontCare //FIXIT
+  csr.io.in.valid := csrrs.io.out.valid || commitBackendException
+  csr.io.in.bits := Mux(commitBackendException, rob.io.beUop, csrrs.io.out.bits)
+  csr.io.flush := io.flush
+  csr.io.mispredictRec := mispredictRec
+  csr.csrio.isBackendException := commitBackendException
+  csr.csrio.memMMU <> io.memMMU
 
   // ------------------------------------------------
   // Backend stage 3+
@@ -436,13 +389,12 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     nullCommit := DontCare
 
     // CDB arbit
-    val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcMOU, srcNone) = (0, 1, 2, 3, 4, 5, 6, 7)
-    val commit = List(bru.io.out.bits, alu1.io.out.bits, alu2.io.out.bits, lsucommit, mdu.io.out.bits, csrcommit, moucommit, nullCommit)
-    val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid, csr.io.out.valid, mou.io.out.valid, false.B)
+    val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcNone) = (0, 1, 2, 3, 4, 5, 6)
+    val commit = List(bru.io.out.bits, alu1.io.out.bits, alu2.io.out.bits, lsucommit, mdu.io.out.bits, csr.io.out.bits, nullCommit)
+    val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid, csr.io.out.valid, false.B)
 
     val WritebackPriority = Seq(
       srcCSR,
-      srcMOU,
       srcLSU,
       srcMDU,
       srcBRU,
@@ -483,14 +435,15 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
       PopCount(commitValidPriority.asUInt) > 3.U
     )
     val commitValidPriorityUInt = commitValidPriority.asUInt
-    assert(!(PopCount(commitValidPriorityUInt(3,0)) > 2.U))
+    assert(!(PopCount(commitValidPriorityUInt(2,0)) > 2.U))
 
     cdb(0).valid := cdbSrc1Valid
     cdb(0).bits := cdbSrc1
     cdb(1).valid := cdbSrc2Valid
     cdb(1).bits := cdbSrc2
 
-    mdu.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcMDU))
+    csr.io.out.ready  := true.B
+    mdu.io.out.ready  := commitValidVec(WritebackPriority.indexOf(srcMDU))
     bru.io.out.ready  := commitValidVec(WritebackPriority.indexOf(srcBRU))
     alu1.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU1))
     alu2.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU2))
@@ -503,11 +456,10 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     cdb(1).bits := lsucommit
     cdb(2).valid := alu1.io.out.valid
     cdb(2).bits := alu1.io.out.bits
-    cdb(3).valid := csr.io.out.valid || mou.io.out.valid || alu2.io.out.valid || mdu.io.out.valid
+    cdb(3).valid := csr.io.out.valid || alu2.io.out.valid || mdu.io.out.valid
     cdb(3).bits := PriorityMux(
       List(
-        csr.io.out.valid -> csrcommit,
-        mou.io.out.valid -> moucommit,
+        csr.io.out.valid -> csr.io.out.bits,
         mdu.io.out.valid -> mdu.io.out.bits,
         alu2.io.out.valid -> alu2.io.out.bits
       )
@@ -516,7 +468,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     mdu.io.out.ready  := true.B
     bru.io.out.ready  := true.B
     alu1.io.out.ready := true.B
-    alu2.io.out.ready := !(csr.io.out.valid || mou.io.out.valid || mdu.io.out.valid)
+    alu2.io.out.ready := !(csr.io.out.valid || mdu.io.out.valid)
   }
 
   brurs.io.out.ready  := bru.io.in.ready
