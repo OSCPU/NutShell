@@ -68,12 +68,16 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   val lsurs  = Module(new RS(storeSeq = true, size = 4, name = "LSURS")) // FIXIT: out of order l/s disabled
   val mdurs  = Module(new RS(priority = true, size = 4, pipelined = false, name = "MDURS"))
 
+  val rs = List(brurs, alu1rs, alu2rs, csrrs, lsurs, mdurs)
+
   val bru = Module(new BRUEP())
   val alu1 = Module(new ALUEP())
   val alu2 = Module(new ALUEP())
-  val mdu = Module(new MDUEP)
-  val lsu = Module(new LSUEP)
   val csr = Module(new CSREP)
+  val lsu = Module(new LSUEP)
+  val mdu = Module(new MDUEP)
+
+  val fu = List(bru, alu1, alu2, csr, lsu, mdu)
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
@@ -259,8 +263,6 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire() && isBranch(1)))
   brMaskReg := Mux(io.flush, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bru.io.out.bits.brMask), brMask(3)))
 
-
-  val rs = List(brurs, alu1rs, alu2rs, csrrs, lsurs, mdurs)
   val rsInstSel = List(bruInst, alu1Inst, alu2Inst, csrInst, lsuInst, mduInst)
   List.tabulate(rs.length)(i => {
     rs(i).io.in.valid := instCango(rsInstSel(i))
@@ -289,30 +291,18 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   commitBackendException := rob.io.exception
 
   // Function Units Wiring
+  (fu zip rs).map{ case (fu, rs) => {
+    rs.io.out <> fu.io.in
+    fu.io.flush := io.flush
+    fu.io.mispredictRec := mispredictRec
+  }}
 
+  // Special Wiring
   // BRU
-  brurs.io.out <> bru.io.in
-  bru.io.flush := io.flush
-  bru.io.mispredictRec := mispredictRec
   bru.bruio.recoverCheckpoint := brurs.io.recoverCheckpoint.get
   mispredictRec := bru.bruio.mispredictRec
   bruRedirect := bru.bruio.bruRedirect
-
-  // ALU1
-  alu1rs.io.out <> alu1.io.in
-  alu1.io.flush := io.flush
-  alu1.io.mispredictRec := mispredictRec
-
-  // ALU2
-  alu2rs.io.out <> alu2.io.in
-  alu2.io.flush := io.flush
-  alu2.io.mispredictRec := mispredictRec
-
   // LSU
-  lsurs.io.out <> lsu.io.in
-  lsu.io.flush := io.flush
-  lsu.io.mispredictRec := mispredictRec
-
   lsu.lsuio.stMaskIn := lsurs.io.stMaskOut.get
   lsu.lsuio.robAllocate.valid := io.in(0).fire()
   lsu.lsuio.robAllocate.bits := rob.io.index
@@ -322,23 +312,16 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   haveUnfinishedStore := lsu.lsuio.haveUnfinishedStore
   BoringUtils.addSource(io.memMMU.dmem.loadPF, "loadPF") // FIXIT: this is nasty
   BoringUtils.addSource(io.memMMU.dmem.storePF, "storePF") // FIXIT: this is nasty
-  lsu.io.out.ready := true.B // Always permit lsu writeback to reduce load-to-use delay
-
   // MDU
   // TODO: update MDU
-  mdurs.io.out <> mdu.io.in
-  mdu.io.flush := io.flush
-  mdu.io.mispredictRec := mispredictRec
   mdurs.io.commit.get := mdu.mduio.mdufinish
-
   // CSR
+  csr.csrio.isBackendException := commitBackendException
+  csr.csrio.memMMU <> io.memMMU
+  // Override CSR in
   assert(!(csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr && commitBackendException))
   csr.io.in.valid := csrrs.io.out.valid || commitBackendException
   csr.io.in.bits := Mux(commitBackendException, rob.io.beUop, csrrs.io.out.bits)
-  csr.io.flush := io.flush
-  csr.io.mispredictRec := mispredictRec
-  csr.csrio.isBackendException := commitBackendException
-  csr.csrio.memMMU <> io.memMMU
 
   // ------------------------------------------------
   // Backend stage 3+
@@ -418,6 +401,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     cdb(1).bits := cdbSrc2
 
     csr.io.out.ready  := true.B
+    lsu.io.out.ready  := true.B // Always permit lsu writeback to reduce load-to-use delay
     mdu.io.out.ready  := commitValidVec(WritebackPriority.indexOf(srcMDU))
     bru.io.out.ready  := commitValidVec(WritebackPriority.indexOf(srcBRU))
     alu1.io.out.ready := commitValidVec(WritebackPriority.indexOf(srcALU1))
