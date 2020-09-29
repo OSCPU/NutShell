@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import bus.simplebus._
 
 // Out of Order Execution Pipeline for NutShell/Argo
 // 
@@ -214,5 +215,58 @@ class CSREP(implicit val p: NutCoreConfig) extends ExecutionPipeline {
 
   io.in.ready := csr.io.in.ready
   io.out.valid := csr.io.out.valid || mou.io.out.valid
+}
+
+class LSUEP extends ExecutionPipeline {
+  val lsuio = IO(new Bundle{
+    val stMaskIn = Input(UInt(robSize.W)) // lsurs.io.stMaskOut.get 
+    val robAllocate = Input(Valid(UInt(log2Up(robSize).W)))
+    val scommit = Input(Bool()) // rob.io.scommit
+    val haveUnfinishedStore = Output(Bool())
+    val dmem = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
+    val dtlb = new SimpleBusUC(addrBits = VAddrBits, userBits = DCacheUserBundleWidth)
+  })
+
+  val lsu = Module(new LSU)
+  val lsuTlbPF = WireInit(false.B)
+  
+  io.out.bits.commits := lsu.access(
+    valid = io.in.valid,
+    src1 = io.in.bits.decode.data.src1, 
+    src2 = io.in.bits.decode.data.imm, 
+    func = io.in.bits.decode.ctrl.fuOpType, 
+    dtlbPF = lsuTlbPF
+  )
+
+  lsu.io.uopIn := io.in.bits
+  lsu.io.flush := io.flush
+  lsu.io.wdata := io.in.bits.decode.data.src2
+  lsu.io.mispredictRec := io.mispredictRec
+
+  lsuio.stMaskIn <> lsu.io.stMaskIn
+  lsuio.robAllocate <> lsu.io.robAllocate
+  lsuio.scommit <> lsu.io.scommit
+  lsuio.haveUnfinishedStore <> lsu.io.haveUnfinishedStore
+  lsuio.dmem <> lsu.io.dmem
+  lsuio.dtlb <> lsu.io.dtlb
+
+  lsu.io.out.ready := true.B // Always permit lsu writeback to reduce load-to-use delay
+  io.out.bits.decode := lsu.io.uopOut.decode
+  io.out.bits.isMMIO := lsu.io.isMMIO
+  io.out.bits.prfidx := lsu.io.uopOut.prfDest
+  io.out.bits.exception := lsu.io.exceptionVec.asUInt.orR
+  io.out.bits.store := lsu.io.commitStoreToCDB
+  io.out.bits.brMask := DontCare
+
+  // fix exceptionVec
+  io.out.bits.decode.cf.exceptionVec := lsu.io.exceptionVec
+
+  // Backend exceptions only come from LSU
+  // for backend exceptions, we reuse 'intrNO' field in ROB
+  // when ROB.exception(x) === 1, intrNO(x) represents backend exception vec for this inst
+  io.out.bits.intrNO := io.out.bits.decode.cf.exceptionVec.asUInt
+
+  io.in.ready := lsu.io.in.ready
+  io.out.valid := lsu.io.out.valid
 }
 

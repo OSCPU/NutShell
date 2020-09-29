@@ -72,6 +72,8 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   val alu1 = Module(new ALUEP())
   val alu2 = Module(new ALUEP())
   val mdu = Module(new MDUEP)
+  val lsu = Module(new LSUEP)
+  val csr = Module(new CSREP)
 
   val instCango = Wire(Vec(DispatchWidth + 1, Bool()))
   val bruRedirect = Wire(new RedirectIO)
@@ -306,48 +308,21 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   alu2.io.flush := io.flush
   alu2.io.mispredictRec := mispredictRec
 
-  val lsu = Module(new LSU)
-  val lsucommit = Wire(new OOCommitIO)
-  val lsuTlbPF = WireInit(false.B)
-  
-  val lsuUop = lsurs.io.out.bits
-
-  val lsuOut = lsu.access(
-    valid = lsurs.io.out.valid,
-    src1 = lsuUop.decode.data.src1, 
-    src2 = lsuUop.decode.data.imm, 
-    func = lsuUop.decode.ctrl.fuOpType, 
-    dtlbPF = lsuTlbPF
-  )
-  lsu.io.uopIn := lsuUop
-  lsu.io.stMaskIn := lsurs.io.stMaskOut.get
-  lsu.io.robAllocate.valid := io.in(0).fire()
-  lsu.io.robAllocate.bits := rob.io.index
-  lsu.io.mispredictRec := mispredictRec
-  lsu.io.scommit := rob.io.scommit
-  haveUnfinishedStore := lsu.io.haveUnfinishedStore
+  // LSU
+  lsurs.io.out <> lsu.io.in
   lsu.io.flush := io.flush
-  lsu.io.wdata := lsuUop.decode.data.src2
-  // lsu.io.instr := lsuUop.decode.cf.instr
-  io.dmem <> lsu.io.dmem
-  io.dtlb <> lsu.io.dtlb
+  lsu.io.mispredictRec := mispredictRec
+
+  lsu.lsuio.stMaskIn := lsurs.io.stMaskOut.get
+  lsu.lsuio.robAllocate.valid := io.in(0).fire()
+  lsu.lsuio.robAllocate.bits := rob.io.index
+  lsu.lsuio.scommit := rob.io.scommit
+  io.dmem <> lsu.lsuio.dmem
+  io.dtlb <> lsu.lsuio.dtlb
+  haveUnfinishedStore := lsu.lsuio.haveUnfinishedStore
   BoringUtils.addSource(io.memMMU.dmem.loadPF, "loadPF") // FIXIT: this is nasty
   BoringUtils.addSource(io.memMMU.dmem.storePF, "storePF") // FIXIT: this is nasty
-  lsu.io.out.ready := true.B //TODO
-  lsucommit.decode := lsu.io.uopOut.decode
-  lsucommit.isMMIO := lsu.io.isMMIO
-  lsucommit.commits := lsuOut
-  lsucommit.prfidx := lsu.io.uopOut.prfDest
-  lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
-  lsucommit.store := lsu.io.commitStoreToCDB
-  lsucommit.brMask := DontCare // FIXIT: gen lsucommit in LSU
-  // fix exceptionVec
-  lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
-
-  // backend exceptions only come from LSU
-  // for backend exceptions, we reuse 'intrNO' field in ROB
-  // when ROB.exception(x) === 1, intrNO(x) represents backend exception vec for this inst
-  lsucommit.intrNO := lsucommit.decode.cf.exceptionVec.asUInt
+  lsu.io.out.ready := true.B // Always permit lsu writeback to reduce load-to-use delay
 
   // MDU
   // TODO: update MDU
@@ -356,7 +331,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
   mdu.io.mispredictRec := mispredictRec
   mdurs.io.commit.get := mdu.mduio.mdufinish
 
-  val csr = Module(new CSREP)
+  // CSR
   assert(!(csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.csr && commitBackendException))
   csr.io.in.valid := csrrs.io.out.valid || commitBackendException
   csr.io.in.bits := Mux(commitBackendException, rob.io.beUop, csrrs.io.out.bits)
@@ -390,7 +365,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
 
     // CDB arbit
     val (srcBRU, srcALU1, srcALU2, srcLSU, srcMDU, srcCSR, srcNone) = (0, 1, 2, 3, 4, 5, 6)
-    val commit = List(bru.io.out.bits, alu1.io.out.bits, alu2.io.out.bits, lsucommit, mdu.io.out.bits, csr.io.out.bits, nullCommit)
+    val commit = List(bru.io.out.bits, alu1.io.out.bits, alu2.io.out.bits, lsu.io.out.bits, mdu.io.out.bits, csr.io.out.bits, nullCommit)
     val commitValid = List(bru.io.out.valid, alu1.io.out.valid, alu2.io.out.valid, lsu.io.out.valid, mdu.io.out.valid, csr.io.out.valid, false.B)
 
     val WritebackPriority = Seq(
@@ -453,7 +428,7 @@ class Backend(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFi
     cdb(0).valid := bru.io.out.valid
     cdb(0).bits := bru.io.out.bits
     cdb(1).valid := lsu.io.out.valid
-    cdb(1).bits := lsucommit
+    cdb(1).bits := lsu.io.out.bits
     cdb(2).valid := alu1.io.out.valid
     cdb(2).bits := alu1.io.out.bits
     cdb(3).valid := csr.io.out.valid || alu2.io.out.valid || mdu.io.out.valid
