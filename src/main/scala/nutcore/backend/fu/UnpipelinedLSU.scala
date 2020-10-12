@@ -267,7 +267,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     // io.out.valid := lsExecUnit.io.out.valid 
 
     //Set LR/SC bits
-    setLr := io.out.fire() && (lrReq || scReq)
+    setLr := io.out.fire() && lrReq 
     setLrVal := lrReq
     setLrAddr := src1
 

@@ -183,9 +183,10 @@ class AtomALU extends NutCoreModule {
   val func = io.func
   val isAdderSub = !LSUOpType.isAdd(func) 
   val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
+  val adderWRes = (src1(31, 0) +& (src2(31, 0) ^ Fill(32, isAdderSub))) + isAdderSub // TODO
   val xorRes = src1 ^ src2
-  val sltu = !adderRes(XLEN)
-  val slt = xorRes(XLEN-1) ^ sltu
+  val sltu = Mux(io.isWordOp, !adderWRes(32), !adderRes(XLEN))
+  val slt = Mux(io.isWordOp, xorRes(31) ^ sltu, xorRes(XLEN-1) ^ sltu)
 
   val res = LookupTreeDefault(func(5, 0), adderRes, List(
     LSUOpType.amoswap -> src2,
@@ -258,7 +259,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   BoringUtils.addSink(lr, "lr")
   BoringUtils.addSink(lrAddr, "lr_addr")
   val scInvalid = !(src1 === lrAddr) && scReq
-  setLr := (lrReq || scReq) && io.in.fire()
+  setLr := lrReq && io.in.fire()
   setLrVal := lrReq
   setLrAddr := src1
 

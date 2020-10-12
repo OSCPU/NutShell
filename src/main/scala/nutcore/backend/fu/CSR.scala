@@ -240,6 +240,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val ie = new Priv
   }
 
+  class SatpStruct extends Bundle {
+    val mode = UInt(4.W)
+    val asid = UInt(16.W)
+    val ppn  = UInt(44.W)
+  }
+
   class Interrupt extends Bundle {
     val e = new Priv
     val t = new Priv
@@ -339,6 +345,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val sipMask  = "h222".U & mideleg
   // val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
   val satp = RegInit(UInt(XLEN.W), 0.U)
+  val satpMask = "h80000fffffffffff".U // disable asid, mode can only be 8 / 0 
   val sepc = RegInit(UInt(XLEN.W), 0.U)
   val scause = RegInit(UInt(XLEN.W), 0.U)
   val stval = Reg(UInt(XLEN.W))
@@ -421,7 +428,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Sip, mip.asUInt, sipMask, MaskedRegMap.Unwritable, sipMask),
 
     // Supervisor Protection and Translation
-    MaskedRegMap(Satp, satp),
+    MaskedRegMap(Satp, satp, satpMask, MaskedRegMap.NoSideEffect, satpMask),
 
     // Machine Information Registers 
     MaskedRegMap(Mvendorid, mvendorid, 0.U, MaskedRegMap.Unwritable), 
@@ -470,10 +477,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     CSROpType.clri -> (rdata & ~csri)
   ))
 
-  val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException
+  // satp wen check
+  val satpLegalMode = (wdata.asTypeOf(new SatpStruct).mode===0.U) || (wdata.asTypeOf(new SatpStruct).mode===8.U)	  
+
+  // general CSR wen check
+  val wen = valid && func =/= CSROpType.jmp && (addr=/=Satp.U || satpLegalMode) && !io.isBackendException
   val permitted = csrAccessPermissionCheck(addr, false.B, priviledgeMode) 
-  // Writeable check is ingored.
-  // Currently, write to illegal csr addr will be ignored
   MaskedRegMap.generate(mapping, addr, rdata, wen && permitted, wdata)
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
   io.out.bits := rdata
@@ -497,12 +506,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   Debug(wen, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
 
   // Illegal priviledged operation list
-  val illegalSModeSret = valid && isSret && priviledgeMode === ModeS && mstatusStruct.tsr.asBool
+  val trapSModeSret = valid && isSret && priviledgeMode === ModeS && mstatusStruct.tsr.asBool
+  val illegalSret = valid && isSret && priviledgeMode < ModeS
+  val illegalMret = valid && isMret && priviledgeMode < ModeM
 
   // Illegal priviledged instruction check
   val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
   val isIllegalAccess = !permitted
-  val isIllegalPrivOp = illegalSModeSret
+  val isIllegalPrivOp = trapSModeSret || illegalSret || illegalMret
 
   // Signals needed by MMU Permission Check
   io.imemMMU.priviledgeMode := priviledgeMode
@@ -602,7 +613,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // Trigger an illegal instr exception when:
   // * unimplemented csr is being read/written
   // * csr access is illegal
-  csrExceptionVec(illegalInstr) := (isIllegalAddr || isIllegalAccess) && wen && !io.isBackendException 
+  csrExceptionVec(illegalInstr) := (isIllegalAddr || isIllegalAccess || isIllegalPrivOp) && wen && !io.isBackendException 
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
@@ -638,7 +649,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   trapTarget := Cat(Mux(delegS, stvec, mtvec)(VAddrBits-1, 2), 0.U(2.W)) + Mux(raiseIntr && interruptVecMode, Cat(intrNO, 0.U(2.W)), 0.U)
   retTarget := DontCare
 
-  when (valid && isMret) {
+  when (valid && isMret && !illegalMret) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     mstatusNew.ie.m := mstatusOld.pie.m
@@ -651,7 +662,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     retTarget := mepc(VAddrBits-1, 0)
   }
 
-  when (valid && isSret && !illegalSModeSret) {
+  when (valid && isSret && !trapSModeSret && !illegalSret) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     mstatusNew.ie.s := mstatusOld.pie.s
