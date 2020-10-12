@@ -259,7 +259,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   BoringUtils.addSink(lr, "lr")
   BoringUtils.addSink(lrAddr, "lr_addr")
   val scInvalid = !(src1 === lrAddr) && scReq
-  setLr := (lrReq || scReq) && io.in.fire()
+  setLr := lrReq && io.in.fire()
   setLrVal := lrReq
   setLrAddr := src1
 
