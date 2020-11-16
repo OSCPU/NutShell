@@ -55,6 +55,7 @@ class LogCtrlIO extends Bundle {
 
 class NutShellSimTop extends Module {
   val io = IO(new Bundle{
+    val mem = new AXI4
     val difftest = new DiffTestIO
     val logCtrl = new LogCtrlIO
     val difftestCtrl = new DiffTestCtrlIO
@@ -62,16 +63,17 @@ class NutShellSimTop extends Module {
 
   lazy val config = NutCoreConfig(FPGAPlatform = false)
   val soc = Module(new NutShell()(config))
-  val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
+  // val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
   // Be careful with the commit checking of emu.
   // A large delay will make emu incorrectly report getting stuck.
-  val memdelay = Module(new AXI4Delayer(0))
+  // val memdelay = Module(new AXI4Delayer(0))
   val mmio = Module(new SimMMIO)
 
   soc.io.frontend <> mmio.io.dma
+  soc.io.mem <> io.mem
 
-  memdelay.io.in <> soc.io.mem
-  mem.io.in <> memdelay.io.out
+  // memdelay.io.in <> soc.io.mem
+  // mem.io.in <> memdelay.io.out
 
   mmio.io.rw <> soc.io.mmio
 

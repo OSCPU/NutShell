@@ -59,6 +59,11 @@ EMU_CXXFLAGS  = -O3 -std=c++11 -static -g -Wall -I$(EMU_CSRC_DIR)
 EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized -D__RV$(DATAWIDTH)__
 EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
+ifeq ($(USE_DRAMSIM3),true)
+EMU_CXXFLAGS += -DWITH_DRAMSIM3 -I$(DRAMSIM3_HOME)/src
+EMU_LDFLAGS  += $(DRAMSIM3_HOME)/build/libdramsim3.a
+endif
+
 # dump vcd: --debug --trace
 # +define+RANDOMIZE_REG_INIT \
 # +define+RANDOMIZE_MEM_INIT
@@ -67,6 +72,7 @@ VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   +define+VERILATOR=1 \
   +define+PRINTF_COND=1 \
   --assert \
+  --trace \
   --output-split 5000 \
   --output-split-cfuncs 5000 \
   -I$(abspath $(BUILD_DIR)) \

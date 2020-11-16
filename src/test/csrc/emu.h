@@ -96,11 +96,30 @@ class Emulator {
     dut_ptr->clock = 0;
     dut_ptr->eval();
 
+#if VM_TRACE
+    tfp->dump(2*cycles);
+#endif
     dut_ptr->clock = 1;
     dut_ptr->eval();
 
+#ifdef WITH_DRAMSIM3
+    struct axi_channel axi;
+    axi_copy_from_dut_ptr(dut_ptr, axi);
+    dramsim3_helper(axi);
+    dut_ptr->DUT_AXI(aw_ready)    = axi.aw.ready;
+    dut_ptr->DUT_AXI(w_ready)     = axi.w.ready;
+    dut_ptr->DUT_AXI(b_valid)     = axi.b.valid;
+    dut_ptr->DUT_AXI(ar_ready)    = axi.ar.ready;
+    dut_ptr->DUT_AXI(r_valid)     = axi.r.valid;
+    dut_ptr->DUT_AXI(r_bits_resp) = axi.r.resp;
+    dut_ptr->DUT_AXI(r_bits_data) = axi.r.data;
+    dut_ptr->DUT_AXI(r_bits_last) = axi.r.last;
+    dut_ptr->DUT_AXI(r_bits_id)   = axi.r.id;
+    dut_ptr->DUT_AXI(r_bits_user) = axi.r.user;
+#endif
+
 #if VM_TRACE
-    tfp->dump(cycles);
+    tfp->dump(2*cycles+1);
 #endif
 
     cycles ++;

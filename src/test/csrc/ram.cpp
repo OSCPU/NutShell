@@ -1,6 +1,12 @@
 #include "common.h"
 #include "difftest.h"
 
+#ifdef WITH_DRAMSIM3
+#include "cosimulation.h"
+
+CoDRAMsim3 *dram = NULL;
+#endif
+
 #define RAMSIZE (128 * 1024 * 1024)
 
 static paddr_t ram[RAMSIZE / sizeof(paddr_t)];
@@ -90,6 +96,11 @@ void init_ram(const char *img) {
   //new add
   addpageSv39();
   //new end
+
+  #ifdef WITH_DRAMSIM3
+  assert(dram == NULL);
+  dram = new CoDRAMsim3("/home/xyn/DRAMsim3/configs/DDR4_8Gb_x8_3200.ini", "build");
+  #endif
 }
 
 extern "C" void ram_helper(
@@ -97,3 +108,60 @@ extern "C" void ram_helper(
   *rdata = ram[rIdx];
   if (wen) { ram[wIdx] = (ram[wIdx] & ~wmask) | (wdata & wmask); }
 }
+
+#ifdef WITH_DRAMSIM3
+
+void dramsim3_helper(struct axi_channel &axi) {
+  // currently only accept one in-flight read + one in-flight write
+  static uint64_t raddr, roffset = 0, rlen;
+  static uint64_t waddr, woffset = 0, wlen;
+
+  // default branch to avoid wrong handsha
+  axi.aw.ready = 0;
+  // axi.w.ready  = 0;
+  axi.b.valid  = 0;
+  axi.ar.ready = 0;
+  // axi.r.valid  = 0;
+
+  // AXI read
+  // first, check rdata in the last cycle
+  if (axi.r.ready && axi.r.valid) {
+    // printf("axi r channel fired\n");
+    roffset--;
+    axi.r.valid = 0;
+  }
+  // second, check whether we response data in this cycle
+  if (roffset != 0) {
+    axi.r.data = ram[raddr + (rlen - roffset)];
+    axi.r.valid = 1;
+    axi.r.last = (roffset == 1) ? 1 : 0;
+  }
+  // third, check ar for next request's address (since only one in-flight, we block the following requests)
+  // put ar in the last since it should be at least one-cycle latency
+  if (axi.ar.valid && roffset == 0) {
+    axi.ar.ready = 1;
+    // printf("axi ar channel fired\n");
+    raddr = (axi.ar.addr % RAMSIZE) / sizeof(paddr_t);
+    rlen = roffset = axi.ar.len + 1;
+  }
+
+  // AXI write
+  // first, check wdata in the last cycle
+  if (axi.w.valid && axi.w.ready) {
+    // printf("axi w channel fired\n");
+    ram[waddr + (wlen - woffset)] = axi.w.data;
+    woffset--;
+    axi.w.ready = 0;
+  }
+  if (woffset != 0) {
+    axi.w.ready = 1;
+  }
+  if (axi.aw.valid && woffset == 0) {
+    axi.aw.ready = 1;
+    // printf("axi aw channel fired\n");
+    waddr = (axi.aw.addr % RAMSIZE) / sizeof(paddr_t);
+    wlen = woffset = axi.aw.len + 1;
+  }
+}
+
+#endif
