@@ -103,7 +103,7 @@ class Emulator {
     dut_ptr->eval();
 
 #ifdef WITH_DRAMSIM3
-    struct axi_channel axi;
+    axi_channel axi;
     axi_copy_from_dut_ptr(dut_ptr, axi);
     dramsim3_helper(axi);
     dut_ptr->DUT_AXI(aw_ready)    = axi.aw.ready;
@@ -210,6 +210,10 @@ class Emulator {
     cache_test(max_cycles);
 #else
     execute_cycles(max_cycles);
+#endif
+#ifdef WITH_DRAMSIM3
+    extern void dramsim3_finish();
+    dramsim3_finish();
 #endif
   }
   uint64_t get_cycles() const { return cycles; }

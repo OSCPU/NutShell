@@ -97,10 +97,10 @@ void init_ram(const char *img) {
   addpageSv39();
   //new end
 
-  #ifdef WITH_DRAMSIM3
+#ifdef WITH_DRAMSIM3
   assert(dram == NULL);
-  dram = new CoDRAMsim3("/home/xyn/DRAMsim3/configs/DDR4_8Gb_x8_3200.ini", "build");
-  #endif
+  dram = new CoDRAMsim3("/home/xyn/DRAMsim3/configs/XiangShan.ini", "/home/xyn/nutshell/NutShell/build");
+#endif
 }
 
 extern "C" void ram_helper(
@@ -110,15 +110,92 @@ extern "C" void ram_helper(
 }
 
 #ifdef WITH_DRAMSIM3
+#include <iostream>
 
-void dramsim3_helper(struct axi_channel &axi) {
+void dramsim3_finish() {
+  delete dram;
+}
+
+#define MAX_AXI_DATA_LEN 8
+
+// currently does not support masked read or write
+struct dramsim3_meta {
+  uint8_t  len;
+  uint8_t  offset;
+  uint64_t data[MAX_AXI_DATA_LEN];
+};
+
+void axi_read_data(const axi_ar_channel &ar, dramsim3_meta *meta) {
+  uint64_t address = ar.addr % RAMSIZE;
+  uint64_t beatsize = 1 << ar.size;
+  uint8_t  beatlen  = ar.len + 1;
+  assert(ar.size == 3); // 2^3 = 8 bytes
+  // axi burst FIXED
+  if (ar.burst == 0x0) {
+    assert(address % sizeof(uint16_t) == 0);
+    for (int i = 0; i <= ar.len; i++) {
+      meta->data[i] = ram[address / sizeof(uint64_t)];
+      address += beatsize;
+    }
+  }
+  // axi burst INCR
+  else if (ar.burst == 1) {
+    std::cout << "arburst == INCR not supported!" << std::endl;
+    assert(0);
+  }
+  // axi burst WRAP
+  else if (ar.burst == 2) {
+    uint64_t aligned = beatlen * beatsize;
+    uint64_t low = (address / aligned) * aligned;
+    uint64_t high = low + aligned;
+    for (int i = 0; i <= ar.len; i++) {
+      if (address == high) {
+        address = low;
+      }
+      meta->data[i] = ram[address / sizeof(uint64_t)];
+      address += beatsize;
+    }
+  }
+  else {
+    std::cout << "reserved arburst!" << std::endl;
+    assert(0);
+  }
+  meta->len = beatlen;
+  meta->offset = 0;
+}
+
+CoDRAMRequest *dramsim3_request(const axi_channel &axi, bool is_write) {
+  uint64_t address = (is_write) ? axi.aw.addr : axi.ar.addr;
+  dramsim3_meta *meta = new dramsim3_meta;
+  // WRITE
+  if (is_write) {
+    meta->len = axi.aw.len + 1;
+    meta->offset = 0;
+  }
+  else {
+    axi_read_data(axi.ar, meta);
+  }
+  CoDRAMRequest *req = new CoDRAMRequest();
+  req->address = address;
+  req->is_write = is_write;
+  req->meta = meta;
+  return req;
+}
+
+void dramsim3_helper(axi_channel &axi) {
+  // ticks DRAMsim3 according to CPU_FREQ:DRAM_FREQ
+  dram->tick();
+
+  static CoDRAMResponse *wait_resp_r = NULL;
+  static CoDRAMResponse *wait_resp_b = NULL;
+  static CoDRAMRequest *wait_req_w = NULL;
   // currently only accept one in-flight read + one in-flight write
   static uint64_t raddr, roffset = 0, rlen;
   static uint64_t waddr, woffset = 0, wlen;
 
   // default branch to avoid wrong handsha
   axi.aw.ready = 0;
-  // axi.w.ready  = 0;
+  axi.w.ready  = 1;
   axi.b.valid  = 0;
   axi.ar.ready = 0;
   // axi.r.valid  = 0;
@@ -127,40 +204,76 @@ void dramsim3_helper(struct axi_channel &axi) {
   // first, check rdata in the last cycle
   if (axi.r.ready && axi.r.valid) {
     // printf("axi r channel fired\n");
-    roffset--;
+    dramsim3_meta *meta = static_cast<dramsim3_meta *>(wait_resp_r->req->meta);
+    meta->offset++;
     axi.r.valid = 0;
   }
   // second, check whether we response data in this cycle
-  if (roffset != 0) {
-    axi.r.data = ram[raddr + (rlen - roffset)];
-    axi.r.valid = 1;
-    axi.r.last = (roffset == 1) ? 1 : 0;
+  if (!wait_resp_r)
+    wait_resp_r = dram->check_read_response();
+  if (wait_resp_r) {
+    dramsim3_meta *meta = static_cast<dramsim3_meta *>(wait_resp_r->req->meta);
+    if (meta->offset == meta->len) {
+      delete meta;
+      delete wait_resp_r->req;
+      delete wait_resp_r;
+      wait_resp_r = NULL;
+    }
+    else {
+      axi.r.data = meta->data[meta->offset];
+      axi.r.valid = 1;
+      axi.r.last = (meta->offset == meta->len - 1) ? 1 : 0;
+    }
   }
-  // third, check ar for next request's address (since only one in-flight, we block the following requests)
+  // third, check ar for next request's address
   // put ar in the last since it should be at least one-cycle latency
-  if (axi.ar.valid && roffset == 0) {
+  if (axi.ar.valid && dram->will_accept(axi.ar.addr, false)) {
+    dram->add_request(dramsim3_request(axi, false));
     axi.ar.ready = 1;
     // printf("axi ar channel fired\n");
-    raddr = (axi.ar.addr % RAMSIZE) / sizeof(paddr_t);
-    rlen = roffset = axi.ar.len + 1;
   }
 
   // AXI write
   // first, check wdata in the last cycle
-  if (axi.w.valid && axi.w.ready) {
-    // printf("axi w channel fired\n");
-    ram[waddr + (wlen - woffset)] = axi.w.data;
-    woffset--;
-    axi.w.ready = 0;
-  }
-  if (woffset != 0) {
-    axi.w.ready = 1;
-  }
-  if (axi.aw.valid && woffset == 0) {
+  // aw channel
+  if (axi.aw.valid && dram->will_accept(axi.aw.addr, true)) {
+    assert(wait_req_w == NULL); // the last request has not finished
+    wait_req_w = dramsim3_request(axi, true);
     axi.aw.ready = 1;
     // printf("axi aw channel fired\n");
-    waddr = (axi.aw.addr % RAMSIZE) / sizeof(paddr_t);
-    wlen = woffset = axi.aw.len + 1;
+    assert(axi.aw.burst == 0 || (axi.aw.burst == 2 && ((axi.aw.addr & 0x3f) == 0)));
+  }
+
+  // w channel: ack write data
+  if (axi.w.valid && axi.w.ready) {
+    // printf("axi w channel fired\n");
+    assert(wait_req_w);
+    dramsim3_meta *meta = static_cast<dramsim3_meta *>(wait_req_w->meta);
+    meta->data[meta->offset] = axi.w.data;
+    meta->offset++;
+    if (meta->offset == meta->len) {
+      assert(dram->will_accept(wait_req_w->address, true));
+      dram->add_request(wait_req_w);
+      wait_req_w = NULL;
+    }
+  }
+
+  // b channel: ack write
+  if (!wait_resp_b)
+    wait_resp_b = dram->check_write_response();
+  if (wait_resp_b) {
+    dramsim3_meta *meta = static_cast<dramsim3_meta *>(wait_resp_b->req->meta);
+    axi.b.valid = 1;
+    // assert(axi.b.ready == 1);
+    for (int i = 0; i < meta->len; i++) {
+      uint64_t address = wait_resp_b->req->address % RAMSIZE;
+      ram[address / sizeof(uint64_t) + i] = meta->data[i];
+    }
+    // printf("axi b channel fired\n");
+    delete meta;
+    delete wait_resp_b->req;
+    delete wait_resp_b;
+    wait_resp_b = NULL;
   }
 }
 
