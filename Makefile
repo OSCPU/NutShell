@@ -73,7 +73,6 @@ VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   +define+VERILATOR=1 \
   +define+PRINTF_COND=1 \
   --assert \
-  --trace \
   --output-split 5000 \
   --output-split-cfuncs 5000 \
   -I$(abspath $(BUILD_DIR)) \
