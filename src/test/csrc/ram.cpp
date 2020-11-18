@@ -98,9 +98,16 @@ void init_ram(const char *img) {
   //new end
 
 #ifdef WITH_DRAMSIM3
-  assert(dram == NULL);
-  dram = new CoDRAMsim3("/home/xyn/DRAMsim3/configs/XiangShan.ini", "/home/xyn/nutshell/NutShell/build");
+
+#if !defined(DRAMSIM3_CONFIG) || !defined(DRAMSIM3_OUTDIR)
+#error DRAMSIM3_CONFIG or DRAMSIM3_OUTDIR is not defined
 #endif
+
+  assert(dram == NULL);
+  dram = new CoDRAMsim3(DRAMSIM3_CONFIG, DRAMSIM3_OUTDIR);
+
+#endif
+
 }
 
 extern "C" void ram_helper(

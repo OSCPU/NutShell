@@ -60,7 +60,8 @@ EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized -D__RV$(DATAWIDTH)__
 EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
 ifeq ($(USE_DRAMSIM3),true)
-EMU_CXXFLAGS += -DWITH_DRAMSIM3 -I$(DRAMSIM3_HOME)/src
+EMU_CXXFLAGS += -I$(DRAMSIM3_HOME)/src
+EMU_CXXFLAGS += -DWITH_DRAMSIM3 -DDRAMSIM3_CONFIG=\\\"$(DRAMSIM3_HOME)/configs/NutShell.ini\\\" -DDRAMSIM3_OUTDIR=\\\"$(BUILD_DIR)\\\"
 EMU_LDFLAGS  += $(DRAMSIM3_HOME)/build/libdramsim3.a
 endif
 

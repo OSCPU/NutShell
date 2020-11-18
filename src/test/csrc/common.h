@@ -58,10 +58,6 @@ void app_error(const char *fmt, ...);
 
 int monitor(void);
 
-#ifndef WITH_DRAMSIM3
-#define WITH_DRAMSIM3
-#endif
-
 #ifdef WITH_DRAMSIM3
 
 #define AXI_ADDR_TYPE uint32_t
