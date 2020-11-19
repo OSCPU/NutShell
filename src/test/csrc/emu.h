@@ -94,14 +94,6 @@ class Emulator {
 
   void single_cycle() {
     dut_ptr->clock = 0;
-    dut_ptr->eval();
-
-#if VM_TRACE
-    tfp->dump(2*cycles);
-#endif
-    dut_ptr->clock = 1;
-    dut_ptr->eval();
-
 #ifdef WITH_DRAMSIM3
     axi_channel axi;
     axi_copy_from_dut_ptr(dut_ptr, axi);
@@ -117,9 +109,13 @@ class Emulator {
     dut_ptr->DUT_AXI(r_bits_id)   = axi.r.id;
     dut_ptr->DUT_AXI(r_bits_user) = axi.r.user;
 #endif
+    dut_ptr->eval();
+
+    dut_ptr->clock = 1;
+    dut_ptr->eval();
 
 #if VM_TRACE
-    tfp->dump(2*cycles+1);
+    tfp->dump(cycles);
 #endif
 
     cycles ++;
