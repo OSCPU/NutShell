@@ -25,6 +25,8 @@ import chisel3.util.experimental.BoringUtils
 
 import bus.axi4._
 import device.AXI4RAM
+import nutcore._
+import utils.GTimer
 
 class DiffTestIO extends Bundle {
   val r = Output(Vec(64, UInt(64.W)))
@@ -46,9 +48,15 @@ class DiffTestIO extends Bundle {
   val scause = Output(UInt(64.W))
 }
 
+class LogCtrlIO extends Bundle {
+  val log_begin, log_end = Input(UInt(64.W))
+  val log_level = Input(UInt(64.W)) // a cpp uint
+}
+
 class NutShellSimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
+    val logCtrl = new LogCtrlIO
     val difftestCtrl = new DiffTestCtrlIO
   })
 
@@ -87,5 +95,18 @@ class NutShellSimTop extends Module {
   BoringUtils.addSink(difftest.mcause, "difftestMcause")
   BoringUtils.addSink(difftest.scause, "difftestScause")
   io.difftest := difftest
+
+  val log_begin, log_end, log_level = WireInit(0.U(64.W))
+  log_begin := io.logCtrl.log_begin
+  log_end := io.logCtrl.log_end
+  log_level := io.logCtrl.log_level
+
+  assert(log_begin <= log_end)
+  BoringUtils.addSource((GTimer() >= log_begin) && (GTimer() < log_end), "DISPLAY_ENABLE")
+
+  // make BoringUtils not report boring exception when EnableDebug is set to false
+  val dummyWire = WireInit(false.B)
+  BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
+
   io.difftestCtrl <> mmio.io.difftestCtrl
 }

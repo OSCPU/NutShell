@@ -51,6 +51,13 @@ class RedirectIO extends NutCoreBundle {
   val valid = Output(Bool())
 }
 
+class MisPredictionRecIO extends NutCoreBundle {
+  val redirect = new RedirectIO
+  val valid = Output(Bool())
+  val checkpoint = Output(UInt(brTagWidth.W))
+  val prfidx = Output(UInt(prfAddrWidth.W))
+}
+
 class CtrlFlowIO extends NutCoreBundle {
   val instr = Output(UInt(64.W))
   val pc = Output(UInt(VAddrBits.W))
@@ -67,7 +74,6 @@ class DecodeIO extends NutCoreBundle {
   val cf = new CtrlFlowIO
   val ctrl = new CtrlSignalIO
   val data = new DataSrcIO
-  val pipeline2 = Output(Bool())
 }
 
 class WriteBackIO extends NutCoreBundle {
@@ -91,6 +97,8 @@ class OOCommitIO extends NutCoreBundle with HasBackendConst{
   val commits = Output(UInt(XLEN.W))
   val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
   val exception = Output(Bool())
+  val store = Output(Bool())
+  val brMask = Output(UInt(checkpointSize.W))
 }
 
 class FunctionUnitIO extends NutCoreBundle {
@@ -157,6 +165,7 @@ class InstFetchIO extends NutCoreBundle {
   val instr = Output(UInt(64.W))
 }
 
+// Micro OP
 class RenamedDecodeIO extends NutCoreBundle with HasBackendConst {
   val decode = new DecodeIO
   val prfDest = Output(UInt(prfAddrWidth.W))
@@ -164,4 +173,5 @@ class RenamedDecodeIO extends NutCoreBundle with HasBackendConst {
   val prfSrc2 = Output(UInt(prfAddrWidth.W))
   val src1Rdy = Output(Bool())
   val src2Rdy = Output(Bool())
+  val brMask = Output(UInt(checkpointSize.W))
 }
