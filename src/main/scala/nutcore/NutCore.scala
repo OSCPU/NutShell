@@ -44,13 +44,14 @@ trait HasNutCoreParameter {
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = true
   val EnableRVC = Settings.get("EnableRVC")
-  val HasFPU = true
-  require(!(HasFPU && EnableOutOfOrderExec), "not supported!")
   // Parameter for Argo's OoO backend
   val EnableMultiIssue = Settings.get("EnableMultiIssue")
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
   val EnableMultiCyclePredictor = false // false unless a customized condition branch predictor is included
   val EnableOutOfOrderMemAccess = false // enable out of order mem access will improve OoO backend's performance
+  // Parameter for FPU
+  val HasFPU = true
+  require(!(HasFPU && EnableOutOfOrderExec), "not supported!")
 }
 
 trait HasNutCoreConst extends HasNutCoreParameter {
