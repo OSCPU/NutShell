@@ -33,6 +33,7 @@ object LSUOpType { //TODO: refactor LSU fuop
   def lbu  = "b0000100".U
   def lhu  = "b0000101".U
   def lwu  = "b0000110".U
+  def flw  = "b0010110".U // box 32-bit data to 64-bit with 1s
   def sb   = "b0001000".U
   def sh   = "b0001001".U
   def sw   = "b0001010".U
@@ -833,7 +834,8 @@ class LSU extends NutCoreModule with HasLSUConst {
       LSUOpType.ld   -> SignExt(rdataSel(63, 0), XLEN),
       LSUOpType.lbu  -> ZeroExt(rdataSel(7, 0) , XLEN),
       LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), XLEN),
-      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN)
+      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN),
+      LSUOpType.flw  -> fpu.boxF32ToF64(rdataSel(31, 0))
   ))
   val atomDataPartialLoad = Mux(moq(moqidxResp).size(0), SignExt(rdataSel(63, 0), XLEN), SignExt(rdataSel(31, 0), XLEN))
 

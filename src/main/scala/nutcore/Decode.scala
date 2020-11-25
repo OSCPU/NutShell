@@ -18,6 +18,7 @@ package nutcore
 
 import chisel3._
 import chisel3.util._
+import nutcore.isa.{RVDInstr, RVFInstr}
 
 trait HasInstrType {
   def InstrN  = "b0000".U
@@ -29,8 +30,20 @@ trait HasInstrType {
   def InstrJ  = "b0111".U
   def InstrA  = "b1110".U
   def InstrSA = "b1111".U // Atom Inst: SC
+  def InstrFR   = "b1001".U
+  def InstrFI   = "b1010".U // flw/fld
+  def InstrGtoF = "b1011".U
+  def InstrFS   = "b1100".U
+  def InstrFtoG = "b1101".U
 
-  def isrfWen(instrType : UInt): Bool = instrType(2)
+//  def isrfWen(instrType : UInt): Bool = instrType(2)
+  def isrfWen(instrType : UInt): Bool = Array(
+    InstrI, InstrR, InstrU, InstrJ, InstrA, InstrSA, InstrFtoG
+  ).map(_===instrType).reduce(_||_)
+
+  def isfpWen(instrType: UInt): Bool = Array(
+    InstrFI, InstrFR, InstrGtoF
+  ).map(_===instrType).reduce(_||_)
 }
 
 // trait CompInstConst {
@@ -47,21 +60,27 @@ trait HasInstrType {
 // }
 
 object SrcType {
-  def reg = "b0".U
-  def pc  = "b1".U
-  def imm = "b1".U
-  def apply() = UInt(1.W)
+  def reg = "b00".U
+  def pc  = "b01".U
+  def imm = "b01".U
+  def fp = "b10".U
+  def apply() = UInt(2.W)
 }
 
 object FuType extends HasNutCoreConst {
-  def num = 5
+  def num = 6
   def alu = "b000".U
   def lsu = "b001".U
   def mdu = "b010".U
   def csr = "b011".U
   def mou = "b100".U
-  def bru = if(IndependentBru) "b101".U
-            else               alu
+
+  // FIXME
+  //  def bru = if(IndependentBru) "b101".U else alu
+  def bru = alu
+  require(!IndependentBru)
+
+  def fpu = "b101".U
   def apply() = UInt(log2Up(num).W)
 }
 
@@ -75,6 +94,7 @@ object Instructions extends HasInstrType with HasNutCoreParameter {
   def DecodeTable = RVIInstr.table ++ NutCoreTrap.table ++
     (if (HasMExtension) RVMInstr.table else Nil) ++
     (if (HasCExtension) RVCInstr.table else Nil) ++
+    (if (HasFPU) RVFInstr.table ++ RVDInstr.table else Nil) ++
     Priviledged.table ++
     RVAInstr.table ++
     RVZicsrInstr.table ++ RVZifenceiInstr.table

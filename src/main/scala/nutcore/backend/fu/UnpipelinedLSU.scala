@@ -409,7 +409,8 @@ class LSExecUnit extends NutCoreModule {
       LSUOpType.lw   -> SignExt(rdataSel(31, 0), XLEN),
       LSUOpType.lbu  -> ZeroExt(rdataSel(7, 0) , XLEN),
       LSUOpType.lhu  -> ZeroExt(rdataSel(15, 0), XLEN),
-      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN)
+      LSUOpType.lwu  -> ZeroExt(rdataSel(31, 0), XLEN),
+      LSUOpType.flw  -> fpu.boxF32ToF64(rdataSel(31, 0))
   ))
   val addrAligned = LookupTree(func(1,0), List(
     "b00".U   -> true.B,            //b

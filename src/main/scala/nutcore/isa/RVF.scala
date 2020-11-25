@@ -1,0 +1,87 @@
+package nutcore.isa
+
+import fpu.FPUOpType._
+import fpu.FPUIOFunc._
+import nutcore.{HasInstrType, HasNutCoreParameter}
+import nutcore.FuType._
+import nutcore.LSUOpType._
+import Chisel.BitPat
+
+
+object RVFInstr extends HasNutCoreParameter with HasInstrType {
+
+  def FLW                = BitPat("b?????????????????010?????0000111")
+  def FSW                = BitPat("b?????????????????010?????0100111")
+  def FADD_S             = BitPat("b0000000??????????????????1010011")
+  def FSUB_S             = BitPat("b0000100??????????????????1010011")
+  def FMUL_S             = BitPat("b0001000??????????????????1010011")
+  def FDIV_S             = BitPat("b0001100??????????????????1010011")
+  def FSGNJ_S            = BitPat("b0010000??????????000?????1010011")
+  def FSGNJN_S           = BitPat("b0010000??????????001?????1010011")
+  def FSGNJX_S           = BitPat("b0010000??????????010?????1010011")
+  def FMIN_S             = BitPat("b0010100??????????000?????1010011")
+  def FMAX_S             = BitPat("b0010100??????????001?????1010011")
+  def FSQRT_S            = BitPat("b010110000000?????????????1010011")
+  def FLE_S              = BitPat("b1010000??????????000?????1010011")
+  def FLT_S              = BitPat("b1010000??????????001?????1010011")
+  def FEQ_S              = BitPat("b1010000??????????010?????1010011")
+  def FCVT_W_S           = BitPat("b110000000000?????????????1010011")
+  def FCVT_WU_S          = BitPat("b110000000001?????????????1010011")
+  def FCVT_L_S           = BitPat("b110000000010?????????????1010011")
+  def FCVT_LU_S          = BitPat("b110000000011?????????????1010011")
+  def FMV_X_W            = BitPat("b111000000000?????000?????1010011")
+  def FCLASS_S           = BitPat("b111000000000?????001?????1010011")
+  def FCVT_S_W           = BitPat("b110100000000?????????????1010011")
+  def FCVT_S_WU          = BitPat("b110100000001?????????????1010011")
+  def FCVT_S_L           = BitPat("b110100000010?????????????1010011")
+  def FCVT_S_LU          = BitPat("b110100000011?????????????1010011")
+  def FMV_W_X            = BitPat("b111100000000?????000?????1010011")
+  def FMADD_S            = BitPat("b?????00??????????????????1000011")
+  def FMSUB_S            = BitPat("b?????00??????????????????1000111")
+  def FNMSUB_S           = BitPat("b?????00??????????????????1001011")
+  def FNMADD_S           = BitPat("b?????00??????????????????1001111")
+
+  val fullTable = Array(
+      FLW       -> List(InstrFI,   lsu, flw,     in_raw,   out_raw),
+      FSW       -> List(InstrFS,   lsu, sw,      in_raw,   out_raw),
+      // FR
+      FADD_S    -> List(InstrFR,   fpu, fadd,    in_unbox, out_box),
+      FSUB_S    -> List(InstrFR,   fpu, fsub,    in_unbox, out_box),
+      FMUL_S    -> List(InstrFR,   fpu, fmul,    in_unbox, out_box),
+      FDIV_S    -> List(InstrFR,   fpu, fdiv,    in_unbox, out_box),
+      FMIN_S    -> List(InstrFR,   fpu, fmin,    in_unbox, out_box),
+      FMAX_S    -> List(InstrFR,   fpu, fmax,    in_unbox, out_box),
+      FSGNJ_S   -> List(InstrFR,   fpu, fsgnj,   in_unbox, out_box),
+      FSGNJN_S  -> List(InstrFR,   fpu, fsgnjn,  in_unbox, out_box),
+      FSGNJX_S  -> List(InstrFR,   fpu, fsgnjx,  in_unbox, out_box),
+      FSQRT_S   -> List(InstrFR,   fpu, fsqrt,   in_unbox, out_box),
+      FMADD_S   -> List(InstrFR,   fpu, fmadd,   in_unbox, out_box),
+      FNMADD_S  -> List(InstrFR,   fpu, fnmadd,  in_unbox, out_box),
+      FMSUB_S   -> List(InstrFR,   fpu, fmsub,   in_unbox, out_box),
+      FNMSUB_S  -> List(InstrFR,   fpu, fnmsub,  in_unbox, out_box),
+
+      // F -> G
+      FCLASS_S  -> List(InstrFtoG, fpu, fclass,  in_unbox, out_raw),
+      FMV_X_W   -> List(InstrFtoG, fpu, fmv_f2i, in_raw,   out_sext),
+      FCVT_W_S  -> List(InstrFtoG, fpu, f2w,     in_unbox, out_sext),
+      FCVT_WU_S -> List(InstrFtoG, fpu, f2wu,    in_unbox, out_sext),
+      FCVT_L_S  -> List(InstrFtoG, fpu, f2l,     in_unbox, out_raw),
+      FCVT_LU_S -> List(InstrFtoG, fpu, f2lu,    in_unbox, out_raw),
+      FLE_S     -> List(InstrFtoG, fpu, fle,     in_unbox, out_raw),
+      FLT_S     -> List(InstrFtoG, fpu, flt,     in_unbox, out_raw),
+      FEQ_S     -> List(InstrFtoG, fpu, feq,     in_unbox, out_raw),
+
+      // G -> F
+      FMV_W_X   -> List(InstrGtoF, fpu, fmv_i2f, in_raw,   out_box),
+      FCVT_S_W  -> List(InstrGtoF, fpu, w2f,     in_raw,   out_box),
+      FCVT_S_WU -> List(InstrGtoF, fpu, wu2f,    in_raw,   out_box),
+      FCVT_S_L  -> List(InstrGtoF, fpu, l2f,     in_raw,   out_box),
+      FCVT_S_LU -> List(InstrGtoF, fpu, lu2f,    in_raw,   out_box)
+  )
+  val table = fullTable.map(row =>
+    row._1 -> row._2.take(3)
+  )
+  val ioFuncTable = fullTable.map(row =>
+    row._1 -> row._2.drop(3)
+  )
+}

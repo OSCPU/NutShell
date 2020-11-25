@@ -72,11 +72,15 @@ static const char *reg_name[DIFFTEST_NR_REG] = {
   "s0", "s1", "a0", "a1", "a2", "a3", "a4", "a5",
   "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7",
   "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6",
+  "ft0", "ft1", "ft2", "ft3", "ft4", "ft5", "ft6", "ft7",
+  "fs0", "fs1", "fa0", "fa1", "fa2", "fa3", "fa4", "fa5",
+  "fa6", "fa7", "fs2", "fs3", "fs4", "fs5", "fs6", "fs7",
+  "fs8", "fs9", "fs10", "fs11", "ft8", "ft9", "ft10", "ft11",
   "this_pc"
-#ifndef __RV32__
+  #ifndef __RV32__
   ,"mstatus", "mcause", "mepc",
   "sstatus", "scause", "sepc"
-#endif
+  #endif
 };
 
 int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
@@ -148,7 +152,7 @@ int difftest_step(rtlreg_t *reg_scala, uint32_t this_inst,
 
   ref_difftest_getregs(&ref_r);
 
-  rtlreg_t next_pc = ref_r[32];
+  rtlreg_t next_pc = ref_r[DIFFTEST_THIS_PC];
   pc_retire_pointer = (pc_retire_pointer+1) % DEBUG_RETIRE_TRACE_SIZE;
   pc_retire_queue[pc_retire_pointer] = this_pc;
   inst_retire_queue[pc_retire_pointer] = this_inst;

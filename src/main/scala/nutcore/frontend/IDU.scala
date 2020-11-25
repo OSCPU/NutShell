@@ -19,7 +19,7 @@ package nutcore
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
-
+import nutcore.isa.{RVDInstr, RVFInstr}
 import utils._
 
 class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType {
@@ -37,22 +37,33 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   // val instrType :: fuType :: fuOpType :: Nil = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val isRVC = if (HasCExtension) instr(1,0) =/= "b11".U else false.B
   val rvcImmType :: rvcSrc1Type :: rvcSrc2Type :: rvcDestType :: Nil =
-    ListLookup(instr, CInstructions.DecodeDefault, CInstructions.CExtraDecodeTable) 
+    ListLookup(instr, CInstructions.DecodeDefault, CInstructions.CExtraDecodeTable)
+
+  val fpuIOFuncTable = RVDInstr.ioFuncTable ++ RVFInstr.ioFuncTable
+  val fpuInputFunc :: fpuOutputFunc :: Nil =
+    if(HasFPU) ListLookup(instr, List(0.U, 0.U), fpuIOFuncTable)
+    else List(0.U, 0.U)
 
   io.out.bits := DontCare
 
+  io.out.bits.ctrl.fpuIOFunc := fpu.FPUIOFunc(fpuInputFunc, fpuOutputFunc)
   io.out.bits.ctrl.fuType := fuType
   io.out.bits.ctrl.fuOpType := fuOpType
 
   val SrcTypeTable = List(
-    InstrI -> (SrcType.reg, SrcType.imm),
-    InstrR -> (SrcType.reg, SrcType.reg),
-    InstrS -> (SrcType.reg, SrcType.reg),
-    InstrSA-> (SrcType.reg, SrcType.reg),
-    InstrB -> (SrcType.reg, SrcType.reg),
-    InstrU -> (SrcType.pc , SrcType.imm),
-    InstrJ -> (SrcType.pc , SrcType.imm),
-    InstrN -> (SrcType.pc , SrcType.imm)
+    InstrI ->  (SrcType.reg, SrcType.imm),
+    InstrFI -> (SrcType.reg, SrcType.imm),
+    InstrR ->  (SrcType.reg, SrcType.reg),
+    InstrFR -> (SrcType.fp,  SrcType.fp ),
+    InstrS ->  (SrcType.reg, SrcType.reg),
+    InstrFS -> (SrcType.reg, SrcType.fp ),
+    InstrSA->  (SrcType.reg, SrcType.reg),
+    InstrB ->  (SrcType.reg, SrcType.reg),
+    InstrU ->  (SrcType.pc , SrcType.imm),
+    InstrJ ->  (SrcType.pc , SrcType.imm),
+    InstrN ->  (SrcType.pc , SrcType.imm),
+    InstrGtoF->(SrcType.reg, SrcType.reg),
+    InstrFtoG->(SrcType.fp , SrcType.fp )
   )
   val src1Type = LookupTree(instrType, SrcTypeTable.map(p => (p._1, p._2._1)))
   val src2Type = LookupTree(instrType, SrcTypeTable.map(p => (p._1, p._2._2)))
@@ -89,15 +100,23 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   val rfDest = Mux(isRVC, rvc_dest, rd)
   // TODO: refactor decode logic
   // make non-register addressing to zero, since isu.sb.isBusy(0) === false.B
+
+  val rfWen = isrfWen(instrType)
+  val fpWen = isfpWen(instrType)
+
   io.out.bits.ctrl.rfSrc1 := Mux(src1Type === SrcType.pc, 0.U, rfSrc1)
-  io.out.bits.ctrl.rfSrc2 := Mux(src2Type === SrcType.reg, rfSrc2, 0.U)
-  io.out.bits.ctrl.rfWen  := isrfWen(instrType)
-  io.out.bits.ctrl.rfDest := Mux(isrfWen(instrType), rfDest, 0.U)
+  io.out.bits.ctrl.rfSrc2 := Mux(src2Type === SrcType.imm, 0.U, rfSrc2)
+  io.out.bits.ctrl.rfSrc3 := instr(31, 27)
+  io.out.bits.ctrl.rfWen  := rfWen
+  io.out.bits.ctrl.fpWen  := fpWen
+  io.out.bits.ctrl.rfDest := Mux(fpWen || rfWen, rfDest, 0.U)
 
   io.out.bits.data := DontCare
   val imm = LookupTree(instrType, List(
     InstrI  -> SignExt(instr(31, 20), XLEN),
+    InstrFI -> SignExt(instr(31, 20), XLEN),
     InstrS  -> SignExt(Cat(instr(31, 25), instr(11, 7)), XLEN),
+    InstrFS -> SignExt(Cat(instr(31, 25), instr(11, 7)), XLEN),
     InstrSA -> SignExt(Cat(instr(31, 25), instr(11, 7)), XLEN),
     InstrB  -> SignExt(Cat(instr(31), instr(7), instr(30, 25), instr(11, 8), 0.U(1.W)), XLEN),
     InstrU  -> SignExt(Cat(instr(31, 12), 0.U(12.W)), XLEN),//fixed
@@ -138,6 +157,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   // fix LUI
   io.out.bits.ctrl.src1Type := Mux(instr(6,0) === "b0110111".U, SrcType.reg, src1Type)
   io.out.bits.ctrl.src2Type := src2Type
+  io.out.bits.ctrl.src3Type := Mux(instrType === InstrFR, SrcType.fp, SrcType.imm)
 
   val NoSpecList = Seq(
     FuType.csr

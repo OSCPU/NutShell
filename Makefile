@@ -6,7 +6,7 @@ SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 MEM_GEN = ./scripts/vlsi_mem_gen
 
-USE_READY_TO_RUN_NEMU = true
+USE_READY_TO_RUN_NEMU = false
 
 SIMTOP = top.TopMain
 IMAGE ?= ready-to-run/linux.bin

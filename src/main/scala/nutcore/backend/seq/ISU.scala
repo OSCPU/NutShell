@@ -54,24 +54,104 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   val sb = new ScoreBoard
   val src1Ready = !sb.isBusy(rfSrc1) || src1ForwardNextCycle || src1Forward
   val src2Ready = !sb.isBusy(rfSrc2) || src2ForwardNextCycle || src2Forward
-  io.out.valid := io.in(0).valid && src1Ready && src2Ready
 
   val rf = new RegFile
 
+  // fp
+
+  val difftestFpr = WireInit(VecInit(Seq.fill(32)(0.U(XLEN.W))))
+  val (fpCanIssue, fpDataVec) =  if(HasFPU){
+
+    val fsb = new ScoreBoard(hasZero = false)
+    val fpr = new RegFile(hasZero = false)
+
+    difftestFpr.zipWithIndex.foreach{
+      case (d, i) =>
+        d := fpr.read(i.U)
+    }
+
+    val wb = io.wb
+    val forward = io.forward
+    val in = io.in(0)
+
+    val forwardFpWen = forward.valid && forward.wb.fpWen
+    when(wb.fpWen){
+      fpr.write(wb.rfDest, wb.rfData)
+    }
+
+    val fsbClearMask = Mux(
+      wb.fpWen && !isDepend(wb.rfDest, forward.wb.rfDest, forwardFpWen),
+      fsb.mask(wb.rfDest),
+      0.U(NRReg.W)
+    )
+    val fsbSetMask = Mux(io.out.fire() && in.bits.ctrl.fpWen, fsb.mask(rfDest1), 0.U)
+
+    when (io.flush) {
+      fsb.update(0.U, Fill(NRReg, 1.U(1.W)))
+    }.otherwise {
+      fsb.update(fsbSetMask, fsbClearMask)
+    }
+
+    val (fpSrc1,fpSrc2,fpSrc3) = (rfSrc1, rfSrc2, in.bits.ctrl.rfSrc3)
+    val srcTuple = Seq(
+      fpSrc1, fpSrc2, fpSrc3
+    ).zip(Seq(
+      in.bits.ctrl.src1Type,
+      in.bits.ctrl.src2Type,
+      in.bits.ctrl.src3Type
+    ))
+
+    val dataVec = Array.fill(3)(Wire(UInt(XLEN.W)))
+
+    val rdyVec = srcTuple.zipWithIndex.map({
+      case ((src, t), i) =>
+        val dependEX = isDepend(src, forward.wb.rfDest, forwardFpWen)
+        val dependWB = isDepend(src, wb.rfDest, wb.fpWen)
+        val forwardEX = dependEX && !dontForward1
+        val forwardWB = dependWB && Mux(dontForward1, !dependEX, true.B)
+        dataVec(i) := MuxCase(fpr.read(src),Seq(
+          forwardEX -> forward.wb.rfData,
+          forwardWB -> wb.rfData
+        ))
+        Debug(){
+          when(io.in(0).valid && t===SrcType.fp){
+            printf(
+              p"i:$i forwardEx: $forwardEX data: ${Hexadecimal(forward.wb.rfData)} " +
+                p"forwardWB: $forwardWB data:${Hexadecimal(wb.rfData)} " +
+                p"rfRead: ${Hexadecimal(fpr.read(src))} src:$src busy:${fsb.busy(src)}\n"
+            )
+          }
+        }
+        (!fsb.busy(src) || forwardEX || forwardWB) || (t =/= SrcType.fp)
+    })
+
+    val canFire = rdyVec.reduce(_ && _)
+
+    (canFire, dataVec)
+  } else (true.B, Array.fill(3)(0.U))
+
+  io.out.valid := io.in(0).valid && src1Ready && src2Ready && fpCanIssue
+
   // out1
   io.out.bits.data.src1 := Mux1H(List(
+    (io.in(0).bits.ctrl.src1Type === SrcType.fp) -> fpDataVec(0),
     (io.in(0).bits.ctrl.src1Type === SrcType.pc) -> SignExt(io.in(0).bits.cf.pc, AddrBits),
     src1ForwardNextCycle -> io.forward.wb.rfData, //io.forward.wb.rfData,
     (src1Forward && !src1ForwardNextCycle) -> io.wb.rfData, //io.wb.rfData,
     ((io.in(0).bits.ctrl.src1Type =/= SrcType.pc) && !src1ForwardNextCycle && !src1Forward) -> rf.read(rfSrc1)
   ))
   io.out.bits.data.src2 := Mux1H(List(
+    (io.in(0).bits.ctrl.src2Type === SrcType.fp) -> fpDataVec(1),
     (io.in(0).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(0).bits.data.imm,
     src2ForwardNextCycle -> io.forward.wb.rfData, //io.forward.wb.rfData,
     (src2Forward && !src2ForwardNextCycle) -> io.wb.rfData, //io.wb.rfData,
     ((io.in(0).bits.ctrl.src2Type === SrcType.reg) && !src2ForwardNextCycle && !src2Forward) -> rf.read(rfSrc2)
   ))
-  io.out.bits.data.imm  := io.in(0).bits.data.imm
+  io.out.bits.data.imm  := Mux(
+    io.in(0).bits.ctrl.src3Type===SrcType.fp,
+    fpDataVec(2),
+    io.in(0).bits.data.imm
+  )
 
   io.out.bits.cf <> io.in(0).bits.cf
   io.out.bits.ctrl := io.in(0).bits.ctrl
@@ -98,6 +178,8 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   BoringUtils.addSource(io.out.fire(), "perfCntCondISUIssue")
 
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")
+    val difftestGpr = (0 until NRReg).map(i => rf.read(i.U))
+    val difftestRegs = VecInit(difftestGpr ++ difftestFpr)
+    BoringUtils.addSource(difftestRegs, "difftestRegs")
   }
 }
