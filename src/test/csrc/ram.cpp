@@ -7,7 +7,7 @@
 CoDRAMsim3 *dram = NULL;
 #endif
 
-#define RAMSIZE (128 * 1024 * 1024)
+#define RAMSIZE (256 * 1024 * 1024)
 
 static paddr_t ram[RAMSIZE / sizeof(paddr_t)];
 static long img_size = 0;
@@ -87,6 +87,9 @@ void init_ram(const char *img) {
 
   fseek(fp, 0, SEEK_END);
   img_size = ftell(fp);
+  if (img_size > RAMSIZE) {
+    img_size = RAMSIZE;
+  }
 
   fseek(fp, 0, SEEK_SET);
   int ret = fread(ram, img_size, 1, fp);
