@@ -142,16 +142,16 @@ void axi_read_data(const axi_ar_channel &ar, dramsim3_meta *meta) {
   assert(ar.size == 3); // 2^3 = 8 bytes
   // axi burst FIXED
   if (ar.burst == 0x0) {
-    assert(address % sizeof(uint16_t) == 0);
+    std::cout << "arburst == FIXED not supported!" << std::endl;
+    assert(0);
+  }
+  // axi burst INCR
+  else if (ar.burst == 1) {
+    assert(address % sizeof(uint64_t) == 0);
     for (int i = 0; i <= ar.len; i++) {
       meta->data[i] = ram[address / sizeof(uint64_t)];
       address += beatsize;
     }
-  }
-  // axi burst INCR
-  else if (ar.burst == 1) {
-    std::cout << "arburst == INCR not supported!" << std::endl;
-    assert(0);
   }
   // axi burst WRAP
   else if (ar.burst == 2) {
