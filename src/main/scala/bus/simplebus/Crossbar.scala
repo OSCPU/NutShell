@@ -40,7 +40,7 @@ class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
   val outSelResp = io.out(outSelIdxResp)
   val reqInvalidAddr = io.in.req.valid && !outSelVec.asUInt.orR
 
-  when(!(!io.in.req.valid || outSelVec.asUInt.orR) || !(!(io.in.req.valid && outSelVec.asUInt.andR))){
+  when((io.in.req.valid && !outSelVec.asUInt.orR) || (io.in.req.valid && outSelVec.asUInt.andR)){
     Debug(){
       printf("crossbar access bad addr %x, time %d\n", addr, GTimer())
     }
