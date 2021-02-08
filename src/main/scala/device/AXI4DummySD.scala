@@ -54,9 +54,11 @@ class SDHelper extends BlackBox with HasBlackBoxInline {
       |  output reg [31:0] data
       |);
       |
-      |  always@(*) begin
-      |    if (setAddr) sd_setaddr(addr);
+      |  always @(negedge clk) begin
       |    if (ren) sd_read(data);
+      |  end
+      |  always@(posedge clk) begin
+      |    if (setAddr) sd_setaddr(addr);
       |  end
       |
       |endmodule
