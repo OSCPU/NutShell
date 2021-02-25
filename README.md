@@ -17,7 +17,7 @@ See [the History and Naming section](#history) for naming issue.
 * Install `mill`. Refer to [the Manual section in this guide][mill].
 * Run `make` to generate verilog code. The output file is `build/TopMain.v`.
 
-[mill]: http://lihaoyi.com/mill#manual
+[mill]: https://com-lihaoyi.github.io/mill/ 
 
 ## Run programs by simulation
 
