@@ -1,5 +1,11 @@
 #! /usr/bin/env python
 
+# if file is taken from Windows to Linux, ERROR:'python\r':no such file or history
+# check the file by vim
+# :set ff -> fileformat=dos
+# change it by :set ff=unix
+# then make
+
 # See LICENSE.SiFive for license details.
 # See LICENSE.Berkeley for license details.
 
