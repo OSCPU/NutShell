@@ -1,12 +1,4 @@
 import mill._, scalalib._
-import coursier.maven.MavenRepository
-
-object CustomZincWorkerModule extends ZincWorkerModule {
-  def repositories() = super.repositories ++ Seq(
-    MavenRepository("https://oss.sonatype.org/content/repositories/releases"),
-    MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
-  )  
-}
 
 /**
  * Scala 2.12 module that is source-compatible with 2.11.
@@ -44,7 +36,6 @@ trait HasMacroParadise extends ScalaModule {
 }
 
 object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests with HasXsource211 with HasMacroParadise {
-  def zincWorker = CustomZincWorkerModule
   def crossScalaVersion = "2.11.12"
 }
 
