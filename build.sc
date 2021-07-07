@@ -5,6 +5,19 @@ import mill._, scalalib._
  * This is due to Chisel's use of structural types. See
  * https://github.com/freechipsproject/chisel3/issues/606
  */
+
+trait CommonModule extends ScalaModule {
+  override def scalaVersion = "2.12.10"
+
+  override def scalacOptions = Seq("-Xsource:2.11")
+
+  private val macroParadise = ivy"org.scalamacros:::paradise:2.1.0"
+
+  override def compileIvyDeps = Agg(macroParadise)
+
+  override def scalacPluginIvyDeps = Agg(macroParadise)
+}
+
 trait HasXsource211 extends ScalaModule {
   override def scalacOptions = T {
     super.scalacOptions() ++ Seq(
@@ -35,7 +48,14 @@ trait HasMacroParadise extends ScalaModule {
   def compileIvyDeps = macroPlugins
 }
 
+object difftest extends SbtModule with CommonModule with HasChisel3 {
+  override def millSourcePath = os.pwd / "difftest"
+}
+
 object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests with HasXsource211 with HasMacroParadise {
   def crossScalaVersion = "2.11.12"
+  override def moduleDeps = super.moduleDeps ++ Seq(
+    difftest
+  )
 }
 

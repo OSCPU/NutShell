@@ -19,7 +19,7 @@ package top
 import nutcore.NutCoreConfig
 import system.NutShell
 import device.{AXI4VGA}
-import sim.NutShellSimTop
+import sim.SimTop
 
 import chisel3._
 
@@ -63,7 +63,7 @@ object TopMain extends App {
       println(f + " = " + v)
   }
   if (board == "sim") {
-    Driver.execute(args, () => new NutShellSimTop)
+    Driver.execute(args, () => new SimTop)
   } else {
     Driver.execute(args, () => new Top)
   }

@@ -1,7 +1,7 @@
 mymap = {}
 last = ""
 
-with open("../build/NutShellSimTop.v", "r") as f:
+with open("../build/SimTop.v", "r") as f:
     line = f.readline()
     cnt = 0
     while(line):

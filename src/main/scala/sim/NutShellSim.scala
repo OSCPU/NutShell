@@ -53,7 +53,7 @@ class LogCtrlIO extends Bundle {
   val log_level = Input(UInt(64.W)) // a cpp uint
 }
 
-class NutShellSimTop extends Module {
+class SimTop extends Module {
   val io = IO(new Bundle{
     val difftest = new DiffTestIO
     val logCtrl = new LogCtrlIO
