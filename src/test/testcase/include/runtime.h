@@ -13,10 +13,4 @@ static inline void outw(uintptr_t addr, uint16_t data) { *(volatile uint16_t *)a
 static inline void outl(uintptr_t addr, uint32_t data) { *(volatile uint32_t *)addr = data; }
 static inline void outd(uintptr_t addr, uint64_t data) { *(volatile uint64_t *)addr = data; }
 
-#define DIFFTESTCTRL_BASE 0x42000000
-
-static inline void difftest_disable() {
-  outl(DIFFTESTCTRL_BASE, 0);
-}
-
 #endif

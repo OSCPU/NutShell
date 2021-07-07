@@ -43,8 +43,6 @@ static inline void check_buf(int *ref, int *dut, int size) {
 }
 
 int main() {
-  difftest_disable();
-
   int i;
   for (i = 0; i < N; i ++) buf[i] = gen_data(i);
   dma(buf2, buf, SIZE);

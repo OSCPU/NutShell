@@ -20,6 +20,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 import utils._
+import difftest._
 
 class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   val io = IO(new Bundle {
@@ -44,14 +45,20 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   BoringUtils.addSource(falseWire, "perfCntCondMultiCommit")
   
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(RegNext(io.in.valid), "difftestCommit")
-    BoringUtils.addSource(falseWire, "difftestMultiCommit")
-    BoringUtils.addSource(RegNext(SignExt(io.in.bits.decode.cf.pc, AddrBits)), "difftestThisPC")
-    BoringUtils.addSource(RegNext(io.in.bits.decode.cf.instr), "difftestThisINST")
-    BoringUtils.addSource(RegNext(io.in.bits.isMMIO), "difftestIsMMIO")
-    BoringUtils.addSource(RegNext(io.in.bits.decode.cf.instr(1,0)=/="b11".U), "difftestIsRVC")
-    BoringUtils.addSource(falseWire, "difftestIsRVC2")
-    BoringUtils.addSource(RegNext(io.in.bits.intrNO), "difftestIntrNO")
+    val difftest = Module(new DifftestInstrCommit)
+    difftest.io.clock    := clock
+    difftest.io.coreid   := 0.U
+    difftest.io.index    := 0.U
+
+    difftest.io.valid    := RegNext(io.in.valid)
+    difftest.io.pc       := RegNext(SignExt(io.in.bits.decode.cf.pc, AddrBits))
+    difftest.io.instr    := RegNext(io.in.bits.decode.cf.instr)
+    difftest.io.skip     := RegNext(io.in.bits.isMMIO)
+    difftest.io.isRVC    := RegNext(io.in.bits.decode.cf.instr(1,0)=/="b11".U)
+    difftest.io.scFailed := RegNext(false.B) // TODO: fixme
+    difftest.io.wen      := RegNext(io.wb.rfWen && io.wb.rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
+    difftest.io.wdata    := RegNext(io.wb.rfData)
+    difftest.io.wdest    := RegNext(io.wb.rfDest)
   } else {
     BoringUtils.addSource(io.in.valid, "ilaWBUvalid")
     BoringUtils.addSource(io.in.bits.decode.cf.pc, "ilaWBUpc")

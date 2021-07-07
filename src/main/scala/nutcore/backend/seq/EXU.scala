@@ -23,6 +23,7 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 import bus.simplebus._
 import top.Settings
+import difftest._
 
 class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   val io = IO(new Bundle {
@@ -127,20 +128,21 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   BoringUtils.addSource(csr.io.out.fire(), "perfCntCondMcsrInstr")
 
   if (!p.FPGAPlatform) {
-    val mon = Module(new Monitor)
     val cycleCnt = WireInit(0.U(64.W))
     val instrCnt = WireInit(0.U(64.W))
     val nutcoretrap = io.in.bits.ctrl.isNutCoreTrap && io.in.valid
-    mon.io.clk := clock
-    mon.io.reset := reset.asBool
-    mon.io.isNutCoreTrap := nutcoretrap
-    mon.io.trapCode := io.in.bits.data.src1
-    mon.io.trapPC := io.in.bits.cf.pc
-    mon.io.cycleCnt := cycleCnt
-    mon.io.instrCnt := instrCnt
 
     BoringUtils.addSink(cycleCnt, "simCycleCnt")
     BoringUtils.addSink(instrCnt, "simInstrCnt")
     BoringUtils.addSource(nutcoretrap, "nutcoretrap")
+
+    val difftest = Module(new DifftestTrapEvent)
+    difftest.io.clock    := clock
+    difftest.io.coreid   := 0.U // TODO: nutshell does not support coreid auto config
+    difftest.io.valid    := nutcoretrap
+    difftest.io.code     := io.in.bits.data.src1
+    difftest.io.pc       := io.in.bits.cf.pc
+    difftest.io.cycleCnt := cycleCnt
+    difftest.io.instrCnt := instrCnt
   }
 }
