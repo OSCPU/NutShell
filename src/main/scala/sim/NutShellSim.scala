@@ -65,6 +65,5 @@ class SimTop extends Module {
   val dummyWire = WireInit(false.B)
   BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
 
-  // Ignore uart print in difftest framework
-  io.uart := DontCare
+  io.uart <> mmio.io.uart
 }

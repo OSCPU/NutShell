@@ -22,12 +22,14 @@ import chisel3.util._
 import bus.simplebus._
 import bus.axi4._
 import device._
+import difftest._
 
 class SimMMIO extends Module {
   val io = IO(new Bundle {
     val rw = Flipped(new SimpleBusUC)
     val meip = Output(Bool())
     val dma = new AXI4
+    val uart = new UARTIO
   })
 
   val devAddrSpace = List(
@@ -58,5 +60,6 @@ class SimMMIO extends Module {
   dma.io.in <> xbar.io.out(6).toAXI4Lite()
   io.dma <> dma.io.extra.get.dma
   io.meip := meipGen.io.extra.get.meip
+  uart.io.extra.get <> io.uart
   vga.io.vga := DontCare
 }
