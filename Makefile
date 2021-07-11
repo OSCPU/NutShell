@@ -51,7 +51,7 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 
 sim-verilog: $(SIM_TOP_V)
 
-emu: verilog
+emu: sim-verilog
 	$(MAKE) -C ./difftest emu
 
 clean:

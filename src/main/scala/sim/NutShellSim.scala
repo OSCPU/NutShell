@@ -27,15 +27,13 @@ import bus.axi4._
 import device.AXI4RAM
 import nutcore._
 import utils.GTimer
-
-class LogCtrlIO extends Bundle {
-  val log_begin, log_end = Input(UInt(64.W))
-  val log_level = Input(UInt(64.W)) // a cpp uint
-}
+import difftest._
 
 class SimTop extends Module {
   val io = IO(new Bundle{
     val logCtrl = new LogCtrlIO
+    val perfInfo = new PerfInfoIO
+    val uart = new UARTIO
   })
 
   lazy val config = NutCoreConfig(FPGAPlatform = false)
@@ -67,4 +65,6 @@ class SimTop extends Module {
   val dummyWire = WireInit(false.B)
   BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
 
+  // Ignore uart print in difftest framework
+  io.uart := DontCare
 }
