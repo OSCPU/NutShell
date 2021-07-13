@@ -644,11 +644,6 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
     difftestGpr.io.clock  := clock
     difftestGpr.io.coreid := 0.U // TODO
     difftestGpr.io.gpr    := VecInit((0 to NRReg-1).map(i => rf.read(i.U)))
-
-    val difftestFpr = Module(new DifftestArchFpRegState)
-    difftestFpr.io.clock  := clock
-    difftestFpr.io.coreid := 0.U // TODO
-    difftestFpr.io.fpr    := VecInit((0 to NRReg-1).map(i => 0.U)) // master branch does not support fp for now
   }
 
   if (!p.FPGAPlatform) {
