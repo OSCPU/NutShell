@@ -54,6 +54,9 @@ sim-verilog: $(SIM_TOP_V)
 emu: sim-verilog
 	$(MAKE) -C ./difftest emu
 
+emu-run: sim-verilog
+	$(MAKE) -C ./difftest emu-run
+
 init:
 	git submodule update --init
 
