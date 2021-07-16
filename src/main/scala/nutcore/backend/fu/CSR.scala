@@ -446,22 +446,37 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
+  // Check CSR addr is legal or not
   val addr = src2(11, 0)
+  val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
+
+  // Check whether the instr has enough priviledge to access its target CSR
+  val requiredPriv = LookupTree(addr(9, 8), List(
+    0.U(2.W) -> ModeU,
+    1.U(2.W) -> ModeS,
+    2.U(2.W) -> ModeH,
+    3.U(2.W) -> ModeM
+  ))
+  val permissionDenied = !isIllegalAddr && (priviledgeMode < requiredPriv)
+
+  // Access CSR registers
   val rdata = Wire(UInt(XLEN.W))
+  val rdataReal = Wire(UInt(XLEN.W))  // Real rdata, used when requiredPriv is satisfied
   val csri = ZeroExt(io.cfIn.instr(19,15), XLEN) //unsigned imm for csri. [TODO]
   val wdata = LookupTree(func, List(
     CSROpType.wrt  -> src1,
-    CSROpType.set  -> (rdata | src1),
-    CSROpType.clr  -> (rdata & ~src1),
+    CSROpType.set  -> (rdataReal | src1),
+    CSROpType.clr  -> (rdataReal & ~src1),
     CSROpType.wrti -> csri,//TODO: csri --> src2
-    CSROpType.seti -> (rdata | csri),
-    CSROpType.clri -> (rdata & ~csri)
+    CSROpType.seti -> (rdataReal | csri),
+    CSROpType.clri -> (rdataReal & ~csri)
   ))
 
-  val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException
+  val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException && !permissionDenied
   // Debug(wen, "addr %x wdata %x func %x rdata %x\n", addr, wdata, func, rdata)
-  MaskedRegMap.generate(mapping, addr, rdata, wen, wdata)
-  val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
+  MaskedRegMap.generate(mapping, addr, rdataReal, wen, wdata)
+  rdata := Mux(!permissionDenied, rdataReal, 0.U(XLEN.W))  // Return rubbish if permission denied
+
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
   io.out.bits := rdata
 
@@ -604,7 +619,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
-  csrExceptionVec(illegalInstr) := isIllegalAddr && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written
+  csrExceptionVec(illegalInstr) := (isIllegalAddr && wen || permissionDenied) && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written or not having enough priviledge
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
