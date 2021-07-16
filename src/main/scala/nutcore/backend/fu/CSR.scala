@@ -457,7 +457,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     2.U(2.W) -> ModeH,
     3.U(2.W) -> ModeM
   ))
-  val permissionDenied = !isIllegalAddr && (priviledgeMode < requiredPriv)
+  val permissionDenied = !isIllegalAddr && (priviledgeMode < requiredPriv) && (func =/= CSROpType.jmp)
 
   // Access CSR registers
   val rdata = Wire(UInt(XLEN.W))
