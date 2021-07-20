@@ -88,6 +88,11 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     BoringUtils.addSink(dtlbPF, "DTLBPF")
     BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
 
+    // // DASICS Protection Logics from CSR
+    // val cannotAccessMemory = WireInit(false.B)
+    // BoringUtils.addSink(cannotAccessMemory, "cannot_access_memory")
+    // BoringUtile.addSource()
+
     // LSU control FSM state
     val s_idle :: s_exec :: s_load :: s_lr :: s_sc :: s_amo_l :: s_amo_a :: s_amo_s :: Nil = Enum(8)
 

@@ -56,6 +56,14 @@ trait HasCSRConst {
   val Time          = 0xC01
   val Instret       = 0xC02
   
+  // User Main-Level Registers for DASICS Protection
+  // Note: 0x880~0x8FF is used for user main-level registers
+  val DasicsMainCfg = 0x880
+
+  val DasicsLibCfg0 = 0x881
+  val DasicsLibCfg1 = 0x882
+  val DasicsLibBoundBase = 0x883  // 16 sets of DASICS-Lib registers, upper-lower
+
   // Supervisor Trap Setup
   val Sstatus       = 0x100
   val Sedeleg       = 0x102
@@ -73,6 +81,12 @@ trait HasCSRConst {
 
   // Supervisor Protection and Translation
   val Satp          = 0x180
+
+  // Supervisor DASICS Protection
+  val DasicsGlobalCfg  = 0x5C0
+
+  val DasicsMainBound0 = 0x5C1
+  val DasicsMainBound1 = 0x5C2
 
   // Machine Information Registers 
   val Mvendorid     = 0xF11 
@@ -157,6 +171,10 @@ trait HasExceptionNO {
   def instrPageFault      = 12
   def loadPageFault       = 13
   def storePageFault      = 15
+  // def dasicsLoadOverstep  = 16
+  // def dasicsStoreOverstep = 17
+  // def dasicsJumpOverstep  = 18
+  // def dasicsMisAccessCSR  = 19  // TODO: Used for assertion, will be merged into illegalInstr
 
   val ExcPriority = Seq(
       breakPoint, // TODO: different BP has different priority
@@ -169,8 +187,12 @@ trait HasExceptionNO {
       loadAddrMisaligned,
       storePageFault,
       loadPageFault,
-      storeAccessFault,
-      loadAccessFault
+      storeAccessFault //,
+      // loadAccessFault,
+      // dasicsLoadOverstep,
+      // dasicsStoreOverstep,
+      // dasicsJumpOverstep,
+      // dasicsMisAccessCSR
   )
 }
 
@@ -339,12 +361,43 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
 
+  val dasicsGlobalCfg  = RegInit(UInt(XLEN.W), 0.U)  // Only the last bit will be used currently
+  val dasicsMainBound0 = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsMainBound1 = RegInit(UInt(XLEN.W), 0.U)
+
+  val dasicsSupervisorMapping = Map(
+    // Supervisor-Level Registers for DASICS Protection
+    MaskedRegMap(DasicsGlobalCfg, dasicsGlobalCfg),
+
+    MaskedRegMap(DasicsMainBound0, dasicsMainBound0),
+    MaskedRegMap(DasicsMainBound1, dasicsMainBound1)
+  )
+
   if (Settings.get("HasDTLB")) {
     BoringUtils.addSource(satp, "CSRSATP")
   }
 
   // User-Level CSRs
   val uepc = RegInit(UInt(XLEN.W), 0.U)
+
+  // User-Main-Level DASICS CSRs
+  val dasicsLibBoundHiList = List.fill(dasicsLibGroups)(RegInit(UInt(XLEN.W), 0.U))
+  val dasicsLibBoundLoList = List.fill(dasicsLibGroups)(RegInit(UInt(XLEN.W), 0.U))
+
+  val dasicsMainCfg = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsLibCfg0 = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsLibCfg1 = RegInit(UInt(XLEN.W), 0.U)
+  val dasicsLibCfgMapping = Map(
+    MaskedRegMap(DasicsMainCfg, dasicsMainCfg),
+    MaskedRegMap(DasicsLibCfg0, dasicsLibCfg0),
+    MaskedRegMap(DasicsLibCfg1, dasicsLibCfg1)
+  )
+
+  val dasicsLibBoundHiMapping = (0 until dasicsLibGroups).map { case i => MaskedRegMap(DasicsLibBoundBase + i * 2      , dasicsLibBoundHiList(i)) }
+  val dasicsLibBoundLoMapping = (0 until dasicsLibGroups).map { case i => MaskedRegMap(DasicsLibBoundBase + i * 2 + 0x1, dasicsLibBoundLoList(i)) }
+
+  val dasicsMainMapping = dasicsLibBoundHiMapping ++ dasicsLibBoundLoMapping ++ dasicsLibCfgMapping
+  val dasicsMapping = dasicsSupervisorMapping ++ dasicsMainMapping
 
   // Atom LR/SC Control Bits
   val setLr = WireInit(Bool(), false.B)
@@ -450,7 +503,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(PmpaddrBase + 2, pmpaddr2),
     MaskedRegMap(PmpaddrBase + 3, pmpaddr3)
 
-  ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
+  ) ++ perfCntsLoMapping ++ dasicsMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
   val addr = src2(11, 0)
   val rdata = Wire(UInt(XLEN.W))
@@ -467,9 +520,18 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // SATP wen check
   val satpLegalMode = (wdata.asTypeOf(new SatpStruct).mode === 0.U) || (wdata.asTypeOf(new SatpStruct).mode === 8.U)
 
+  // DASICS-UserMain-CSR wen check
+  // Note: 1. dasicsGlobalCfg(1) is used to enable the whole DASICS mechanism
+  //       2. Once DASICS is enabled, those csrs in address space of 0x880-0x8FF or 0xCE0-0xCFF will become user-main specified,
+  //          otherwise they retain the access priviledge of ModeU.
+  val isUMainEnable = dasicsGlobalCfg(1) && (dasicsMainBound0 >= dasicsMainBound1) && dasicsMainBound0 =/= 0.U
+  val isInUMainMode = (priviledgeMode === ModeU) && (io.cfIn.pc >= dasicsMainBound1 && io.cfIn.pc <= dasicsMainBound0)
+  val accessUMainCSRs = isUMainEnable && (addr(11, 7) === "b10001".U || addr(11, 5) === "b1100111".U)  // 0x880-0x8FF, or 0xCE0-0xCFF
+  val isIllegalUMainMode = accessUMainCSRs && !(isInUMainMode || priviledgeMode > ModeU)
+
   // General CSR wen check
   val wen = (valid && func =/= CSROpType.jmp) && (addr =/= Satp.U || satpLegalMode) && !io.isBackendException
-  val isIllegalMode  = priviledgeMode < addr(9, 8)
+  val isIllegalMode  = (priviledgeMode < addr(9, 8) && !accessUMainCSRs) || isIllegalUMainMode
   val justRead = (func === CSROpType.set || func === CSROpType.seti) && src1 === 0.U  // csrrs and csrrsi are exceptions when their src1 is zero
   val isIllegalWrite = wen && (addr(11, 10) === "b11".U) && !justRead  // Write a read-only CSR register
   val isIllegalAccess = isIllegalMode || isIllegalWrite
@@ -484,8 +546,35 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Mip, mipReg.asUInt, mipFixMask),
     MaskedRegMap(Sip, mipReg.asUInt, sipMask, MaskedRegMap.NoSideEffect, sipMask)
   )
-  val rdataDummy = Wire(UInt(XLEN.W))
-  MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen && !isIllegalAccess, wdata)
+  val rdataFix = Wire(UInt(XLEN.W))
+  val wdataFix = LookupTree(func, List(
+    CSROpType.wrt  -> src1,
+    CSROpType.set  -> (rdataFix | src1),
+    CSROpType.clr  -> (rdataFix & ~src1),
+    CSROpType.wrti -> csri,//TODO: csri --> src2
+    CSROpType.seti -> (rdataFix | csri),
+    CSROpType.clri -> (rdataFix & ~csri)
+  ))
+  MaskedRegMap.generate(fixMapping, addr, rdataFix, wen && !isIllegalAccess, wdataFix)
+
+  // DASICS -- Act when the last bit of dasicsGlobalCfg or dasicsMainCfg is set
+  when (dasicsGlobalCfg(0) || dasicsMainCfg(0))  // Reset all dasics lib registers
+  {
+    when (dasicsGlobalCfg(0))
+    {
+      dasicsMainBound0 := 0.U
+      dasicsMainBound1 := 0.U
+
+      dasicsGlobalCfg := Cat(dasicsGlobalCfg(XLEN-1, 1), 0.U(1.W))  // Reset itself
+    }
+
+    dasicsLibBoundHiList.foreach(reg => reg := 0.U)
+    dasicsLibBoundLoList.foreach(reg => reg := 0.U)
+    dasicsLibCfg0 := 0.U
+    dasicsLibCfg1 := 0.U
+
+    dasicsMainCfg := Cat(dasicsMainCfg(XLEN-1, 1), 0.U(1.W))  // Reset itself
+  }
 
   // CSR inst decode
   val ret = Wire(Bool())
@@ -599,7 +688,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
                                    ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
 
-  val intrVecEnable = Wire(Vec(12, Bool()))
+  val intrVecEnable = Wire(Vec(InterruptTypes, Bool()))
   intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
   val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
   BoringUtils.addSource(intrVec, "intrVecIDU")
@@ -612,7 +701,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // exceptions
 
   // TODO: merge iduExceptionVec, csrExceptionVec as raiseExceptionVec
-  val csrExceptionVec = Wire(Vec(16, Bool()))
+  val csrExceptionVec = Wire(Vec(ExceptionTypes, Bool()))
   csrExceptionVec.map(_ := false.B)
   csrExceptionVec(breakPoint) := io.in.valid && isEbreak
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall

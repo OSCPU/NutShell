@@ -103,7 +103,7 @@ class LSUIO extends FunctionUnitIO {
   val uopIn = Input(new RenamedDecodeIO)
   val uopOut = Output(new RenamedDecodeIO)
   val isMMIO = Output(Bool())
-  val exceptionVec = Output(Vec(16, Bool()))
+  val exceptionVec = Output(Vec(ExceptionTypes, Bool()))
   val scommit = Input(Bool())
   val commitStoreToCDB = Output(Bool())
   val haveUnfinishedStore = Output(Bool())
