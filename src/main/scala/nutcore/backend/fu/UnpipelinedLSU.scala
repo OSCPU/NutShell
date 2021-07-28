@@ -151,8 +151,8 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
           lsExecUnit.io.in.bits.src2 := DontCare
           lsExecUnit.io.in.bits.func := func
           lsExecUnit.io.wdata        := io.wdata
-          io.in.ready                := lsExecUnit.io.out.fire() || scInvalid
-          io.out.valid               := lsExecUnit.io.out.valid  || scInvalid
+          io.in.ready                := lsExecUnit.io.out.fire() || scInvalid || cannotAccessMemory
+          io.out.valid               := lsExecUnit.io.out.valid  || scInvalid || cannotAccessMemory
           state := s_idle
         }
 
