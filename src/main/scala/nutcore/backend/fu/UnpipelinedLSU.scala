@@ -88,11 +88,6 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     BoringUtils.addSink(dtlbPF, "DTLBPF")
     BoringUtils.addSink(dtlbEnable, "DTLBENABLE")
 
-    // // DASICS Protection Logics from CSR
-    // val cannotAccessMemory = WireInit(false.B)
-    // BoringUtils.addSink(cannotAccessMemory, "cannot_access_memory")
-    // BoringUtile.addSource()
-
     // LSU control FSM state
     val s_idle :: s_exec :: s_load :: s_lr :: s_sc :: s_amo_l :: s_amo_a :: s_amo_s :: Nil = Enum(8)
 
@@ -106,8 +101,15 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     atomALU.io.func := func
     atomALU.io.isWordOp := atomWidthW
 
-    val addr = DontCare
-    
+    val addr = if(IndependentAddrCalcState){RegNext(src1 + src2, state === s_idle)}else{DontCare}
+
+    // DASICS Protection Logics from CSR
+    val cannotAccessMemory = WireInit(false.B)
+    BoringUtils.addSink(cannotAccessMemory, "cannot_access_memory")
+    BoringUtils.addSource(valid && !scInvalid, "lsu_is_valid")
+    BoringUtils.addSource(loadReq || lrReq, "lsu_is_load")
+    BoringUtils.addSource(Mux(loadReq || storeReq, src1 + src2, src1), "lsu_addr")
+
     // StoreQueue
     // TODO: inst fence needs storeQueue to be finished
     // val enableStoreQueue = EnableStoreQueue // StoreQueue is disabled for page fault detection
@@ -138,9 +140,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := DontCare
         lsExecUnit.io.wdata        := DontCare
-        io.in.ready                := false.B || scInvalid
-        io.out.valid               := false.B || scInvalid
-        when(valid){state := s_exec}
+        io.in.ready                := false.B || scInvalid || cannotAccessMemory
+        io.out.valid               := false.B || scInvalid || cannotAccessMemory
+        when(valid && !cannotAccessMemory){state := s_exec}
 
         if(!IndependentAddrCalcState){
           lsExecUnit.io.in.valid     := io.in.valid && !atomReq
@@ -154,9 +156,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
           state := s_idle
         }
 
-        when(amoReq){state := s_amo_l}
-        when(lrReq){state := s_lr}
-        when(scReq){state := Mux(scInvalid, s_idle, s_sc)}
+        when(amoReq && !cannotAccessMemory){state := s_amo_l}
+        when(lrReq && !cannotAccessMemory){state := s_lr}
+        when(scReq && !cannotAccessMemory){state := Mux(scInvalid, s_idle, s_sc)}
         
       } 
 
@@ -429,7 +431,7 @@ class LSExecUnit extends NutCoreModule {
 
   val isAMO = WireInit(false.B)
   BoringUtils.addSink(isAMO, "ISAMO2")
-  BoringUtils.addSource(addr, "LSUADDR")
+  BoringUtils.addSource(addr, "LSUEXECADDR")
 
   io.loadAddrMisaligned :=  valid && !isStore && !isAMO && !addrAligned
   io.storeAddrMisaligned := valid && (isStore || isAMO) && !addrAligned

@@ -43,7 +43,7 @@ trait HasNutCoreParameter {
   val DataBytes = DataBits / 8
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = true
-  val ExceptionTypes = 16 //20
+  val ExceptionTypes = 19
   val InterruptTypes = 12
   // Parameter for Argo's OoO backend
   val EnableMultiIssue = Settings.get("EnableMultiIssue")
@@ -65,6 +65,10 @@ trait HasNutCoreLog { this: RawModule =>
 
 trait HasDasicsConst {
   val dasicsLibGroups = 16
+
+  def LIBCFG_V = 0x3
+  def LIBCFG_R = 0x1
+  def LIBCFG_W = 0x0
 }
 
 abstract class NutCoreModule extends Module with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog with HasDasicsConst

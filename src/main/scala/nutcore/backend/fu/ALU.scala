@@ -130,6 +130,10 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   // this is actually for jal and jalr to write pc + 4/2 to rd
   io.out.bits := Mux(isBru, Mux(!isRVC, SignExt(io.cfIn.pc, AddrBits) + 4.U, SignExt(io.cfIn.pc, AddrBits) + 2.U), aluRes)
 
+  // Send redirect information to CSR module to judge whether to trigger DasicsInstrAccessFault or not
+  BoringUtils.addSource(io.redirect.valid, "redirect_valid")
+  BoringUtils.addSource(io.redirect.target, "redirect_target")
+
   Debug(valid && isBru, "tgt %x, valid:%d, npc: %x, pdwrong: %x\n", io.redirect.target, io.redirect.valid, io.cfIn.pnpc, predictWrong)
   Debug(valid && isBru, "taken:%d addrRes:%x src1:%x src2:%x func:%x\n", taken, adderRes, src1, src2, func)
   Debug(valid && isBru, "[BPW] pc %x tgt %x, npc: %x, pdwrong: %x type: %x%x%x%x\n", io.cfIn.pc, io.redirect.target, io.cfIn.pnpc, predictWrong, isBranch, (func === ALUOpType.jal || func === ALUOpType.call), func === ALUOpType.jalr, func === ALUOpType.ret)
