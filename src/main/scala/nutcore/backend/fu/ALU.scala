@@ -56,6 +56,9 @@ object ALUOpType {
   def call = "b1011100".U
   def ret  = "b1011110".U
 
+  // for dasics protection
+  def pulpret = "b1111110".U  // Use func5 to make difference
+
   def isAdd(func: UInt) = func(6)
   def pcPlus2(func: UInt) = func(5)
   def isBru(func: UInt) = func(4)
@@ -133,6 +136,7 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   // Send redirect information to CSR module to judge whether to trigger DasicsInstrAccessFault or not
   BoringUtils.addSource(io.redirect.valid, "redirect_valid")
   BoringUtils.addSource(io.redirect.target, "redirect_target")
+  BoringUtils.addSource(valid && func === ALUOpType.pulpret, "is_pulpret")
 
   Debug(valid && isBru, "tgt %x, valid:%d, npc: %x, pdwrong: %x\n", io.redirect.target, io.redirect.valid, io.cfIn.pnpc, predictWrong)
   Debug(valid && isBru, "taken:%d addrRes:%x src1:%x src2:%x func:%x\n", taken, adderRes, src1, src2, func)

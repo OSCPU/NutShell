@@ -77,7 +77,8 @@ object Instructions extends HasInstrType with HasNutCoreParameter {
     (if (HasCExtension) RVCInstr.table else Nil) ++
     Priviledged.table ++
     RVAInstr.table ++
-    RVZicsrInstr.table ++ RVZifenceiInstr.table
+    RVZicsrInstr.table ++ RVZifenceiInstr.table ++
+    DasicsInstr.table
 }
 
 object CInstructions extends HasInstrType with HasNutCoreParameter{

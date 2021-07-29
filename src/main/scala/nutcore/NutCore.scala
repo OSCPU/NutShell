@@ -67,6 +67,7 @@ trait HasDasicsConst {
   val dasicsLibGroups = 16
 
   def LIBCFG_V = 0x3
+  def LIBCFG_X = 0x2
   def LIBCFG_R = 0x1
   def LIBCFG_W = 0x0
 }
