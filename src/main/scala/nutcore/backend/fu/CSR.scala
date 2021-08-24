@@ -51,13 +51,12 @@ trait HasCSRConst {
   val Frm           = 0x002
   val Fcsr          = 0x003
 
-  // User Counter/Timers
+  // User Counter/Timers (not implemented)
   val Cycle         = 0xC00
   val Time          = 0xC01
   val Instret       = 0xC02
   
   // User Main-Level Registers for DASICS Protection
-  // Note: 0x880~0x8FF is used for user main-level registers
   val DasicsMainCfg = 0x880
 
   val DasicsLibCfg0 = 0x881
@@ -66,8 +65,8 @@ trait HasCSRConst {
 
   val DasicsMaincallEntry = 0x8A3
 
-  val DasicsReturnPC = 0xCE0  // Read-Only, store the PC when jump/branch from trusted zone to untrusted
-  val DasicsFreeZoneReturnPC = 0xCE1
+  val DasicsReturnPC = 0x8A4
+  val DasicsFreeZoneReturnPC = 0x8A5
 
   // Supervisor Trap Setup
   val Sstatus       = 0x100
@@ -178,9 +177,14 @@ trait HasExceptionNO {
   def storePageFault      = 15
 
   // Customized exceptions added by DASICS mechanism
-  def dasicsInstrAccessFault = 16
-  def dasicsLoadAccessFault  = 17
-  def dasicsStoreAccessFault = 18
+  def dasicsUInstrAccessFault = 16
+  def dasicsSInstrAccessFault = 17
+
+  def dasicsULoadAccessFault  = 18
+  def dasicsSLoadAccessFault  = 19
+
+  def dasicsUStoreAccessFault = 20
+  def dasicsSStoreAccessFault = 21
 
   val ExcPriority = Seq(
       breakPoint, // TODO: different BP has different priority
@@ -195,9 +199,10 @@ trait HasExceptionNO {
       loadPageFault,
       storeAccessFault,
       loadAccessFault,
-      dasicsInstrAccessFault,
-      dasicsLoadAccessFault,
-      dasicsStoreAccessFault
+
+      // Customized DASICS exceptions
+      dasicsSInstrAccessFault, dasicsSLoadAccessFault, dasicsSStoreAccessFault,
+      dasicsUInstrAccessFault, dasicsULoadAccessFault, dasicsUStoreAccessFault
   )
 }
 
@@ -257,7 +262,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val mpp = Output(UInt(2.W))
     val hpp = Output(UInt(2.W))
     val spp = Output(UInt(1.W))
-    val pie = new Priv
+    val pie = new Priv  // FIXME: UBE -> hpie ???
     val ie = new Priv
   }
 
@@ -292,6 +297,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   var extList = List('a', 's', 'i', 'u')
   if(HasMExtension){ extList = extList :+ 'm'}
   if(HasCExtension){ extList = extList :+ 'c'}
+  if(HasNExtension){ extList = extList :+ 'n'}
   val misaInitVal = getMisaMxl(2) | extList.foldLeft(0.U)((sum, i) => sum | getMisaExt(i)) //"h8000000000141105".U 
   val misa = RegInit(UInt(XLEN.W), misaInitVal) 
   // MXL = 2          | 0 | EXT = b 00 0000 0100 0001 0001 0000 0101
@@ -301,7 +307,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val marchid = RegInit(UInt(XLEN.W), 0.U) // return 0 to indicate the field is not implemented
   val mimpid = RegInit(UInt(XLEN.W), 0.U) // provides a unique encoding of the version of the processor implementation
   val mhartid = RegInit(UInt(XLEN.W), 0.U) // the hardware thread running the code
-  val mstatus = RegInit(UInt(XLEN.W), "h00001800".U)
+  val mstatus = RegInit(UInt(XLEN.W), "h00001800".U)  // FIXME: sxl and uxl is not set ???
   // val mstatus = RegInit(UInt(XLEN.W), "h8000c0100".U)
   // mstatus Value Table
   // | sd   |
@@ -366,6 +372,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
 
+  val sedeleg = RegInit(UInt(XLEN.W), 0.U)
+  val sideleg = RegInit(UInt(XLEN.W), 0.U)
+
   val dasicsGlobalCfg  = RegInit(UInt(XLEN.W), 0.U)  // Only the last bit will be used currently
   val dasicsMainBound0 = RegInit(UInt(XLEN.W), 0.U)
   val dasicsMainBound1 = RegInit(UInt(XLEN.W), 0.U)
@@ -383,7 +392,15 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }
 
   // User-Level CSRs
+  val ustatusWmask = "h11".U  // UPIE and UIE
+  val ustatusRmask = ustatusWmask
+  val uieMask = "h111".U & sideleg
+  val uipMask = "h111".U & sideleg
   val uepc = RegInit(UInt(XLEN.W), 0.U)
+  val ucause = RegInit(UInt(XLEN.W), 0.U)
+  val uscratch = RegInit(UInt(XLEN.W), 0.U)
+  val utvec = RegInit(UInt(XLEN.W), 0.U)
+  val utval = RegInit(UInt(XLEN.W), 0.U)
 
   // User-Main-Level DASICS CSRs
   val dasicsLibBoundHiList = List.fill(dasicsLibGroups)(RegInit(UInt(XLEN.W), 0.U))
@@ -439,35 +456,37 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val perfCntsHiMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb80 + i, perfCnts(i)(63, 32)) }
 
   // CSR reg map
-  val mapping = Map(
+  val userMapping = if (!HasNExtension) Nil else Map(
 
     // User Trap Setup
-    // MaskedRegMap(Ustatus, ustatus), 
-    // MaskedRegMap(Uie, uie, 0.U, MaskedRegMap.Unwritable),
-    // MaskedRegMap(Utvec, utvec),
-    
+    MaskedRegMap(Ustatus, mstatus, ustatusWmask, mstatusUpdateSideEffect, ustatusRmask),
+    MaskedRegMap(Uie, mie, uieMask, MaskedRegMap.Unwritable, uieMask),
+    MaskedRegMap(Utvec, utvec),
+
     // User Trap Handling
-    // MaskedRegMap(Uscratch, uscratch),
-    // MaskedRegMap(Uepc, uepc),
-    // MaskedRegMap(Ucause, ucause),
-    // MaskedRegMap(Utval, utval),
-    // MaskedRegMap(Uip, uip),
+    MaskedRegMap(Uscratch, uscratch),
+    MaskedRegMap(Uepc, uepc),
+    MaskedRegMap(Ucause, ucause),
+    MaskedRegMap(Utval, utval),
+    MaskedRegMap(Uip, mip.asUInt, uipMask, MaskedRegMap.Unwritable, uipMask)
 
     // User Floating-Point CSRs (not implemented)
     // MaskedRegMap(Fflags, fflags),
     // MaskedRegMap(Frm, frm),
     // MaskedRegMap(Fcsr, fcsr),
 
-    // User Counter/Timers
+    // User Counter/Timers (not implemented)
     // MaskedRegMap(Cycle, cycle),
     // MaskedRegMap(Time, time),
-    // MaskedRegMap(Instret, instret),
-    
+    // MaskedRegMap(Instret, instret)
+  )
+
+  val mapping = Map(
     // Supervisor Trap Setup
     MaskedRegMap(Sstatus, mstatus, sstatusWmask, mstatusUpdateSideEffect, sstatusRmask),
 
-    // MaskedRegMap(Sedeleg, Sedeleg),
-    // MaskedRegMap(Sideleg, Sideleg),
+    MaskedRegMap(Sedeleg, sedeleg),
+    MaskedRegMap(Sideleg, sideleg),
     MaskedRegMap(Sie, mie, sieMask, MaskedRegMap.NoSideEffect, sieMask),
     MaskedRegMap(Stvec, stvec),
     MaskedRegMap(Scounteren, scounteren),
@@ -492,7 +511,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
     MaskedRegMap(Mstatus, mstatus, "hffffffffffffffff".U, mstatusUpdateSideEffect),
     MaskedRegMap(Misa, misa), // now MXL, EXT is not changeable
-    MaskedRegMap(Medeleg, medeleg, "h7bbff".U),
+    MaskedRegMap(Medeleg, medeleg, "h3fbbff".U),
     MaskedRegMap(Mideleg, mideleg, "h222".U),
     MaskedRegMap(Mie, mie),
     MaskedRegMap(Mtvec, mtvec),
@@ -515,7 +534,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(PmpaddrBase + 2, pmpaddr2),
     MaskedRegMap(PmpaddrBase + 3, pmpaddr3)
 
-  ) ++ perfCntsLoMapping ++ dasicsMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
+  ) ++ userMapping ++ perfCntsLoMapping ++ dasicsMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
   val addr = src2(11, 0)
   val rdata = Wire(UInt(XLEN.W))
@@ -533,12 +552,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val satpLegalMode = (wdata.asTypeOf(new SatpStruct).mode === 0.U) || (wdata.asTypeOf(new SatpStruct).mode === 8.U)
 
   // DASICS-UserMain-CSR wen check
-  // Note: 1. dasicsGlobalCfg(1) is used to enable the whole DASICS mechanism
-  //       2. Once DASICS is enabled, those csrs in address space of 0x880-0x8FF or 0xCE0-0xCFF will become user-main specified,
-  //          otherwise they retain the access priviledge of ModeU.
+  // Note: dasicsGlobalCfg(1) is used to enable the whole DASICS mechanism
   val isUMainEnable = dasicsGlobalCfg(1) && (dasicsMainBound0 >= dasicsMainBound1) && dasicsMainBound0 =/= 0.U
   val isInUMainMode = (priviledgeMode === ModeU) && (io.cfIn.pc >= dasicsMainBound1 && io.cfIn.pc <= dasicsMainBound0)
-  val accessUMainCSRs = isUMainEnable && (addr(11, 7) === "b10001".U || addr(11, 5) === "b1100111".U)  // 0x880-0x8FF, or 0xCE0-0xCFF
+  val accessUMainCSRs = isUMainEnable && addr(9, 8) === ModeU
   val isIllegalUMainMode = accessUMainCSRs && !(isInUMainMode || priviledgeMode > ModeU)
 
   // General CSR wen check
@@ -587,6 +604,105 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
     dasicsMainCfg := Cat(dasicsMainCfg(XLEN-1, 1), 0.U(1.W))  // Reset itself
   }
+
+  // DASICS -- Check LSU DASICS exception
+  val lsuIsValid = WireInit(false.B)
+  val lsuIsLoad = WireInit(false.B)
+  val lsuAddr = WireInit(0.U(XLEN.W))  // Memory address where the inst at LSU will access in idle-state
+
+  BoringUtils.addSink(lsuIsValid, "lsu_is_valid")
+  BoringUtils.addSink(lsuIsLoad, "lsu_is_load")
+  BoringUtils.addSink(lsuAddr, "lsu_addr")
+
+  val dasicsLibSeq = if (Settings.get("IsRV32"))
+                          ((for (i <- 0 until 32 if i % 4 == 0)
+                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 2), dasicsLibBoundLoList(i >> 2))) ++
+                           (for (i <- 0 until 32 if i % 4 == 0)
+                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 2) + 8), dasicsLibBoundLoList((i >> 2) + 8))))
+                     else ((for (i <- 0 until 64 if i % 8 == 0)
+                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 3), dasicsLibBoundLoList(i >> 3))) ++
+                           (for (i <- 0 until 64 if i % 8 == 0)
+                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 3) + 8), dasicsLibBoundLoList((i >> 3) + 8))))
+
+  val lsuInULibMode = isUMainEnable && (priviledgeMode === ModeU) && !isInUMainMode
+  val lsuPermitLibLoad  = dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_R) && lsuAddr <= x._2 && lsuAddr >= x._3).foldRight(false.B)(_ || _)  // If there exists one pair, that's ok
+  val lsuPermitLibStore = dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_W) && lsuAddr <= x._2 && lsuAddr >= x._3).foldRight(false.B)(_ || _)
+  val lsuLibLoadFault  = lsuIsValid &&  lsuIsLoad && lsuInULibMode && !lsuPermitLibLoad
+  val lsuLibStoreFault = lsuIsValid && !lsuIsLoad && lsuInULibMode && !lsuPermitLibStore
+
+  BoringUtils.addSource(lsuLibLoadFault || lsuLibStoreFault, "cannot_access_memory")
+
+//  when (io.cfIn.pc === 0x80200244L.U)
+//  {
+//    printf("[DEBUG] lsuIsValid = %b, lsuAddr = 0x%x, lsuLibStoreFault = %b\n", lsuIsValid, lsuAddr, lsuLibStoreFault)
+//  }
+
+  // when (lsuLibLoadFault || lsuLibStoreFault)
+  // {
+  //   printf("[DEBUG] lsuAddr: 0x%x\n", lsuAddr)
+  // }
+
+//   when (dasicsGlobalCfg(1) && io.cfIn.pc === 0x8020029eL.U)
+//   {
+//     printf("[DEBUG] lsuIsValid = %b, lsuIsLoad = %b, lsuAddr = 0x%x\n", lsuIsValid, lsuIsLoad, lsuAddr)
+//     printf("[DEBUG] libSeq0: (%x, 0x%x, 0x%x), libSeq1: (%x, 0x%x, 0x%x), libSeq2: (%x, 0x%x, 0x%x), libSeq3: (%x, 0x%x, 0x%x)\n",
+//           dasicsLibSeq(0)._1, dasicsLibSeq(0)._2, dasicsLibSeq(0)._3,
+//           dasicsLibSeq(1)._1, dasicsLibSeq(1)._2, dasicsLibSeq(1)._3,
+//           dasicsLibSeq(2)._1, dasicsLibSeq(2)._2, dasicsLibSeq(2)._3,
+//           dasicsLibSeq(3)._1, dasicsLibSeq(3)._2, dasicsLibSeq(3)._3)
+//     printf("[DEBUG] libSeq4: (%x, 0x%x, 0x%x), libSeq5: (%x, 0x%x, 0x%x), libSeq6: (%x, 0x%x, 0x%x), libSeq7: (%x, 0x%x, 0x%x)\n",
+//           dasicsLibSeq(4)._1, dasicsLibSeq(4)._2, dasicsLibSeq(4)._3,
+//           dasicsLibSeq(5)._1, dasicsLibSeq(5)._2, dasicsLibSeq(5)._3,
+//           dasicsLibSeq(6)._1, dasicsLibSeq(6)._2, dasicsLibSeq(6)._3,
+//           dasicsLibSeq(7)._1, dasicsLibSeq(7)._2, dasicsLibSeq(7)._3)
+//     printf("[DEBUG] libSeq8: (%x, 0x%x, 0x%x), libSeq9: (%x, 0x%x, 0x%x), libSeq10: (%x, 0x%x, 0x%x), libSeq11: (%x, 0x%x, 0x%x)\n",
+//           dasicsLibSeq(8)._1, dasicsLibSeq(8)._2, dasicsLibSeq(8)._3,
+//           dasicsLibSeq(9)._1, dasicsLibSeq(9)._2, dasicsLibSeq(9)._3,
+//           dasicsLibSeq(10)._1, dasicsLibSeq(10)._2, dasicsLibSeq(10)._3,
+//           dasicsLibSeq(11)._1, dasicsLibSeq(11)._2, dasicsLibSeq(11)._3)
+//     printf("[DEBUG] libSeq12: (%x, 0x%x, 0x%x), libSeq13: (%x, 0x%x, 0x%x), libSeq14: (%x, 0x%x, 0x%x), libSeq15: (%x, 0x%x, 0x%x)\n",
+//           dasicsLibSeq(12)._1, dasicsLibSeq(12)._2, dasicsLibSeq(12)._3,
+//           dasicsLibSeq(13)._1, dasicsLibSeq(13)._2, dasicsLibSeq(13)._3,
+//           dasicsLibSeq(14)._1, dasicsLibSeq(14)._2, dasicsLibSeq(14)._3,
+//           dasicsLibSeq(15)._1, dasicsLibSeq(15)._2, dasicsLibSeq(15)._3)
+//   }
+
+  // DASICS -- Check ALU DASICS exception
+  val aluRedirectValid = WireInit(false.B)
+  val aluRedirectTarget = WireInit(0.U(XLEN.W))
+  val aluIsPulpret = WireInit(false.B)
+
+  BoringUtils.addSink(aluRedirectValid, "redirect_valid")
+  BoringUtils.addSink(aluRedirectTarget, "redirect_target")
+  BoringUtils.addSink(aluIsPulpret, "is_pulpret")
+
+  val isInTrustedZone = priviledgeMode > ModeU || isInUMainMode
+  val targetIsInTrustedZone = (priviledgeMode > ModeU) || (priviledgeMode === ModeU && aluRedirectTarget >= dasicsMainBound1 && aluRedirectTarget <= dasicsMainBound0)
+
+  val isInLibFreeZone = !isInTrustedZone && dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_X) && io.cfIn.pc <= x._2 && io.cfIn.pc >= x._3).foldRight(false.B)(_ || _)
+  val targetIsInLibFreeZone = !targetIsInTrustedZone && dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_X) && aluRedirectTarget <= x._2 && aluRedirectTarget >= x._3).foldRight(false.B)(_ || _)
+
+  when (aluRedirectValid && isInTrustedZone && !targetIsInTrustedZone && !aluIsPulpret)  // Jump/branch from trusted to untrusted
+  {
+    dasicsReturnPC := io.cfIn.pc + 4.U
+  }
+
+  when (aluRedirectValid && !isInTrustedZone && !isInLibFreeZone && targetIsInLibFreeZone)  // Jump/branch from untrusted-nonfree to untrusted-free
+  {
+    dasicsFreeZoneReturnPC := io.cfIn.pc + 4.U
+  }
+
+  val aluPermitRedirect = isInTrustedZone       || (!isInTrustedZone &&  targetIsInTrustedZone && (aluRedirectTarget === dasicsReturnPC || aluRedirectTarget === dasicsMaincallEntry)) || 
+                          targetIsInLibFreeZone || ( isInLibFreeZone && !targetIsInTrustedZone && !targetIsInLibFreeZone && aluRedirectTarget === dasicsFreeZoneReturnPC)
+  val aluLibInstrFault = dasicsGlobalCfg(1) && aluRedirectValid && !aluPermitRedirect
+
+//  when (aluLibInstrFault)
+//  {
+//    printf("[DEBUG] isInTrustedZone = %b, targetIsInTrustedZone = %b, isInLibFreeZone = %b, targetIsInLibFreeZone = %b\n",
+//      isInTrustedZone, targetIsInTrustedZone, isInLibFreeZone, targetIsInLibFreeZone)
+//    printf("[DEBUG] aluRedirectTarget = 0x%x, dasicsReturnPC = 0x%x, dasicsFreeZoneReturnPC = 0x%x\n",
+//      aluRedirectTarget, dasicsReturnPC, dasicsFreeZoneReturnPC)
+//  }
 
   // CSR inst decode
   val ret = Wire(Bool())
@@ -676,6 +792,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     Debug("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
   }
 
+  when(aluLibInstrFault || lsuLibLoadFault || lsuLibStoreFault)
+  {
+    utval := Mux(aluLibInstrFault, SignExt(aluRedirectTarget, XLEN), SignExt(lsuAddr, XLEN))
+  }
+
   // Exception and Intr
 
   // interrupts
@@ -712,86 +833,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   // exceptions
 
-  // Check LSU DASICS exception
-  val lsuIsValid = WireInit(false.B)
-  val lsuIsLoad = WireInit(false.B)
-  val lsuAddr = WireInit(0.U(XLEN.W))  // Memory address where the inst at LSU will access in idle-state
-
-  BoringUtils.addSink(lsuIsValid, "lsu_is_valid")
-  BoringUtils.addSink(lsuIsLoad, "lsu_is_load")
-  BoringUtils.addSink(lsuAddr, "lsu_addr")
-
-  val dasicsLibSeq = if (Settings.get("IsRV32"))
-                          ((for (i <- 0 until 32 if i % 4 == 0)
-                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 2), dasicsLibBoundLoList(i >> 2))) ++
-                           (for (i <- 0 until 32 if i % 4 == 0)
-                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 2) + 8), dasicsLibBoundLoList((i >> 2) + 8))))
-                     else ((for (i <- 0 until 64 if i % 8 == 0)
-                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 3), dasicsLibBoundLoList(i >> 3))) ++
-                           (for (i <- 0 until 64 if i % 8 == 0)
-                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 3) + 8), dasicsLibBoundLoList((i >> 3) + 8))))
-
-  val lsuInULibMode = isUMainEnable && (priviledgeMode === ModeU) && !isInUMainMode
-  val lsuPermitLibLoad  = dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_R) && lsuAddr <= x._2 && lsuAddr >= x._3).foldRight(false.B)(_ || _)  // If there exists one pair, that's ok
-  val lsuPermitLibStore = dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_W) && lsuAddr <= x._2 && lsuAddr >= x._3).foldRight(false.B)(_ || _)
-  val lsuLibLoadFault  = lsuIsValid &&  lsuIsLoad && lsuInULibMode && !lsuPermitLibLoad
-  val lsuLibStoreFault = lsuIsValid && !lsuIsLoad && lsuInULibMode && !lsuPermitLibStore
-
-  BoringUtils.addSource(lsuLibLoadFault || lsuLibStoreFault, "cannot_access_memory")
-
-  // when (lsuLibLoadFault || lsuLibStoreFault)
-  // {
-  //   printf("[DEBUG] lsuAddr: 0x%x\n", lsuAddr)
-  // }
-
-  // when (io.cfIn.pc === 0x8020284cL.U)
-  // {
-  //   printf("[DEBUG] libSeq0: (%x, 0x%x, 0x%x), libSeq1: (%x, 0x%x, 0x%x), libSeq2: (%x, 0x%x, 0x%x), libSeq3: (%x, 0x%x, 0x%x)\n",
-  //         dasicsLibSeq(0)._1, dasicsLibSeq(0)._2, dasicsLibSeq(0)._3, 
-  //         dasicsLibSeq(1)._1, dasicsLibSeq(1)._2, dasicsLibSeq(1)._3, 
-  //         dasicsLibSeq(2)._1, dasicsLibSeq(2)._2, dasicsLibSeq(2)._3, 
-  //         dasicsLibSeq(3)._1, dasicsLibSeq(3)._2, dasicsLibSeq(3)._3)
-  //   printf("[DEBUG] libSeq4: (%x, 0x%x, 0x%x), libSeq5: (%x, 0x%x, 0x%x), libSeq6: (%x, 0x%x, 0x%x), libSeq7: (%x, 0x%x, 0x%x)\n",
-  //         dasicsLibSeq(4)._1, dasicsLibSeq(4)._2, dasicsLibSeq(4)._3, 
-  //         dasicsLibSeq(5)._1, dasicsLibSeq(5)._2, dasicsLibSeq(5)._3, 
-  //         dasicsLibSeq(6)._1, dasicsLibSeq(6)._2, dasicsLibSeq(6)._3, 
-  //         dasicsLibSeq(7)._1, dasicsLibSeq(7)._2, dasicsLibSeq(7)._3)
-  //   printf("[DEBUG] libSeq8: (%x, 0x%x, 0x%x), libSeq9: (%x, 0x%x, 0x%x), libSeq10: (%x, 0x%x, 0x%x), libSeq11: (%x, 0x%x, 0x%x)\n",
-  //         dasicsLibSeq(8)._1, dasicsLibSeq(8)._2, dasicsLibSeq(8)._3, 
-  //         dasicsLibSeq(9)._1, dasicsLibSeq(9)._2, dasicsLibSeq(9)._3, 
-  //         dasicsLibSeq(10)._1, dasicsLibSeq(10)._2, dasicsLibSeq(10)._3, 
-  //         dasicsLibSeq(11)._1, dasicsLibSeq(11)._2, dasicsLibSeq(11)._3)
-  // }
-
-  // Check ALU DASICS exception
-  val aluRedirectValid = WireInit(false.B)
-  val aluRedirectTarget = WireInit(0.U(XLEN.W))
-  val aluIsPulpret = WireInit(false.B)
-
-  BoringUtils.addSink(aluRedirectValid, "redirect_valid")
-  BoringUtils.addSink(aluRedirectTarget, "redirect_target")
-  BoringUtils.addSink(aluIsPulpret, "is_pulpret")
-
-  val isInTrustedZone = priviledgeMode > ModeU || isInUMainMode
-  val targetIsInTrustedZone = (priviledgeMode > ModeU) || (priviledgeMode === ModeU && aluRedirectTarget >= dasicsMainBound1 && aluRedirectTarget <= dasicsMainBound0)
-
-  val isInLibFreeZone = !isInTrustedZone && dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_X) && io.cfIn.pc <= x._2 && io.cfIn.pc >= x._3).foldRight(false.B)(_ || _)
-  val targetIsInLibFreeZone = !targetIsInTrustedZone && dasicsLibSeq.map(x => x._1(LIBCFG_V) && x._1(LIBCFG_X) && aluRedirectTarget <= x._2 && aluRedirectTarget >= x._3).foldRight(false.B)(_ || _)
-
-  when (aluRedirectValid && isInTrustedZone && !targetIsInTrustedZone && !aluIsPulpret)  // Jump/branch from trusted to untrusted
-  {
-    dasicsReturnPC := io.cfIn.pc + 4.U
-  }
-
-  when (aluRedirectValid && !isInTrustedZone && !isInLibFreeZone && targetIsInLibFreeZone)  // Jump/branch from untrusted-nonfree to untrusted-free
-  {
-    dasicsFreeZoneReturnPC := io.cfIn.pc + 4.U
-  }
-
-  val aluPermitRedirect = isInTrustedZone       || (!isInTrustedZone &&  targetIsInTrustedZone && (aluRedirectTarget === dasicsReturnPC || aluRedirectTarget === dasicsMaincallEntry)) || 
-                          targetIsInLibFreeZone || ( isInLibFreeZone && !targetIsInTrustedZone && !targetIsInLibFreeZone && aluRedirectTarget === dasicsFreeZoneReturnPC)
-  val aluLibInstrFault = dasicsGlobalCfg(1) && aluRedirectValid && !aluPermitRedirect
-
   // TODO: merge iduExceptionVec, csrExceptionVec as raiseExceptionVec
   val csrExceptionVec = Wire(Vec(ExceptionTypes, Bool()))
   csrExceptionVec.map(_ := false.B)
@@ -802,9 +843,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   csrExceptionVec(illegalInstr) := (isIllegalAddr || isIllegalAccess) && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written or not having enough priviledge
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
-  csrExceptionVec(dasicsInstrAccessFault) := aluLibInstrFault
-  csrExceptionVec(dasicsLoadAccessFault) := lsuLibLoadFault
-  csrExceptionVec(dasicsStoreAccessFault) := lsuLibStoreFault
+  csrExceptionVec(dasicsUInstrAccessFault) := aluLibInstrFault
+  csrExceptionVec(dasicsULoadAccessFault) := lsuLibLoadFault
+  csrExceptionVec(dasicsUStoreAccessFault) := lsuLibStoreFault
   val iduExceptionVec = io.cfIn.exceptionVec
   val raiseExceptionVec = csrExceptionVec.asUInt() | iduExceptionVec.asUInt()
   val raiseException = raiseExceptionVec.orR
@@ -829,16 +870,26 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   // Branch control
 
-  val deleg = Mux(raiseIntr, mideleg , medeleg)
-  // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
-  val delegS = (deleg(causeNO(4,0))) && (priviledgeMode < ModeM)
-  val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in nutcore-riscv64, no exception will come together with PF
+  val delegVecM = Mux(raiseIntr, mideleg, medeleg)
+  val delegVecS = Mux(raiseIntr, sideleg, sedeleg)
+  // val delegS = ((delegVecM & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
+  val delegS = (delegVecM(causeNO(4,0))) && (priviledgeMode < ModeM)
+  val delegU = (delegVecS(causeNO(4,0))) && (priviledgeMode < ModeS)
+  val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned ||
+                  aluLibInstrFault || lsuLibLoadFault || lsuLibStoreFault) || raiseIntr // in nutcore-riscv64, no exception will come together with PF
 
   ret := isMret || isSret || isUret
-  trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
+  trapTarget := Mux(delegS, Mux(delegU, utvec, stvec), mtvec)(VAddrBits-1, 0)
   retTarget := DontCare
   // TODO redirect target
   // val illegalEret = TODO
+
+  // DASICS DEBUG
+//  when (lsuLibLoadFault || lsuLibStoreFault) {
+//    printf("[DEBUG] utvec = 0x%x, ucause = 0x%x, uepc = 0x%x, utval = 0x%x\n", utvec, ucause, uepc, utval)
+//    printf("[DEBUG] delegS = %b, delegU = %b\n", delegS, delegU)
+//    printf("[DEBUG] trapTarget = 0x%x, mtvec = 0x%x, stvec = 0x%x\n", trapTarget, mtvec, stvec)
+//  }
 
   when (valid && isMret) {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
@@ -881,7 +932,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
 
-    when (delegS) {
+    when (delegS && !delegU) {
       scause := causeNO
       sepc := SignExt(io.cfIn.pc, XLEN)
       mstatusNew.spp := priviledgeMode
@@ -891,6 +942,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
       when(tvalWen){stval := 0.U} // TODO: should not use =/=
       // printf("[*] mstatusNew.spp %x\n", mstatusNew.spp)
       // trapTarget := stvec(VAddrBits-1. 0)
+    }.elsewhen (delegS && delegU) {
+      ucause := causeNO
+      uepc := SignExt(io.cfIn.pc, XLEN)
+      mstatusNew.pie.u := mstatusOld.ie.u
+      mstatusNew.ie.u := false.B
+      priviledgeMode := ModeU
+      when(tvalWen){utval := 0.U}
     }.otherwise {
       mcause := causeNO
       mepc := SignExt(io.cfIn.pc, XLEN)

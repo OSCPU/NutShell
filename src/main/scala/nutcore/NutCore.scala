@@ -30,6 +30,7 @@ trait HasNutCoreParameter {
   val XLEN = if (Settings.get("IsRV32")) 32 else 64
   val HasMExtension = true
   val HasCExtension = Settings.get("EnableRVC")
+  val HasNExtension = Settings.get("EnableRVN")
   val HasDiv = true
   val HasIcache = Settings.get("HasIcache")
   val HasDcache = Settings.get("HasDcache")
@@ -43,7 +44,7 @@ trait HasNutCoreParameter {
   val DataBytes = DataBits / 8
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = true
-  val ExceptionTypes = 19
+  val ExceptionTypes = 22
   val InterruptTypes = 12
   // Parameter for Argo's OoO backend
   val EnableMultiIssue = Settings.get("EnableMultiIssue")

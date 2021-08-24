@@ -42,6 +42,7 @@ object DefaultSettings {
     "EnableILA" -> true,
     "EnableDebug" -> false,
     "EnableRVC" -> true,
+    "EnableRVN" -> true,
 
     "SoCTest" -> false
   )
