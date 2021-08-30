@@ -49,10 +49,12 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
 
+SOC_DIR = ../ysyxSoC/src/main/resources/ysyx-peripheral
+EMU_SOC_V = $(shell find $(SOC_DIR) -name '*.v')
 
 EMU_CSRC_DIR = $(abspath ./src/test/csrc)
 EMU_VSRC_DIR = $(abspath ./src/test/vsrc)
-EMU_CXXFILES = $(shell find $(EMU_CSRC_DIR) -name "*.cpp")
+EMU_CXXFILES = $(shell find $(EMU_CSRC_DIR) -name "*.cpp") $(abspath $(SOC_DIR)/spiFlash/spiFlash.cpp)
 EMU_VFILES = $(shell find $(EMU_VSRC_DIR) -name "*.v" -or -name "*.sv")
 
 EMU_CXXFLAGS  = -O3 -std=c++11 -static -g -Wall -I$(EMU_CSRC_DIR)
@@ -70,11 +72,14 @@ VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   --output-split 5000 \
   --output-split-cfuncs 5000 \
   -I$(abspath $(BUILD_DIR)) \
+  -I$(abspath $(SOC_DIR)/uart16550/rtl) \
+  -I$(abspath $(SOC_DIR)/spi/rtl) \
   --x-assign unique -O3 -CFLAGS "$(EMU_CXXFLAGS)" \
-  -LDFLAGS "$(EMU_LDFLAGS)"
+  -LDFLAGS "$(EMU_LDFLAGS)" \
+  --timescale "1ns/1ns"
 
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(SIM_TOP).mk
-EMU_DEPS := $(EMU_VFILES) $(EMU_CXXFILES)
+EMU_DEPS := $(EMU_VFILES) $(EMU_CXXFILES) $(EMU_SOC_V)
 EMU_HEADERS := $(shell find $(EMU_CSRC_DIR) -name "*.h")
 EMU := $(BUILD_DIR)/emu
 
