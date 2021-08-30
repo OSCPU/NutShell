@@ -24,7 +24,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import bus.axi4._
-import device.AXI4RAM
+import device.AXI4RAMSim
 import nutcore._
 import utils.GTimer
 
@@ -62,7 +62,7 @@ class NutShellSimTop extends Module {
 
   lazy val config = NutCoreConfig(FPGAPlatform = false)
   val soc = Module(new NutShell()(config))
-  val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
+  val mem = Module(new AXI4RAMSim(memByte = 128 * 1024 * 1024, useBlackBox = true))
   // Be careful with the commit checking of emu.
   // A large delay will make emu incorrectly report getting stuck.
   val memdelay = Module(new AXI4Delayer(0))
