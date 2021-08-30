@@ -124,7 +124,7 @@ class AXI4VGA(sim: Boolean = false) extends Module with HasVGAParameter {
 
   val ctrl = Module(new VGACtrl)
   io.in.ctrl <> ctrl.io.in
-  val fb = Module(new AXI4RAM(new AXI4Lite, memByte = FBPixels * 4))
+  val fb = Module(new AXI4RAMSim(new AXI4Lite, memByte = FBPixels * 4))
   // writable by axi4lite
   // but it only readable by the internel controller
   fb.io.in.aw <> io.in.fb.aw

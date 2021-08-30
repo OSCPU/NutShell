@@ -18,7 +18,7 @@ package sim
 
 import bus.axi4._
 import chisel3._
-import device.AXI4RAM
+import device.AXI4RAMSim
 import difftest._
 import nutcore.NutCoreConfig
 import system._
@@ -26,7 +26,7 @@ import system._
 class SimTop extends Module {
   lazy val config = NutCoreConfig(FPGAPlatform = false)
   val soc = Module(new NutShell()(config))
-  val mem = Module(new AXI4RAM(memByte = 2L * 1024 * 1024 * 1024, useBlackBox = true))
+  val mem = Module(new AXI4RAMSim(memByte = 2L * 1024 * 1024 * 1024, useBlackBox = true))
   // Be careful with the commit checking of emu.
   // A large delay will make emu incorrectly report getting stuck.
   val memdelay = Module(new AXI4Delayer(0))

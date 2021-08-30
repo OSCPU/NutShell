@@ -23,7 +23,7 @@ import nutcore.HasNutCoreParameter
 import bus.axi4._
 import difftest.common.DifftestMem
 
-class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Long,
+class AXI4RAMSim[T <: AXI4Lite](_type: T = new AXI4, memByte: Long,
   useBlackBox: Boolean = false) extends AXI4SlaveModule(_type) with HasNutCoreParameter {
 
   def index(addr: UInt) = addr(log2Ceil(memByte) - 1, log2Ceil(DataBytes))
