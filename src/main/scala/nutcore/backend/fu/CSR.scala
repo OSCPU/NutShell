@@ -235,6 +235,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val ie = new Priv
   }
 
+  class SatpStruct extends Bundle {
+    val mode = UInt(4.W)
+    val asid = UInt(16.W)
+    val ppn  = UInt(44.W)
+  }
+
   class Interrupt extends Bundle {
     val e = new Priv
     val t = new Priv
@@ -459,9 +465,17 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     CSROpType.clri -> (rdata & ~csri)
   ))
 
-  val wen = (valid && func =/= CSROpType.jmp) && !io.isBackendException
-  // Debug(wen, "addr %x wdata %x func %x rdata %x\n", addr, wdata, func, rdata)
-  MaskedRegMap.generate(mapping, addr, rdata, wen, wdata)
+  // SATP wen check
+  val satpLegalMode = (wdata.asTypeOf(new SatpStruct).mode === 0.U) || (wdata.asTypeOf(new SatpStruct).mode === 8.U)
+
+  // General CSR wen check
+  val wen = (valid && func =/= CSROpType.jmp) && (addr =/= Satp.U || satpLegalMode) && !io.isBackendException
+  val isIllegalMode  = priviledgeMode < addr(9, 8)
+  val justRead = (func === CSROpType.set || func === CSROpType.seti) && src1 === 0.U  // csrrs and csrrsi are exceptions when their src1 is zero
+  val isIllegalWrite = wen && (addr(11, 10) === "b11".U) && !justRead  // Write a read-only CSR register
+  val isIllegalAccess = isIllegalMode || isIllegalWrite
+
+  MaskedRegMap.generate(mapping, addr, rdata, wen && !isIllegalAccess, wdata)
   val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
   io.out.bits := rdata
@@ -472,7 +486,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Sip, mipReg.asUInt, sipMask, MaskedRegMap.NoSideEffect, sipMask)
   )
   val rdataDummy = Wire(UInt(XLEN.W))
-  MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen, wdata)
+  MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen && !isIllegalAccess, wdata)
 
   // CSR inst decode
   val ret = Wire(Bool())
@@ -605,7 +619,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
   csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
   csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
-  csrExceptionVec(illegalInstr) := isIllegalAddr && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written
+  csrExceptionVec(illegalInstr) := (isIllegalAddr || isIllegalAccess) && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written or not having enough priviledge
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
