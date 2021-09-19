@@ -21,6 +21,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import difftest._
 import top.Settings
 
 object ALUOpType {
@@ -129,6 +130,18 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   // may be can be moved to ISU to calculate pc + 4
   // this is actually for jal and jalr to write pc + 4/2 to rd
   io.out.bits := Mux(isBru, Mux(!isRVC, SignExt(io.cfIn.pc, AddrBits) + 4.U, SignExt(io.cfIn.pc, AddrBits) + 2.U), aluRes)
+
+  val runahead_redirect = Module(new DifftestRunaheadRedirectEvent)
+  runahead_redirect.io.clock := clock
+  runahead_redirect.io.coreid := 0.U
+  runahead_redirect.io.valid := io.redirect.valid
+  runahead_redirect.io.pc := io.cfIn.pc
+  runahead_redirect.io.target_pc := io.redirect.target
+  runahead_redirect.io.checkpoint_id := io.cfIn.runahead_checkpoint_id
+
+  when(runahead_redirect.io.valid) {
+    printf("DUT redirect to %x cpid %x\n", io.redirect.target, io.cfIn.runahead_checkpoint_id)
+  }
 
   Debug(valid && isBru, "tgt %x, valid:%d, npc: %x, pdwrong: %x\n", io.redirect.target, io.redirect.valid, io.cfIn.pnpc, predictWrong)
   Debug(valid && isBru, "taken:%d addrRes:%x src1:%x src2:%x func:%x\n", taken, adderRes, src1, src2, func)

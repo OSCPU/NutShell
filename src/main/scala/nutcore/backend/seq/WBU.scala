@@ -59,6 +59,15 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
     difftest.io.wen      := RegNext(io.wb.rfWen && io.wb.rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
     difftest.io.wdata    := RegNext(io.wb.rfData)
     difftest.io.wdest    := RegNext(io.wb.rfDest)
+
+    val runahead_commit = Module(new DifftestRunaheadCommitEvent)
+    runahead_commit.io.clock := clock
+    runahead_commit.io.coreid := 0.U
+    runahead_commit.io.valid := RegNext(io.in.valid && io.in.bits.decode.cf.isBranch)
+    runahead_commit.io.pc    := RegNext(SignExt(io.in.bits.decode.cf.pc, AddrBits))
+    when(runahead_commit.io.valid) {
+    printf("DUT commit branch %x\n", runahead_commit.io.pc)
+  }
   } else {
     BoringUtils.addSource(io.in.valid, "ilaWBUvalid")
     BoringUtils.addSource(io.in.bits.decode.cf.pc, "ilaWBUpc")
