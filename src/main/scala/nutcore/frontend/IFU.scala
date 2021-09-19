@@ -23,6 +23,7 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 import bus.simplebus._
 import top.Settings
+import difftest._
 
 trait HasResetVector {
   val resetVector = Settings.getLong("ResetVector")

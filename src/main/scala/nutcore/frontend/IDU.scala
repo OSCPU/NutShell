@@ -21,12 +21,14 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import difftest._
 
 class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
     val isWFI = Output(Bool()) // require NutCoreSim to advance mtime when wfi to reduce the idle time in Linux
+    val isBranch = Output(Bool())
   })
 
   val hasIntr = Wire(Bool())
@@ -183,6 +185,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
 
   io.out.bits.ctrl.isNutCoreTrap := (instr === NutCoreTrap.TRAP) && io.in.valid
   io.isWFI := (instr === Priviledged.WFI) && io.in.valid
+  io.isBranch := VecInit(RV32I_BRUInstr.table.map(i => i._2.tail(1) === fuOpType)).asUInt.orR && fuType === FuType.bru
 
 }
 
@@ -200,6 +203,17 @@ class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   if(!EnableMultiIssue){
     io.in(1).ready := false.B
     decoder2.io.in.valid := false.B
+  }
+
+  // debug runahead
+  val runahead = Module(new DifftestRunaheadEvent)
+  runahead.io.clock    := clock
+  runahead.io.coreid   := 0.U
+  runahead.io.pc       := io.out(0).bits.cf.pc
+  runahead.io.branch   := decoder1.io.isBranch
+  runahead.io.valid    := io.out(0).fire()
+  when(runahead.io.valid) {
+    printf("fire pc %x branch %x inst %x\n", runahead.io.pc, runahead.io.branch, io.out(0).bits.cf.instr)
   }
 
   if (!p.FPGAPlatform) {
