@@ -214,7 +214,7 @@ class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   runahead.io.valid         := io.out(0).fire()
   runahead.io.branch        := decoder1.io.isBranch
   runahead.io.pc            := io.out(0).bits.cf.pc
-  runahead.io.checkpoint_id := checkpoint_id
+  runahead.io.checkpoint_id := RegNext(checkpoint_id)
   when(runahead.io.valid && runahead.io.branch) {
     checkpoint_id := checkpoint_id + 1.U // allocate a new checkpoint_id
   }
