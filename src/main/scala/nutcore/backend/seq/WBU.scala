@@ -46,9 +46,9 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   runahead_redirect.io.target_pc := io.in.bits.decode.cf.redirect.target // for debug only
   runahead_redirect.io.checkpoint_id := io.in.bits.decode.cf.runahead_checkpoint_id // make sure it is right
 
-  when(runahead_redirect.io.valid) {
-    printf("DUT pc %x redirect to %x cpid %x\n", runahead_redirect.io.pc, runahead_redirect.io.target_pc, runahead_redirect.io.checkpoint_id)
-  }
+  // when(runahead_redirect.io.valid) {
+  //   printf("DUT pc %x redirect to %x cpid %x\n", runahead_redirect.io.pc, runahead_redirect.io.target_pc, runahead_redirect.io.checkpoint_id)
+  // }
 
   Debug(io.in.valid, "[COMMIT] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", io.in.bits.decode.cf.pc, io.in.bits.decode.cf.instr, io.wb.rfWen, io.wb.rfDest, io.wb.rfData, io.in.bits.isMMIO, io.in.bits.intrNO)
 
@@ -77,9 +77,9 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
     runahead_commit.io.coreid := 0.U
     runahead_commit.io.valid := RegNext(io.in.valid && io.in.bits.decode.cf.isBranch)
     runahead_commit.io.pc    := RegNext(SignExt(io.in.bits.decode.cf.pc, AddrBits))
-    when(runahead_commit.io.valid) {
-    printf("DUT commit branch %x\n", runahead_commit.io.pc)
-  }
+    // when(runahead_commit.io.valid) {
+    //   printf("DUT commit branch %x\n", runahead_commit.io.pc)
+    // }
   } else {
     BoringUtils.addSource(io.in.valid, "ilaWBUvalid")
     BoringUtils.addSource(io.in.bits.decode.cf.pc, "ilaWBUpc")
