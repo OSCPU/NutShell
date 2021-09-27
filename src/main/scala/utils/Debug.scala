@@ -53,8 +53,8 @@ object LogUtil {
            (implicit name: String): Any = {
     val commonInfo = p"[${GTimer()}] $name: "
     when (cond && displayLog) {
-      if(prefix) printf(commonInfo)
-      printf(pable)
+      // if(prefix) printf(commonInfo)
+      // printf(pable)
     }
   }
 }

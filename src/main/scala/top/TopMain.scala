@@ -49,6 +49,8 @@ object TopMain extends App {
     case "pynq"   => PynqSettings()
     case "axu3cg" => Axu3cgSettings()
     case "PXIe"   => PXIeSettings()
+    case "soctest" => SoCTestSettings()
+    case "out"     => OutSettings()
   } ) ++ ( core match {
     case "inorder"  => InOrderSettings()
     case "ooo"  => OOOSettings()
@@ -62,9 +64,14 @@ object TopMain extends App {
     case (f, v) =>
       println(f + " = " + v)
   }
-  if (board == "sim") {
+  if (board == "sim" || board == "soctest") {
     Driver.execute(args, () => new NutShellSimTop)
   } else {
-    Driver.execute(args, () => new Top)
+    // Driver.execute(args, () => new Top)
+    (new chisel3.stage.ChiselStage).execute(args, Seq(
+      chisel3.stage.ChiselGeneratorAnnotation(() => new Top()),
+      firrtl.stage.RunFirrtlTransformAnnotation(new AddModulePrefix()),
+      ModulePrefixAnnotation("ysyx_000000_")
+    ))
   }
 }

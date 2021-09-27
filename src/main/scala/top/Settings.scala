@@ -22,6 +22,8 @@ object DefaultSettings {
     "MemMapRegionBits" -> 0,
     "MMIOBase" -> 0x0000000040000000L,
     "MMIOSize" -> 0x0000000040000000L,
+    "CLINTBase"-> 0x0000000038000000L,
+    "PLICBase" -> 0x000000003C000000L,
     "ResetVector" -> 0x80000000L,
     "NrExtIntr" -> 1,
 
@@ -38,8 +40,10 @@ object DefaultSettings {
 
     "FPGAPlatform" -> false,
     "EnableILA" -> true,
-    "EnableDebug" -> true,
-    "EnableRVC" -> true
+    "EnableDebug" -> false,
+    "EnableRVC" -> true,
+
+    "SoCTest" -> false
   )
 }
 
@@ -66,6 +70,40 @@ object PXIeSettings {
   def apply() = Map(
     "FPGAPlatform" -> true,
     "NrExtIntr" -> 5
+  )
+}
+
+object SoCTestSettings {
+  def apply() = Map(
+    "NrExtIntr" -> 1,
+    "EnableILA" -> false,
+    "SoCTest" -> true,
+    "ResetVector" -> 0x30000000L,
+    "MMIOBase" -> 0x0000000010000000L,
+    "MMIOSize" -> 0x0000000070000000L,
+    "CLINTBase"-> 0x0000000002000000L,
+    "PLICBase" -> 0x0000000002010000L,
+    "EnableDebug" -> false,
+    "FPGAPlatform" -> false,
+    "HasL2cache" -> false,
+    "HasPrefetch" -> false
+  )
+}
+
+object OutSettings {
+  def apply() = Map(
+    "NrExtIntr" -> 1,
+    "EnableILA" -> false,
+    "SoCTest" -> true,
+    "ResetVector" -> 0x30000000L,
+    "MMIOBase" -> 0x0000000010000000L,
+    "MMIOSize" -> 0x0000000070000000L,
+    "CLINTBase"-> 0x0000000002000000L,
+    "PLICBase" -> 0x0000000002010000L,
+    "EnableDebug" -> false,
+    "FPGAPlatform" -> true,
+    "HasL2cache" -> false,
+    "HasPrefetch" -> false
   )
 }
 

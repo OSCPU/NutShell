@@ -12,7 +12,7 @@ SIMTOP = top.TopMain
 IMAGE ?= ready-to-run/linux.bin
 
 DATAWIDTH ?= 64
-BOARD ?= sim  # sim  pynq  axu3cg
+BOARD ?= sim  # sim  pynq  axu3cg soctest
 CORE  ?= inorder  # inorder  ooo  embedded
 
 .DEFAULT_GOAL = verilog
@@ -47,7 +47,7 @@ SIM_TOP = NutShellSimTop
 SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
+	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=$(BOARD) CORE=$(CORE)
 
 SOC_DIR = ../ysyxSoC/src/main/resources/ysyx-peripheral
 EMU_SOC_V = $(shell find $(SOC_DIR) -name '*.v')
@@ -57,7 +57,7 @@ EMU_VSRC_DIR = $(abspath ./src/test/vsrc)
 EMU_CXXFILES = $(shell find $(EMU_CSRC_DIR) -name "*.cpp") $(abspath $(SOC_DIR)/spiFlash/spiFlash.cpp)
 EMU_VFILES = $(shell find $(EMU_VSRC_DIR) -name "*.v" -or -name "*.sv")
 
-EMU_CXXFLAGS  = -O3 -std=c++11 -static -g -Wall -I$(EMU_CSRC_DIR)
+EMU_CXXFLAGS  = -O3 -std=c++11 -static -g -Wall -I$(EMU_CSRC_DIR) -I$(abspath $(SOC_DIR)/spiFlash/)
 EMU_CXXFLAGS += -DVERILATOR -Wno-maybe-uninitialized -D__RV$(DATAWIDTH)__
 EMU_LDFLAGS   = -lpthread -lSDL2 -ldl
 
@@ -76,7 +76,8 @@ VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   -I$(abspath $(SOC_DIR)/spi/rtl) \
   --x-assign unique -O3 -CFLAGS "$(EMU_CXXFLAGS)" \
   -LDFLAGS "$(EMU_LDFLAGS)" \
-  --timescale "1ns/1ns"
+  --timescale "1ns/1ns" \
+  -Wno-WIDTH
 
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(SIM_TOP).mk
 EMU_DEPS := $(EMU_VFILES) $(EMU_CXXFILES) $(EMU_SOC_V)

@@ -32,7 +32,7 @@ case class CacheConfig (
   idBits: Int = 0,
   cacheLevel: Int = 1,
 
-  totalSize: Int = 32, // Kbytes
+  totalSize: Int = 4, // Kbytes
   ways: Int = 4
 )
 
