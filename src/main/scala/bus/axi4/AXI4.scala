@@ -19,10 +19,10 @@ object AXI4Parameters extends HasNutCoreParameter {
   val respBits  = 2
 
   // These are not fixed:
-  val idBits    = 1
+  val idBits    = 4
   val addrBits  = PAddrBits
   val dataBits  = DataBits
-  val userBits  = 1
+  val userBits  = 0
 
   def CACHE_RALLOCATE  = 8.U(cacheBits.W)
   def CACHE_WALLOCATE  = 4.U(cacheBits.W)

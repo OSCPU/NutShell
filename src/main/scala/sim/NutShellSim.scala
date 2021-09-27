@@ -32,14 +32,14 @@ class SimTop extends Module {
   val memdelay = Module(new AXI4Delayer(0))
   val mmio = Module(new SimMMIO)
 
-  soc.io.frontend <> mmio.io.dma
+  soc.io.slave <> mmio.io.dma
 
-  memdelay.io.in <> soc.io.mem
+  memdelay.io.in <> soc.io.master
   mem.io.in <> memdelay.io.out
 
   mmio.io.rw <> soc.io.mmio
 
-  soc.io.meip := mmio.io.meip
+  soc.io.interrupt := mmio.io.meip
 
   val difftest = DifftestModule.finish("nutshell")
   difftest.uart <> mmio.io.uart

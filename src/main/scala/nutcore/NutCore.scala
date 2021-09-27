@@ -75,16 +75,74 @@ case class NutCoreConfig (
 object AddressSpace extends HasNutCoreParameter {
   // (start, size)
   // address out of MMIO will be considered as DRAM
-  def mmio = List(
-    (0x30000000L, 0x10000000L),  // internal devices, such as CLINT and PLIC
-    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")) // external devices
-  )
+  def mmio = if (Settings.get("ASIC")) {
+    List(
+    // internal devices, such as CLINT and PLIC
+    (0x00000000L, 0x10000000L),
+    // external devices
+    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize"))
+  )} else {
+  List(
+    // internal devices, such as CLINT and PLIC
+    (0x30000000L, 0x10000000L),
+    // external devices
+    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize"))
+  )}
 
   def isMMIO(addr: UInt) = mmio.map(range => {
-    require(isPow2(range._2))
-    val bits = log2Up(range._2)
-    (addr ^ range._1.U)(PAddrBits-1, bits) === 0.U
+    // require(isPow2(range._2))
+    // val bits = log2Up(range._2)
+    // (addr ^ range._1.U)(PAddrBits-1, bits) === 0.U
+    addr >= range._1.U && addr < (range._1 + range._2).U
   }).reduce(_ || _)
+}
+
+class MMIOBridge(implicit val p: NutCoreConfig) extends NutCoreModule {
+  val io = IO(new Bundle {
+    val in = Flipped(new SimpleBusUC)
+    val out = new SimpleBusUC
+  })
+  val s_idle :: s_req1 :: s_waitResp1 :: s_req2 :: s_waitResp2 :: s_done :: s_req :: s_normal :: Nil = Enum(8)
+  val state = RegInit(0.U(8.W))
+  val in_reqLatch = RegEnable(io.in.req.bits, io.in.req.fire)
+  val out_respLatch1 = HoldUnless(io.out.resp.bits, io.out.resp.fire && state === s_waitResp1)
+  val out_respLatch2 = HoldUnless(io.out.resp.bits, io.out.resp.fire && state === s_waitResp2)
+  val normal = RegInit(false.B)
+  val out_normalLatch = HoldUnless(io.out.resp.bits, io.out.resp.fire && normal)
+
+  val in_sel = !(io.in.req.bits.size === "b11".U)
+
+  switch (state) {
+    is (s_idle) {
+      when (io.in.req.fire) {
+        normal := in_sel
+        when (!in_sel) { state := s_req1 }
+        assert(!in_sel)
+      }
+    }
+    is (s_req1)      { when (io.out.req.fire) { state := s_waitResp1 } }
+    is (s_waitResp1) { when (io.out.resp.fire) { state := s_req2 } }
+    is (s_req2)      { when (io.out.req.fire) { state := s_waitResp2 } }
+    is (s_waitResp2) { when (io.out.resp.fire) { state := s_done } }
+    is (s_done)      { when (io.in.resp.fire) { state := s_idle } }
+    is (s_req)       { when {io.out.req.fire} { state := s_normal } }
+    is (s_normal)    { when {io.out.resp.fire} { state := s_done } }
+  }
+
+  io.in.req.ready := Mux(in_sel, io.out.req.ready, state === s_idle)
+  io.in.resp.valid := Mux(normal, io.out.resp.valid, state === s_done)
+  io.in.resp.bits.cmd := Mux(normal, io.out.resp.bits.cmd, out_respLatch2.cmd)
+  io.in.resp.bits.rdata := Mux(normal, io.out.resp.bits.rdata, Cat(out_respLatch2.rdata(31,0), out_respLatch1.rdata(31,0)))
+
+  io.out.req.valid := (state === s_req1) || (state === s_req2) || ((state === s_idle) && io.in.req.valid && in_sel)
+  //  io.out.req.bits <> in_reqLatch
+  io.out.req.bits.addr :=  Mux(in_sel, io.in.req.bits.addr, Mux(state === s_req1, Cat(in_reqLatch.addr(31,3),0.U(3.W)), Cat(in_reqLatch.addr(31,3),0.U(3.W)) + 4.U))
+  io.out.req.bits.size := Mux(in_sel, io.in.req.bits.size, "b10".U)
+  io.out.req.bits.cmd := io.in.req.bits.cmd
+  io.out.req.bits.wdata := Mux(in_sel, io.in.req.bits.wdata, Mux(state === s_req1, Cat(Seq.fill(2)(in_reqLatch.wdata(31,0))), Cat(Seq.fill(2)(in_reqLatch.wdata(63,32)))))
+  io.out.req.bits.wmask := Mux(in_sel, io.in.req.bits.wmask, Mux(state === s_req1, in_reqLatch.wmask(3,0), in_reqLatch.wmask(7,4)))
+  io.out.resp.ready := Mux(normal, io.in.resp.ready, true.B)
+  //  assert(io.in.resp.bits.rdata === out_normalLatch.rdata)
 }
 
 class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
@@ -150,9 +208,15 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     val mmioXbar = Module(new SimpleBusCrossbarNto1(2))
     val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
 
+    val mmioBridge = Module(new MMIOBridge())
+    val immioBus = WireInit(0.U.asTypeOf(new SimpleBusUC))
+
     val itlb = EmbeddedTLB(in = frontend.io.imem, mem = dmemXbar.io.in(1), flush = frontend.io.flushVec(0) | frontend.io.bpFlush, csrMMU = backend.io.memMMU.imem, enable = HasITLB)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     frontend.io.ipf := itlb.io.ipf
-    io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, frontend.io.flushVec(0) | frontend.io.bpFlush), empty = itlb.io.cacheEmpty, enable = HasIcache)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
+    io.imem <> Cache(in = itlb.io.out, mmio = Seq(immioBus), flush = Fill(2, frontend.io.flushVec(0) | frontend.io.bpFlush), empty = itlb.io.cacheEmpty, enable = HasIcache)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
+
+    immioBus <> mmioBridge.io.in
+    mmioXbar.io.in(0) <> mmioBridge.io.out
 
     // dtlb
     val dtlb = EmbeddedTLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", totalEntry = 64))

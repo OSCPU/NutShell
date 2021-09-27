@@ -1,5 +1,4 @@
 TOP = TopMain
-SIM_TOP = SimTop
 FPGATOP = NutShellFPGATop
 
 BUILD_DIR = $(abspath ./build)
@@ -18,8 +17,14 @@ SIMTOP = top.TopMain
 IMAGE ?= ready-to-run/linux.bin
 
 DATAWIDTH ?= 64
-BOARD ?= sim  # sim  pynq  axu3cg
+BOARD ?= asic  # sim  pynq  axu3cg  asic
 CORE  ?= inorder  # inorder  ooo  embedded
+
+ifeq ($(BOARD),sim)
+SIM_TOP = SimTop
+else
+SIM_TOP = Top
+endif
 
 MILL_ARGS_ALL  = $(MILL_ARGS)
 MILL_ARGS_ALL += --target-dir $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)

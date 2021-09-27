@@ -25,6 +25,7 @@ import top.Settings
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
+import utils._
 
 trait HasSoCParameter {
   val EnableILA = Settings.get("EnableILA")
@@ -43,10 +44,10 @@ class ILABundle extends NutCoreBundle {
 
 class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParameter {
   val io = IO(new Bundle{
-    val mem = new AXI4
-    val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
-    val frontend = Flipped(new AXI4)
-    val meip = Input(UInt(Settings.getInt("NrExtIntr").W))
+    val master = new AXI4
+    val mmio = if (Settings.get("ASIC")) null else { if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC } }
+    val slave = Flipped(new AXI4)
+    val interrupt = Input(UInt(Settings.getInt("NrExtIntr").W))
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
@@ -59,7 +60,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   xbar.io.in(1) <> nutcore.io.dmem.mem
 
   val axi2sb = Module(new AXI42SimpleBusConverter())
-  axi2sb.io.in <> io.frontend
+  axi2sb.io.in <> io.slave
   nutcore.io.frontend <> axi2sb.io.out
 
   val memport = xbar.io.out.toMemPort
@@ -92,23 +93,30 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   val memMapBase = Settings.getLong("MemMapBase")
   val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))
   memAddrMap.io.in <> mem
-  io.mem <> memAddrMap.io.out.toAXI4(true)
   
   nutcore.io.imem.coh.resp.ready := true.B
   nutcore.io.imem.coh.req.valid := false.B
   nutcore.io.imem.coh.req.bits := DontCare
 
   val addrSpace = List(
-    (0x38000000L, 0x00010000L), // CLINT
-    (0x3c000000L, 0x04000000L), // PLIC
+    (Settings.getLong("CLINTBase"), 0x00010000L), // CLINT
+    (Settings.getLong("PLICBase"),  0x04000000L), // PLIC
     (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices
   )
   val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
   mmioXbar.io.in <> nutcore.io.mmio
 
   val extDev = mmioXbar.io.out(2)
-  if (p.FPGAPlatform) { io.mmio <> extDev.toAXI4() }
-  else { io.mmio <> extDev }
+  if (!Settings.get("ASIC")) {
+    if (p.FPGAPlatform) { io.mmio <> extDev.toAXI4() }
+    else { io.mmio <> extDev }
+    io.master <> memAddrMap.io.out.toAXI4(true)
+  } else {
+    val outputXbar = Module(new SimpleBusCrossbarNto1(2))
+    outputXbar.io.in(0) <> memAddrMap.io.out
+    outputXbar.io.in(1) <> extDev
+    io.master <> outputXbar.io.out.toAXI4(true)
+  }
 
   val clint = Module(new AXI4CLINT(sim = !p.FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(0).toAXI4Lite
@@ -119,7 +127,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
 
   val plic = Module(new AXI4PLIC(nrIntr = Settings.getInt("NrExtIntr"), nrHart = 1))
   plic.io.in <> mmioXbar.io.out(1).toAXI4Lite
-  plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
+  plic.io.extra.get.intrVec := RegNext(RegNext(io.interrupt))
   val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
   

@@ -45,8 +45,8 @@ object LogUtil {
     val c = control()
     val commonInfo = p"[${c._2}] $name: "
     when (cond && c._1) {
-      if(prefix) printf(commonInfo)
-      printf(pable)
+      //if(prefix) printf(commonInfo)
+      //printf(pable)
     }
   }
 }
