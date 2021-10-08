@@ -505,10 +505,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       difftest.io.valid    := {if (i == 0) RegNext(retireATerm) else RegNext(retireMultiTerms)}
       difftest.io.pc       := RegNext(SignExt(decode(ringBufferTail)(i).cf.pc, AddrBits))
       difftest.io.instr    := RegNext(decode(ringBufferTail)(i).cf.instr)
-      difftest.io.skip     := RegNext(
-        isMMIO(ringBufferTail)(0) && valid(ringBufferTail)(0) || 
-        isMMIO(ringBufferTail)(1) && valid(ringBufferTail)(1) && !(valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid)
-      )
+      difftest.io.skip     := RegNext(isMMIO(ringBufferTail)(i) && valid(ringBufferTail)(i))
       difftest.io.isRVC    := RegNext(decode(ringBufferTail)(i).cf.isRVC)
       difftest.io.scFailed := RegNext(false.B) // TODO: fixme
       difftest.io.wen      := RegNext(io.wb(i).rfWen && io.wb(i).rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
