@@ -789,7 +789,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   when(aluSLibInstrFault || lsuSLibLoadFault || lsuSLibStoreFault)  // Lower priority
   {
-    stval := Mux(aluSLibInstrFault, SignExt(aluRedirectTarget, XLEN), SignExt(lsuAddr, XLEN))
+    mtval := Mux(aluSLibInstrFault, SignExt(aluRedirectTarget, XLEN), SignExt(lsuAddr, XLEN))
   }
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
