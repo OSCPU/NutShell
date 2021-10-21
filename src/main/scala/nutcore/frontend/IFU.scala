@@ -329,7 +329,7 @@ class IFU_inorder extends NutCoreModule with HasResetVector {
   when(pcUpdate || bp1.io.flush) {
     crosslineJumpLatch := Mux(bp1.io.flush, false.B, crosslineJump && !crosslineJumpLatch)
   }
-  val crosslineJumpTarget = RegEnable(bp1.io.out.target, crosslineJump)
+  val crosslineJumpTarget = RegEnable(bp1.io.out.target, init=0.U, crosslineJump)
   val crosslineJumpForceSeq = crosslineJump && bp1.io.out.valid
   val crosslineJumpForceTgt = crosslineJumpLatch && !bp1.io.flush
 

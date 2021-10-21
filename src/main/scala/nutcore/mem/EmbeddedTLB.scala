@@ -220,7 +220,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val hitinstrPF = WireInit(false.B)
   val hitWB = hit && (!hitFlag.a || !hitFlag.d && req.isWrite()) && !hitinstrPF && !(loadPF || storePF || io.pf.isPF())
   val hitRefillFlag = Cat(req.isWrite().asUInt, 1.U(1.W), 0.U(6.W)) | hitFlag.asUInt
-  val hitWBStore = RegEnable(Cat(0.U(10.W), hitData.ppn, 0.U(2.W), hitRefillFlag), hitWB)
+  val hitWBStore = RegEnable(Cat(0.U(10.W), hitData.ppn, 0.U(2.W), hitRefillFlag), init=0.U, hitWB)
 
   // hit permission check
   val hitCheck = hit /*&& hitFlag.v */&& !(pf.priviledgeMode === ModeU && !hitFlag.u) && !(pf.priviledgeMode === ModeS && hitFlag.u && (!pf.status_sum || ifecth))
@@ -247,13 +247,13 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val state = RegInit(s_idle)
   val level = RegInit(Level.U(log2Up(Level).W))
   
-  val memRespStore = Reg(UInt(XLEN.W))
+  val memRespStore = RegInit(UInt(XLEN.W), 0.U)
   val missMask = WireInit("h3ffff".U(maskLen.W))
-  val missMaskStore = Reg(UInt(maskLen.W))
+  val missMaskStore = RegInit(UInt(maskLen.W), 0.U)
   val missMetaRefill = WireInit(false.B)
   val missRefillFlag = WireInit(0.U(8.W))
   val memRdata = io.mem.resp.bits.rdata.asTypeOf(pteBundle)
-  val raddr = Reg(UInt(PAddrBits.W))
+  val raddr = RegInit(UInt(PAddrBits.W), 0.U)
   val alreadyOutFire = RegEnable(true.B, init = false.B, io.out.fire)
 
   //handle flush
@@ -369,10 +369,10 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
 
   // tlb refill
   io.mdWrite.apply(wen = RegNext((missMetaRefill && !isFlush) || (hitWB && state === s_idle && !isFlush), init = false.B), 
-    windex = RegNext(getIndex(req.addr)), waymask = RegNext(waymask), vpn = RegNext(vpn.asUInt), 
-    asid = RegNext(Mux(hitWB, hitMeta.asid, satp.asid)), mask = RegNext(Mux(hitWB, hitMask, missMask)), 
-    flag = RegNext(Mux(hitWB, hitRefillFlag, missRefillFlag)), ppn = RegNext(Mux(hitWB, hitData.ppn, memRdata.ppn)), 
-    pteaddr = RegNext((Mux(hitWB, hitData.pteaddr, raddr))))
+    windex = RegNext(getIndex(req.addr), 0.U), waymask = RegNext(waymask, 0.U), vpn = RegNext(vpn.asUInt, 0.U), 
+    asid = RegNext(Mux(hitWB, hitMeta.asid, satp.asid), 0.U), mask = RegNext(Mux(hitWB, hitMask, missMask), 0.U), 
+    flag = RegNext(Mux(hitWB, hitRefillFlag, missRefillFlag), 0.U), ppn = RegNext(Mux(hitWB, hitData.ppn, memRdata.ppn), 0.U), 
+    pteaddr = RegNext((Mux(hitWB, hitData.pteaddr, raddr)), 0.U))
 
   // io
   io.out.bits := req

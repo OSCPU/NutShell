@@ -93,8 +93,8 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
 
     // LSU control FSM
     val state = RegInit(s_idle)
-    val atomMemReg = Reg(UInt(XLEN.W))
-    val atomRegReg = Reg(UInt(XLEN.W))
+    val atomMemReg = RegInit(UInt(XLEN.W), 0.U)
+    val atomRegReg = RegInit(UInt(XLEN.W), 0.U)
     val atomALU = Module(new AtomALU)
     atomALU.io.src1 := atomMemReg
     atomALU.io.src2 := io.wdata
@@ -330,7 +330,7 @@ class LSExecUnit extends NutCoreModule {
   }
 
   val dmem = io.dmem
-  val addrLatch = RegNext(addr)
+  val addrLatch = RegNext(addr, 0.U)
   val isStore = valid && LSUOpType.isStore(func)
   val partialLoad = !isStore && (func =/= LSUOpType.ld)
 
@@ -385,7 +385,7 @@ class LSExecUnit extends NutCoreModule {
   Debug(io.out.fire(), "[LSU-EXECUNIT] state %x dresp %x dpf %x lm %x sm %x\n", state, dmem.resp.fire(), dtlbPF, io.loadAddrMisaligned, io.storeAddrMisaligned)
 
   val rdata = dmem.resp.bits.rdata
-  val rdataLatch = RegNext(rdata)
+  val rdataLatch = RegNext(rdata, 0.U)
   val rdataSel64 = LookupTree(addrLatch(2, 0), List(
     "b000".U -> rdataLatch(63, 0),
     "b001".U -> rdataLatch(63, 8),

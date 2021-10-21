@@ -61,9 +61,9 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
   // val loadNextInstline =false.B
   val pcOut = WireInit(0.U(VAddrBits.W))
   val pnpcOut = WireInit(0.U(VAddrBits.W))
-  val specialPCR = Reg(UInt(VAddrBits.W)) // reg for full inst that cross 2 inst line
-  val specialNPCR = Reg(UInt(VAddrBits.W)) // reg for pnc for full inst jump that cross 2 inst line
-  val specialInstR = Reg(UInt(16.W))
+  val specialPCR = RegInit(UInt(VAddrBits.W), 0.U) // reg for full inst that cross 2 inst line
+  val specialNPCR = RegInit(UInt(VAddrBits.W), 0.U) // reg for pnc for full inst jump that cross 2 inst line
+  val specialInstR = RegInit(UInt(16.W), 0.U)
   val specialIPFR = RegInit(Bool(), false.B)
   val redirectPC = Cat(io.in.bits.pc(VAddrBits-1,3), 0.U(3.W))+"b1010".U // IDU can got get full inst from a single inst line  
   val rvcForceLoadNext = (pcOffset === 2.U && !isRVC && io.in.bits.pnpc(2,0) === 4.U && !brIdx(1))

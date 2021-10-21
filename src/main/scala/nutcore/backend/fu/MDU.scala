@@ -53,8 +53,8 @@ class Multiplier(len: Int) extends NutCoreModule {
   val io = IO(new MulDivIO(len))
   val latency = 1
 
-  def DSPInPipe[T <: Data](a: T) = RegNext(a)
-  def DSPOutPipe[T <: Data](a: T) = RegNext(RegNext(RegNext(a)))
+  def DSPInPipe[T <: Data](a: T) = RegNext(a, 0.U.asTypeOf(a))
+  def DSPOutPipe[T <: Data](a: T) = RegNext(RegNext(RegNext(a, 0.U.asTypeOf(a)), 0.U.asTypeOf(a)), 0.U.asTypeOf(a))
   val mulRes = (DSPInPipe(io.in.bits(0)).asSInt * DSPInPipe(io.in.bits(1)).asSInt)
   io.out.bits := DSPOutPipe(mulRes).asUInt
   io.out.valid := DSPOutPipe(DSPInPipe(io.in.fire()))
@@ -178,7 +178,7 @@ class MDU extends NutCoreModule {
   val res = Mux(isDiv, divRes, mulRes)
   io.out.bits := Mux(isW, SignExt(res(31,0),XLEN), res)
 
-  val isDivReg = Mux(io.in.fire(), isDiv, RegNext(isDiv))
+  val isDivReg = Mux(io.in.fire(), isDiv, RegNext(isDiv, false.B))
   io.in.ready := Mux(isDiv, div.io.in.ready, mul.io.in.ready)
   io.out.valid := Mux(isDivReg, div.io.out.valid, mul.io.out.valid)
 

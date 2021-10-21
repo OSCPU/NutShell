@@ -34,7 +34,7 @@ class AXI4PLIC(nrIntr: Int, nrHart: Int) extends AXI4SlaveModule(new AXI4Lite, n
   val addressBits = log2Up(addressSpaceSize)
   def getOffset(addr: UInt) = addr(addressBits-1,0)
 
-  val priority = List.fill(nrIntr)(Reg(UInt(32.W)))
+  val priority = List.fill(nrIntr)(RegInit(UInt(32.W), 0.U))
   val priorityMap = priority.zipWithIndex.map{ case (r, intr) => RegMap((intr + 1) * 4, r) }.toMap
 
   val nrIntrWord = (nrIntr + 31) / 32  // roundup
@@ -50,7 +50,7 @@ class AXI4PLIC(nrIntr: Int, nrHart: Int) extends AXI4SlaveModule(new AXI4Lite, n
     l.zipWithIndex.map { case (r, intrWord) => RegMap(0x2000 + hart * 0x80 + intrWord * 4, r) }
   }.reduce(_ ++ _).toMap
 
-  val threshold = List.fill(nrHart)(Reg(UInt(32.W)))
+  val threshold = List.fill(nrHart)(RegInit(UInt(32.W), 0.U))
   val thresholdMap = threshold.zipWithIndex.map {
     case (r, hart) => RegMap(0x200000 + hart * 0x1000, r)
   }.toMap
@@ -61,7 +61,7 @@ class AXI4PLIC(nrIntr: Int, nrHart: Int) extends AXI4SlaveModule(new AXI4Lite, n
     0.U
   }
 
-  val claimCompletion = List.fill(nrHart)(Reg(UInt(32.W)))
+  val claimCompletion = List.fill(nrHart)(RegInit(UInt(32.W), 0.U))
   val claimCompletionMap = claimCompletion.zipWithIndex.map {
     case (r, hart) => {
       val addr = 0x200004 + hart * 0x1000

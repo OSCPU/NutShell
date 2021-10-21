@@ -102,7 +102,7 @@ class SimpleBusCrossbarNto1(n: Int, userBits:Int = 0) extends Module {
   (inputArb.io.in zip io.in.map(_.req)).map{ case (arb, in) => arb <> in }
   val thisReq = inputArb.io.out
   assert(!(thisReq.valid && !thisReq.bits.isRead() && !thisReq.bits.isWrite()))
-  val inflightSrc = Reg(UInt(log2Up(n).W))
+  val inflightSrc = RegInit(UInt(log2Up(n).W), 0.U)
 
   io.out.req.bits := thisReq.bits
   // bind correct valid and ready signals
