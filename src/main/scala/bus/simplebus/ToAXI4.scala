@@ -91,7 +91,7 @@ class AXI42SimpleBusConverter() extends Module {
   }
 
   // Write Path
-  val aw_reg = Reg(new AXI4BundleA(idBits))
+  val aw_reg = RegInit(new AXI4BundleA(idBits), 0.U.asTypeOf(new AXI4BundleA(idBits)))
   val bresp_en = RegInit(false.B)
 
   when (!isInflight() && axi.aw.valid && !axi.ar.valid) {
@@ -156,7 +156,7 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean)
   val (ar, aw, w, r, b) = (axi.ar.bits, axi.aw.bits, axi.w.bits, axi.r.bits, axi.b.bits)
 
   ar.addr  := mem.req.bits.addr
-  ar.prot  := AXI4Parameters.PROT_PRIVILEGED
+  //ar.prot  := AXI4Parameters.PROT_PRIVILEGED
   w.data := mem.req.bits.wdata
   w.strb := mem.req.bits.wmask
 
@@ -170,9 +170,9 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean)
     axi4.ar.bits.size  := mem.req.bits.size
     axi4.ar.bits.burst := (if (isFromCache) AXI4Parameters.BURST_WRAP
                            else AXI4Parameters.BURST_INCR)
-    axi4.ar.bits.lock  := false.B
-    axi4.ar.bits.cache := 0.U
-    axi4.ar.bits.qos   := 0.U
+    // axi4.ar.bits.lock  := false.B
+    // axi4.ar.bits.cache := 0.U
+    // axi4.ar.bits.qos   := 0.U
     axi4.ar.bits.user  := 0.U
     axi4.w.bits.last   := mem.req.bits.isWriteLast() || mem.req.bits.isWriteSingle()
     wlast := axi4.w.bits.last
@@ -187,7 +187,7 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean)
   val awAck = BoolStopWatch(axi.aw.fire, wSend)
   val wAck = BoolStopWatch(axi.w.fire && wlast, wSend)
   wSend := (axi.aw.fire && axi.w.fire && wlast) || (awAck && wAck)
-  val wen = RegEnable(mem.req.bits.isWrite(), mem.req.fire)
+  val wen = RegEnable(mem.req.bits.isWrite(), false.B, mem.req.fire)
 
   axi.ar.valid := mem.isRead
   axi.aw.valid := mem.isWrite && !awAck
