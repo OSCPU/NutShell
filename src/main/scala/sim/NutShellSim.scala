@@ -54,6 +54,7 @@ class LogCtrlIO extends Bundle {
   val log_level = Input(UInt(64.W)) // a cpp uint
 }
 
+/*
 class ysyxSoCFull extends BlackBox with HasNutCoreParameter {
   val io = IO(new Bundle {
     val clock = Input(Clock())
@@ -124,6 +125,7 @@ class ysyxSoCFull extends BlackBox with HasNutCoreParameter {
     val uart_tx = Output(Bool())
   })
 }
+*/
 
 class NutShellSimTop extends Module {
   val io = IO(new Bundle{
@@ -140,6 +142,7 @@ class NutShellSimTop extends Module {
     nutshell.io := DontCare
     io.difftestCtrl.enable := false.B
 
+    /*
     val ysyxSoC = Module(new ysyxSoCFull())
     ysyxSoC.io.clock := clock
     ysyxSoC.io.reset := reset
@@ -178,6 +181,7 @@ class NutShellSimTop extends Module {
 
     // TODO: leave cpu_slave hanging
     ysyxSoC.io.uart_rx := 1.U
+    */
 
     dontTouch(nutshell.io)
 
@@ -216,10 +220,6 @@ class NutShellSimTop extends Module {
   BoringUtils.addSink(difftest.mcause, "difftestMcause")
   BoringUtils.addSink(difftest.scause, "difftestScause")
   io.difftest := difftest
-  /* For debug */
-  // when (io.difftest.commit) {
-  //   printf("pc: %x      instr: %x\n", io.difftest.thisPC, io.difftest.thisINST)
-  // }
 
   val log_begin, log_end, log_level = WireInit(0.U(64.W))
   log_begin := io.logCtrl.log_begin

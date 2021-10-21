@@ -8,7 +8,9 @@
 
 //#include "VSimTop__Dpi.h"
 #include "common.h"
-#include "VNutShellSimTop.h"
+// #include "VNutShellSimTop.h"
+#include "VysyxSoCFull.h"
+#include "spiFlash.h"
 #if VM_TRACE
 #include <verilated_vcd_c.h>	// Trace file format header
 #endif
@@ -16,7 +18,8 @@
 
 class Emulator {
   const char *image;
-  std::shared_ptr<VNutShellSimTop> dut_ptr;
+  std::shared_ptr<VysyxSoCFull> dut_ptr;
+  // std::shared_ptr<VNutShellSimTop> dut_ptr;
 #if VM_TRACE
   VerilatedVcdC* tfp;
 #endif
@@ -31,6 +34,7 @@ class Emulator {
   static const struct option long_options[];
   static void print_help(const char *file);
 
+/*
   void read_emu_regs(rtlreg_t *r) {
 #define macro(x) r[x] = dut_ptr->io_difftest_r_##x
     macro(0); macro(1); macro(2); macro(3); macro(4); macro(5); macro(6); macro(7);
@@ -47,6 +51,7 @@ class Emulator {
     r[DIFFTEST_SCAUSE ] = dut_ptr->io_difftest_scause;
 #endif
   }
+*/
 
   public:
   // argv decay to the secondary pointer
@@ -63,15 +68,25 @@ class Emulator {
     srand(seed);
     srand48(seed);
     Verilated::randReset(2);
+    Verilated::commandArgs(argc, argv);
 
     // set log time range and log level
+    /*
     dut_ptr->io_logCtrl_log_begin = log_begin;
     dut_ptr->io_logCtrl_log_end = log_end;
     dut_ptr->io_logCtrl_log_level = log_level;
+    */
 
     // init ram
     extern void init_ram(const char *img);
     init_ram(image);
+
+    // init flash
+    // flash_init("/home53/wkf/ysyx/ysyxSoC/src/main/resources/ysyx-peripheral/bin/hello-flash.bin");
+    // flash_init("/home53/wkf/ysyx/hello-loader.bin");
+    flash_init("/home53/wkf/ysyx/ysyxSoC-new/ysyx/program/bin/loader/rtthread-loader.bin");
+    // flash_init("/home53/wkf/ysyx/ysyxSoC-new/ysyx/program/bin/flash/rtthread-flash.bin");
+    // flash_init("/home53/wkf/ysyx/rt-thread/bsp/qemu-riscv-virt64/rtthread.bin");
 
     // init device
     extern void init_device(void);
@@ -129,6 +144,7 @@ class Emulator {
       single_cycle();
       n --;
 
+      /*
       if (lastcommit - n > stuck_limit && hascommit) {
         eprintf("No instruction commits for %d cycles, maybe get stuck\n"
             "(please also check whether a fence.i instruction requires more than %d cycles to flush the icache)\n",
@@ -167,6 +183,7 @@ class Emulator {
         }
         lastcommit = n;
       }
+      */
 
       uint32_t t = uptime();
       if (t - lasttime > 100) {

@@ -43,14 +43,16 @@ build/top.zip: $(TOP_V)
 
 verilog: $(TOP_V)
 
-SIM_TOP = NutShellSimTop
+SIM_TOP = ysyxSoCFull
+# SIM_TOP = NutShellSimTop
 SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=$(BOARD) CORE=$(CORE)
 
-SOC_DIR = ../ysyxSoC/src/main/resources/ysyx-peripheral
-EMU_SOC_V = $(shell find $(SOC_DIR) -name '*.v')
+SOC_DIR = ../ysyxSoC-new/ysyx/peripheral
+RAM_DIR = ../ysyxSoC-new/ysyx/ram
+EMU_SOC_V = $(shell find $(SOC_DIR) -name '*.v') $(shell find $(RAM_DIR) -name '*.v') ../ysyxSoC-new/ysyx/soc/ysyxSoCFull.v
 
 EMU_CSRC_DIR = $(abspath ./src/test/csrc)
 EMU_VSRC_DIR = $(abspath ./src/test/vsrc)
@@ -77,7 +79,8 @@ VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   --x-assign unique -O3 -CFLAGS "$(EMU_CXXFLAGS)" \
   -LDFLAGS "$(EMU_LDFLAGS)" \
   --timescale "1ns/1ns" \
-  -Wno-WIDTH
+  -Wno-WIDTH \
+  -Wno-PINMISSING
 
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(SIM_TOP).mk
 EMU_DEPS := $(EMU_VFILES) $(EMU_CXXFILES) $(EMU_SOC_V)

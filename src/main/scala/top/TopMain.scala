@@ -65,13 +65,16 @@ object TopMain extends App {
       println(f + " = " + v)
   }
   if (board == "sim" || board == "soctest") {
-    Driver.execute(args, () => new NutShellSimTop)
+    // Driver.execute(args, () => new NutShellSimTop)
+    (new chisel3.stage.ChiselStage).execute(args, Seq(
+      chisel3.stage.ChiselGeneratorAnnotation(() => new NutShellSimTop())
+    ))
   } else {
     // Driver.execute(args, () => new Top)
     (new chisel3.stage.ChiselStage).execute(args, Seq(
       chisel3.stage.ChiselGeneratorAnnotation(() => new Top()),
       firrtl.stage.RunFirrtlTransformAnnotation(new AddModulePrefix()),
-      ModulePrefixAnnotation("ysyx_000000_")
+      ModulePrefixAnnotation("ysyx_210000_")
     ))
   }
 }
