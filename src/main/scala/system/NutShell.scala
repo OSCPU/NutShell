@@ -120,7 +120,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
     val outputXbar = Module(new SimpleBusCrossbarNto1(2))
     outputXbar.io.in(0) <> memAddrMap.io.out
     outputXbar.io.in(1) <> extDev
-    io.master <> outputXbar.io.out.toAXI4()
+    io.master <> outputXbar.io.out.toAXI4(true)
   }
 
   val clint = Module(new AXI4CLINT(sim = !p.FPGAPlatform))
