@@ -32,7 +32,7 @@ case class CacheConfig (
   idBits: Int = 0,
   cacheLevel: Int = 1,
 
-  totalSize: Int = 4, // Kbytes
+  totalSize: Int = 2, // Kbytes
   ways: Int = 4
 )
 
@@ -475,8 +475,8 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
   val s1 = Module(new CacheStage1)
   val s2 = Module(new CacheStage2)
   val s3 = Module(new CacheStage3)
-  val metaArray = Module(new SRAMTemplateWithArbiter(nRead = 1, new MetaBundle, set = Sets, way = Ways, shouldReset = true))
-  val dataArray = Module(new SRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways))
+  val metaArray = Module(new SRAMTemplateWithArbiter(nRead = 1, new MetaBundle, set = Sets, way = Ways, shouldReset = true, isData = false))
+  val dataArray = Module(new SRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways, isData = true))
 
   if (cacheName == "icache") {
     // flush icache when executing fence.i

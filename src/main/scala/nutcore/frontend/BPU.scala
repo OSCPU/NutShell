@@ -299,7 +299,7 @@ class BPU_inorder extends NutCoreModule {
     val valid = Bool()
   }
 
-  val btb = Module(new SRAMTemplate(btbEntry(), set = NRbtb, shouldReset = true, holdRead = true, singlePort = true))
+  val btb = Module(new BTBSRAMTemplate(btbEntry(), set = NRbtb, shouldReset = true, holdRead = true, singlePort = true))
   // flush BTB when executing fence.i
   val flushBTB = WireInit(false.B)
   val flushTLB = WireInit(false.B)
@@ -316,7 +316,7 @@ class BPU_inorder extends NutCoreModule {
   btbRead := btb.io.r.resp.data(0)
   // since there is one cycle latency to read SyncReadMem,
   // we should latch the input pc for one cycle
-  val pcLatch = RegEnable(io.in.pc.bits, io.in.pc.valid)
+  val pcLatch = RegEnable(io.in.pc.bits, init=0x30000000.U, io.in.pc.valid)
   val btbHit = btbRead.valid && btbRead.tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb.io.r.req.fire(), init = false.B) && !(pcLatch(1) && btbRead.brIdx(0))
   // btbHit will ignore pc(1,0). pc(1,0) is used to build brIdx
   // !(pcLatch(1) && btbRead.brIdx(0)) is used to deal with the following case:
@@ -334,7 +334,7 @@ class BPU_inorder extends NutCoreModule {
   
   // PHT
   val pht = Mem(NRbtb, UInt(2.W))
-  val phtTaken = RegEnable(pht.read(btbAddr.getIdx(io.in.pc.bits))(1), io.in.pc.valid)
+  val phtTaken = RegEnable(pht.read(btbAddr.getIdx(io.in.pc.bits))(1), init=false.B, io.in.pc.valid)
 
   // RAS
 
@@ -342,7 +342,7 @@ class BPU_inorder extends NutCoreModule {
   val ras = Mem(NRras, UInt(VAddrBits.W))
   // val raBrIdxs = Mem(NRras, UInt(2.W))
   val sp = Counter(NRras)
-  val rasTarget = RegEnable(ras.read(sp.value), io.in.pc.valid)
+  val rasTarget = RegEnable(ras.read(sp.value), init=0.U, io.in.pc.valid)
   // val rasBrIdx = RegEnable(raBrIdxs.read(sp.value), io.in.pc.valid)
 
   // update
@@ -386,8 +386,8 @@ class BPU_inorder extends NutCoreModule {
   //  Debug("[BTBWrite-ALL] %d setIdx:%x req.valid:%d pc:%x target:%x bridx:%x\n", GTimer(), btbAddr.getIdx(req.pc), req.valid, req.pc, req.actualTarget, btbWrite.brIdx)
   //}
 
-  val cnt = RegNext(pht.read(btbAddr.getIdx(req.pc)))
-  val reqLatch = RegNext(req)
+  val cnt = RegNext(pht.read(btbAddr.getIdx(req.pc)), init=0.U)
+  val reqLatch = RegNext(req, init=0.U.asTypeOf(req))
   when (reqLatch.valid && ALUOpType.isBranch(reqLatch.fuOpType)) {
     val taken = reqLatch.actualTaken
     val newCnt = Mux(taken, cnt + 1.U, cnt - 1.U)
