@@ -289,7 +289,7 @@ class BPU_inorder extends NutCoreModule {
   val flush = BoolStopWatch(io.flush, io.in.pc.valid, startHighPriority = true)
 
   // BTB
-  val NRbtb = 64
+  val NRbtb = 32
   val btbAddr = new TableAddr(log2Up(NRbtb))
   def btbEntry() = new Bundle {
     val tag = UInt(btbAddr.tagBits.W)
@@ -299,7 +299,7 @@ class BPU_inorder extends NutCoreModule {
     val valid = Bool()
   }
 
-  val btb = Module(new BTBSRAMTemplate(btbEntry(), set = NRbtb, shouldReset = true, holdRead = true, singlePort = true))
+  val btb = Module(new SRAMTemplate(btbEntry(), set = NRbtb, shouldReset = true, holdRead = true, singlePort = true)) // total: 304B
   // flush BTB when executing fence.i
   val flushBTB = WireInit(false.B)
   val flushTLB = WireInit(false.B)
