@@ -115,14 +115,14 @@ class ArrayMultiplier(pipeGap:Int = 1)(len: Int) extends Multiplier(len) {
         cout2 = c2
       }
       val needReg = if(pipeGap == 0 || depth == 0) false else (depth % pipeGap) == 0
-      val toNextLayer = if(needReg) columns_next.map(_.map( c => RegEnable(c, 0.U.asTypeOf(c), valid))) else columns_next
+      val toNextLayer = if(needReg) columns_next.map(bits => RegEnable(Cat(bits), 0.U, valid).asBools()) else columns_next
       val validNext = if(needReg) RegNext(valid, false.B) else valid
       addAll(toNextLayer, validNext, depth+1)
     }
   }
 
   val (res, v) = addAll(
-    cols = columns.map(_.map(c => RegEnable(c, init=0.U.asTypeOf(c), io.in.valid))),
+    cols = columns.map(bits => RegEnable(Cat(bits), init = 0.U, io.in.valid).asBools()),
     valid = RegNext(io.in.valid, false.B),
     depth = 0
   )
