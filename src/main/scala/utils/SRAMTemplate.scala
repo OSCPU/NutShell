@@ -42,6 +42,35 @@ class S011HD1P_X32Y2D128_BW extends BlackBox {
   })
 }
 
+class SRAMWrapper extends Module {
+  val io = IO(new Bundle {
+    val Q = Output(UInt(128.W))
+    val CLK = Input(Clock())
+    val CEN = Input(Bool())
+    val WEN = Input(Bool())
+    val BWEN = Input(UInt(128.W))
+    val A = Input(UInt(7.W))
+    val D = Input(UInt(128.W))
+  })
+  val sram_lo = Module(new S011HD1P_X32Y2D128_BW())
+  val sram_hi = Module(new S011HD1P_X32Y2D128_BW())
+  sram_lo.io.CLK := io.CLK
+  sram_lo.io.CEN := io.A(6) || io.CEN
+  sram_lo.io.WEN := io.WEN
+  sram_lo.io.BWEN := io.BWEN
+  sram_lo.io.A := io.A(5,0)
+  sram_lo.io.D := io.D
+
+  sram_hi.io.CLK := io.CLK
+  sram_hi.io.CEN := !io.A(6) || io.CEN
+  sram_hi.io.WEN := io.WEN
+  sram_hi.io.BWEN := io.BWEN
+  sram_hi.io.A := io.A(5,0)
+  sram_hi.io.D := io.D
+
+  io.Q := Mux(RegNext(io.A(6), false.B), sram_hi.io.Q, sram_lo.io.Q)
+}
+
 class SRAMBundleA(val set: Int) extends Bundle {
   val setIdx = Output(UInt(log2Up(set).W))
 
@@ -256,7 +285,7 @@ class DataSRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
   require(gen.getWidth == 64)
   val wordType = UInt(gen.getWidth.W)
   // val array = SyncReadMem(set, Vec(way, wordType))
-  val sram = Seq.fill(2)(Module(new S011HD1P_X32Y2D128_BW()))  // 4 * 64 => 2 * 128
+  val sram = Seq.fill(2)(Module(new SRAMWrapper()))  // 4 * 64 => 2 * 128
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
 
   if (shouldReset) {
