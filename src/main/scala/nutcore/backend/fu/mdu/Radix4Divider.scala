@@ -170,17 +170,18 @@ class Radix4Divider(len: Int) extends Divider(len) {
     *
     * (ws[j+1], wc[j+1]) = 4(ws[j],wc[j]) - q(j+1)*d
     */
-  val csa = Module(new CSA3_2(wLen))
-  csa.io.in(0) := ws
-  csa.io.in(1) := Cat(wc(wLen-1, 2), wc_adj)
-  csa.io.in(2) := MuxLookup(q_sel, 0.U)(Seq(
+  val csa_in = List.fill(3)(Wire(UInt(wLen.W)))
+  csa_in(0) := ws
+  csa_in(1) := Cat(wc(wLen-1, 2), wc_adj)
+  csa_in(2) := MuxLookup(q_sel, 0.U)(Seq(
     sel_d -> neg_d,
     sel_dx2 -> neg_dx2,
     sel_neg_d -> d,
     sel_neg_dx2 -> dx2
   ))
-  ws_next := csa.io.out(0)
-  wc_next := csa.io.out(1) << 1
+  val csa_out = CSA.CSA3_2(wLen)(csa_in)
+  ws_next := csa_out(0)
+  wc_next := csa_out(1) << 1
 
   // On the fly quotient conversion
   val q, qm = Reg(UInt(len.W))
