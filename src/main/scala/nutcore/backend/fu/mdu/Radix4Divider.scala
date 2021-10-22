@@ -31,7 +31,7 @@ class Radix4Divider(len: Int) extends Divider(len) {
   val state = RegInit(s_idle)
   val newReq = (state === s_idle) && io.in.fire()
   val cnt_next = Wire(UInt(log2Up((len+3)/2).W))
-  val cnt = RegEnable(cnt_next, state===s_normlize || state===s_recurrence)
+  val cnt = RegEnable(cnt_next, init=0.U, state===s_normlize || state===s_recurrence)
   val rec_enough = cnt_next === 0.U
 
   def abs(a: UInt, sign: Bool): (Bool, UInt) = {
@@ -41,10 +41,10 @@ class Radix4Divider(len: Int) extends Divider(len) {
   val (a, b) = (io.in.bits(0), io.in.bits(1))
   val (aSign, aVal) = abs(a, io.sign)
   val (bSign, bVal) = abs(b, io.sign)
-  val aSignReg = RegEnable(aSign, newReq)
-  val qSignReg = RegEnable(aSign ^ bSign, newReq)
+  val aSignReg = RegEnable(aSign, init=false.B, newReq)
+  val qSignReg = RegEnable(aSign ^ bSign, init=false.B, newReq)
   val divZero = b === 0.U
-  val divZeroReg = RegEnable(divZero, newReq)
+  val divZeroReg = RegEnable(divZero, init=false.B, newReq)
 
   switch(state){
     is(s_idle){
@@ -79,23 +79,25 @@ class Radix4Divider(len: Int) extends Divider(len) {
     * wLen = 3 integer bits + (len+1) frac bits
     */
   def wLen = 3 + len + 1
-  val ws, wc = Reg(UInt(wLen.W))
+  val ws, wc = RegInit(UInt(wLen.W), 0.U)
   val ws_next, wc_next = Wire(UInt(wLen.W))
-  val d = Reg(UInt(wLen.W))
+  val d = RegInit(UInt(wLen.W), 0.U)
 
   val aLeadingZeros = RegEnable(
     next = PriorityEncoder(ws(len-1, 0).asBools().reverse),
+    init = 0.U(log2Ceil(len).W),
     enable = state===s_lzd
   )
   val bLeadingZeros = RegEnable(
     next = PriorityEncoder(d(len-1, 0).asBools().reverse),
+    init = 0.U(log2Ceil(len).W),
     enable = state===s_lzd
   )
   val diff = Cat(0.U(1.W), bLeadingZeros).asSInt() - Cat(0.U(1.W), aLeadingZeros).asSInt()
   val isNegDiff = diff(diff.getWidth - 1)
   val quotientBits = Mux(isNegDiff, 0.U, diff.asUInt())
   val qBitsIsOdd = quotientBits(0)
-  val recoveryShift = RegEnable(len.U - bLeadingZeros, state===s_normlize)
+  val recoveryShift = RegEnable(len.U - bLeadingZeros, init=0.U, state===s_normlize)
   val a_shifted, b_shifted = Wire(UInt(len.W))
   a_shifted := Mux(isNegDiff,
     ws(len-1, 0) << bLeadingZeros,
@@ -189,7 +191,7 @@ class Radix4Divider(len: Int) extends Divider(len) {
   wc_next := csa.io.out(1) << 1
 
   // On the fly quotient conversion
-  val q, qm = Reg(UInt(len.W))
+  val q, qm = RegInit(UInt(len.W), 0.U)
   when(newReq){
     q := 0.U
     qm := 0.U

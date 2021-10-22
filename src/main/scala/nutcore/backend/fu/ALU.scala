@@ -155,7 +155,7 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   bpuUpdateReq.isRVC := isRVC
 
   if(hasBru){
-    BoringUtils.addSource(RegNext(bpuUpdateReq), "bpuUpdateReq")
+    BoringUtils.addSource(RegNext(bpuUpdateReq, 0.U.asTypeOf(bpuUpdateReq)), "bpuUpdateReq")
   
     val right = valid && isBru && !predictWrong
     val wrong = valid && isBru && predictWrong

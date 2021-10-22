@@ -86,7 +86,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   tlbExec.io.satp := satp
   tlbExec.io.mem <> io.mem
   tlbExec.io.pf <> io.csrMMU
-  tlbExec.io.md <> RegEnable(mdTLB.io.tlbmd, mdUpdate)
+  tlbExec.io.md <> RegEnable(mdTLB.io.tlbmd, 0.U.asTypeOf(mdTLB.io.tlbmd), mdUpdate)
   tlbExec.io.mdReady := mdTLB.io.ready
   mdTLB.io.rindex := getIndex(io.in.req.bits.addr)
   mdTLB.io.write <> tlbExec.io.mdWrite
@@ -108,7 +108,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
     when (isFlush) { valid := false.B }
 
     left.ready := right.ready
-    right.bits <> RegEnable(left.bits, left.valid && right.ready)
+    right.bits <> RegEnable(left.bits, 0.U.asTypeOf(left.bits), left.valid && right.ready)
     right.valid := valid //&& !isFlush
 
     update := left.valid && right.ready
@@ -233,7 +233,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
     BoringUtils.addSink(isAMO, "ISAMO")
   }
 
-  io.pf.loadPF := RegNext(loadPF, init =false.B)
+  io.pf.loadPF := RegNext(loadPF, init = false.B)
   io.pf.storePF := RegNext(storePF, init = false.B)
 
   if (tlbname == "itlb") { hitinstrPF := !hitExec  && hit}

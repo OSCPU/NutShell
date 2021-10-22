@@ -104,7 +104,7 @@ class MMIOBridge(implicit val p: NutCoreConfig) extends NutCoreModule {
   })
   val s_idle :: s_req1 :: s_waitResp1 :: s_req2 :: s_waitResp2 :: s_done :: s_req :: s_normal :: Nil = Enum(8)
   val state = RegInit(0.U(8.W))
-  val in_reqLatch = RegEnable(io.in.req.bits, io.in.req.fire())
+  val in_reqLatch = RegEnable(io.in.req.bits, 0.U.asTypeOf(io.in.req.bits), io.in.req.fire())
   val out_respLatch1 = HoldUnless(io.out.resp.bits, io.out.resp.fire() && state === s_waitResp1)
   val out_respLatch2 = HoldUnless(io.out.resp.bits, io.out.resp.fire() && state === s_waitResp2)
   val normal = RegInit(false.B)

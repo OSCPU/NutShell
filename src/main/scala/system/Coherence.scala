@@ -49,7 +49,7 @@ class CoherenceManager extends Module with HasCoherenceParameter {
   assert(!(thisReq.valid && !thisReq.bits.isRead() && !thisReq.bits.isWrite()))
 
   // when read, we should first probe dcache
-  val reqLatch = RegEnable(thisReq.bits, !inflight && thisReq.bits.isRead())
+  val reqLatch = RegEnable(thisReq.bits, 0.U.asTypeOf(thisReq.bits), !inflight && thisReq.bits.isRead())
   io.out.coh match { case c => {
     c.req.bits := thisReq.bits
     c.req.bits.cmd := SimpleBusCmd.probe

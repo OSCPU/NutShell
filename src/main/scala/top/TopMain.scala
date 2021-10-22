@@ -26,12 +26,12 @@ import chisel3._
 class Top extends Module {
   val io = IO(new Bundle{})
   val nutshell = Module(new NutShell()(NutCoreConfig()))
-  val vga = Module(new AXI4VGA)
+  // val vga = Module(new AXI4VGA)
 
   nutshell.io := DontCare
-  vga.io := DontCare
+  // vga.io := DontCare
   dontTouch(nutshell.io)
-  dontTouch(vga.io)
+  // dontTouch(vga.io)
 }
 
 object TopMain extends App {

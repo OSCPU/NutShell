@@ -165,7 +165,7 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
   val isForwardMetaReg = RegInit(false.B)
   when (isForwardMeta) { isForwardMetaReg := true.B }
   when (io.in.fire() || !io.in.valid) { isForwardMetaReg := false.B }
-  val forwardMetaReg = RegEnable(io.metaWriteBus.req.bits, isForwardMeta)
+  val forwardMetaReg = RegEnable(io.metaWriteBus.req.bits, init=0.U.asTypeOf(io.metaWriteBus.req.bits), isForwardMeta)
 
   val metaWay = Wire(Vec(Ways, chiselTypeOf(forwardMetaReg.data)))
   val pickForwardMeta = isForwardMetaReg || isForwardMeta
@@ -207,7 +207,7 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
   val isForwardDataReg = RegInit(false.B)
   when (isForwardData) { isForwardDataReg := true.B }
   when (io.in.fire() || !io.in.valid) { isForwardDataReg := false.B }
-  val forwardDataReg = RegEnable(io.dataWriteBus.req.bits, isForwardData)
+  val forwardDataReg = RegEnable(io.dataWriteBus.req.bits, 0.U.asTypeOf(io.dataWriteBus.req.bits), isForwardData)
   io.out.bits.isForwardData := isForwardDataReg || isForwardData
   io.out.bits.forwardData := Mux(isForwardData, io.dataWriteBus.req.bits, forwardDataReg)
 
@@ -292,7 +292,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
 
   io.dataReadBus.apply(valid = (state === s_memWriteReq || state === s_release) && (state2 === s2_idle),
     setIdx = Cat(addr.index, Mux(state === s_release, readBeatCnt.value, writeBeatCnt.value)))
-  val dataWay = RegEnable(io.dataReadBus.resp.data, state2 === s2_dataReadWait)
+  val dataWay = RegEnable(io.dataReadBus.resp.data, init=0.U.asTypeOf(io.dataReadBus.resp.data), state2 === s2_dataReadWait)
   val dataHitWay = Mux1H(io.in.bits.waymask, dataWay).data
 
   switch (state2) {
@@ -324,6 +324,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
   val alreadyOutFire = RegEnable(true.B, init = false.B, io.out.fire())
   val readingFirst = !afterFirstRead && io.mem.resp.fire() && (state === s_memReadResp)
   val inRdataRegDemand = RegEnable(Mux(mmio, io.mmio.resp.bits.rdata, io.mem.resp.bits.rdata),
+                                   init = 0.U.asTypeOf(io.mmio.resp.bits.rdata),
                                    Mux(mmio, state === s_mmioResp, readingFirst))
 
   // probe

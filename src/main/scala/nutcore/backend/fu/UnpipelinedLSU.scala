@@ -101,7 +101,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     atomALU.io.func := func
     atomALU.io.isWordOp := atomWidthW
 
-    val addr = if(IndependentAddrCalcState){RegNext(src1 + src2, state === s_idle)}else{DontCare}
+    val addr = DontCare
     
     // StoreQueue
     // TODO: inst fence needs storeQueue to be finished

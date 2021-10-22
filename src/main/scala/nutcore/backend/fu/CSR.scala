@@ -344,7 +344,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }
 
   // User-Level CSRs
-  val uepc = Reg(UInt(XLEN.W))
+  val uepc = RegInit(UInt(XLEN.W), 0.U)
 
   // Atom LR/SC Control Bits
   val setLr = WireInit(Bool(), false.B)

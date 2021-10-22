@@ -36,7 +36,7 @@ class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
     range => (addr >= range._1.U && addr < (range._1 + range._2).U)))
   val outSelIdx = PriorityEncoder(outSelVec)
   val outSel = io.out(outSelIdx)
-  val outSelIdxResp = RegEnable(outSelIdx, outSel.req.fire() && (state === s_idle))
+  val outSelIdxResp = RegEnable(outSelIdx, 0.U.asTypeOf(outSelIdx), outSel.req.fire() && (state === s_idle))
   val outSelResp = io.out(outSelIdxResp)
   val reqInvalidAddr = io.in.req.valid && !outSelVec.asUInt.orR
 

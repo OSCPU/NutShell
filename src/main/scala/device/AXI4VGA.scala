@@ -159,7 +159,7 @@ class AXI4VGA(sim: Boolean = false) extends Module with HasVGAParameter {
   // each pixel is 4 bytes
   // fb.io.in.ar.bits.prot := 0.U
   fb.io.in.ar.bits.addr := Cat(Mux(vCounterIsOdd, fbPixelAddrV1, fbPixelAddrV0), 0.U(2.W))
-  fb.io.in.ar.valid := RegNext(nextPixel) && hCounterIs2
+  fb.io.in.ar.valid := RegNext(nextPixel, false.B) && hCounterIs2
 
   fb.io.in.r.ready := true.B
   val data = HoldUnless(fb.io.in.r.bits.data, fb.io.in.r.fire())
