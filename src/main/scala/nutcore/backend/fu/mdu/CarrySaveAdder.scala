@@ -19,44 +19,50 @@ package nutcore
 import chisel3._
 import chisel3.util._
 
-abstract class CarrySaveAdderMToN(m: Int, n: Int)(len: Int) extends Module{
-  val io = IO(new Bundle() {
-    val in = Input(Vec(m, UInt(len.W)))
-    val out = Output(Vec(n, UInt(len.W)))
-  })
-}
-
-class CSA2_2(len: Int) extends CarrySaveAdderMToN(2, 2)(len) {
-  val temp = Wire(Vec(len, UInt(2.W)))
-  for((t, i) <- temp.zipWithIndex){
-    val (a, b) = (io.in(0)(i), io.in(1)(i))
-    val sum = a ^ b
-    val cout = a & b
-    t := Cat(cout, sum)
+object CSA {
+  def checkInput(len: Int, width: Int, in: List[UInt]) = {
+    require(in.length == width)
+    in.map(x => require(x.getWidth == len))
   }
-  io.out.zipWithIndex.foreach({case(x, i) => x := Cat(temp.reverse map(_(i)))})
-}
 
-class CSA3_2(len: Int) extends CarrySaveAdderMToN(3, 2)(len){
-  val temp = Wire(Vec(len, UInt(2.W)))
-  for((t, i) <- temp.zipWithIndex){
-    val (a, b, cin) = (io.in(0)(i), io.in(1)(i), io.in(2)(i))
-    val a_xor_b = a ^ b
-    val a_and_b = a & b
-    val sum = a_xor_b ^ cin
-    val cout = a_and_b | (a_xor_b & cin)
-    t := Cat(cout, sum)
+  def CSA2_2(len: Int)(in: List[UInt]): List[UInt] = {
+    checkInput(len, 2, in);
+    val temp = Wire(Vec(len, UInt(2.W)))
+    for((t, i) <- temp.zipWithIndex){
+      val (a, b) = (in(0)(i), in(1)(i))
+      val sum = a ^ b
+      val cout = a & b
+      t := Cat(cout, sum)
+    }
+    val out = Wire(Vec(2, UInt(len.W)))
+    out.zipWithIndex.foreach({case(x, i) => x := Cat(temp.reverse map(_(i)))})
+    out.toList
   }
-  io.out.zipWithIndex.foreach({case(x, i) => x := Cat(temp.reverse map(_(i)))})
-}
 
-class CSA5_3(len: Int)extends CarrySaveAdderMToN(5, 3)(len){
-  val FAs = Array.fill(2)(Module(new CSA3_2(len)))
-  FAs(0).io.in := io.in.take(3)
-  FAs(1).io.in := VecInit(FAs(0).io.out(0), io.in(3), io.in(4))
-  io.out := VecInit(FAs(1).io.out(0), FAs(0).io.out(1), FAs(1).io.out(1))
-}
+  def CSA3_2(len: Int)(in: List[UInt]): List[UInt] = {
+    checkInput(len, 3, in);
+    val temp = Wire(Vec(len, UInt(2.W)))
+    for((t, i) <- temp.zipWithIndex){
+      val (a, b, cin) = (in(0)(i), in(1)(i), in(2)(i))
+      val a_xor_b = a ^ b
+      val a_and_b = a & b
+      val sum = a_xor_b ^ cin
+      val cout = a_and_b | (a_xor_b & cin)
+      t := Cat(cout, sum)
+    }
+    val out = Wire(Vec(2, UInt(len.W)))
+    out.zipWithIndex.foreach({case(x, i) => x := Cat(temp.reverse map(_(i)))})
+    out.toList
+  }
 
-class C22 extends CSA2_2(1)
-class C32 extends CSA3_2(1)
-class C53 extends CSA5_3(1)
+  def CSA5_3(len: Int)(in: List[UInt]): List[UInt] = {
+    checkInput(len, 5, in);
+    val FA0_out = CSA3_2(len)(in.take(3))
+    val FA1_out = CSA3_2(len)(List(FA0_out(0), in(3), in(4)))
+    List(FA1_out(0), FA0_out(1), FA1_out(1))
+  }
+
+  def C22 = CSA2_2(1)(_)
+  def C32 = CSA3_2(1)(_)
+  def C53 = CSA5_3(1)(_)
+}
