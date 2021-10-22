@@ -27,32 +27,20 @@ object CSA {
 
   def CSA2_2(len: Int)(in: List[UInt]): List[UInt] = {
     checkInput(len, 2, in);
-    val temp = Wire(Vec(len, UInt(2.W)))
-    for((t, i) <- temp.zipWithIndex){
-      val (a, b) = (in(0)(i), in(1)(i))
-      val sum = a ^ b
-      val cout = a & b
-      t := Cat(cout, sum)
-    }
-    val out = Wire(Vec(2, UInt(len.W)))
-    out.zipWithIndex.foreach({case(x, i) => x := Cat(temp.reverse map(_(i)))})
-    out.toList
+    val (a, b) = (in(0), in(1))
+    val sum = a ^ b
+    val cout = a & b
+    List(sum, cout)
   }
 
   def CSA3_2(len: Int)(in: List[UInt]): List[UInt] = {
     checkInput(len, 3, in);
-    val temp = Wire(Vec(len, UInt(2.W)))
-    for((t, i) <- temp.zipWithIndex){
-      val (a, b, cin) = (in(0)(i), in(1)(i), in(2)(i))
-      val a_xor_b = a ^ b
-      val a_and_b = a & b
-      val sum = a_xor_b ^ cin
-      val cout = a_and_b | (a_xor_b & cin)
-      t := Cat(cout, sum)
-    }
-    val out = Wire(Vec(2, UInt(len.W)))
-    out.zipWithIndex.foreach({case(x, i) => x := Cat(temp.reverse map(_(i)))})
-    out.toList
+    val (a, b, cin) = (in(0), in(1), in(2))
+    val a_xor_b = a ^ b
+    val a_and_b = a & b
+    val sum = a_xor_b ^ cin
+    val cout = a_and_b | (a_xor_b & cin)
+    List(sum, cout)
   }
 
   def CSA5_3(len: Int)(in: List[UInt]): List[UInt] = {
