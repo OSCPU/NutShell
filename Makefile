@@ -80,6 +80,7 @@ VERILATOR_FLAGS = --top-module $(SIM_TOP) \
   --x-assign unique -O3 -CFLAGS "$(EMU_CXXFLAGS)" \
   -LDFLAGS "$(EMU_LDFLAGS)" \
   --timescale "1ns/1ns" \
+  --autoflush \
   -Wno-WIDTH \
   -Wno-PINMISSING
 
