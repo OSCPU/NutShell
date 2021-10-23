@@ -65,6 +65,18 @@ class ArrayMultiplier(pipeGap:Int = 1)(len: Int) extends Multiplier(len) {
     }
   }
 
+  def addRegs(cols: Array[Seq[Bool]], valid: Bool, depth: Int): Array[Seq[Bool]] = {
+    val next = Array.fill(2*len)(Seq[Bool]())
+    val width = cols.map(_.size)
+    val start = width.scanRight(0)(_ + _).tail
+    val end = (start zip width).map{case (s, w) => s + w - 1}
+    val allCols = cols.reduce(_ ++ _)
+    val uint = RegEnable(Cat(allCols), 0.U(allCols.length.W), valid)
+    for(i <- next.indices) { next(i) = uint(end(i), start(i)).asBools }
+    println(s"Wallace Tree: Insert Reg(UInt(${uint.getWidth}.W) in depth level $depth")
+    next
+  }
+
   def addOneColumn(col: Seq[Bool], cin: Seq[Bool]): (Seq[Bool], Seq[Bool], Seq[Bool]) = {
     var sum = Seq[Bool]()
     var cout1 = Seq[Bool]()
@@ -115,16 +127,14 @@ class ArrayMultiplier(pipeGap:Int = 1)(len: Int) extends Multiplier(len) {
         cout2 = c2
       }
       val needReg = if(pipeGap == 0 || depth == 0) false else (depth % pipeGap) == 0
-      val toNextLayer = if(needReg) columns_next.map(bits =>
-        RegEnable(Cat(bits), 0.U(bits.length.W), valid).asBools
-      ) else columns_next
+      val toNextLayer = if(needReg) addRegs(columns_next, valid, depth+1) else columns_next
       val validNext = if(needReg) RegNext(valid, false.B) else valid
       addAll(toNextLayer, validNext, depth+1)
     }
   }
 
   val (res, v) = addAll(
-    cols = columns.map(bits => RegEnable(Cat(bits), 0.U(bits.length.W), io.in.valid).asBools),
+    cols = addRegs(columns, io.in.valid, 0),
     valid = RegNext(io.in.valid, false.B),
     depth = 0
   )
