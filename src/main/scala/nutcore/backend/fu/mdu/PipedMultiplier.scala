@@ -23,7 +23,7 @@ class PipedMultiplier(len: Int) extends Multiplier(len) {
   val latency = 1
 
   def DSPInPipe[T <: Data](a: T) = RegNext(a, 0.U.asTypeOf(a))
-  def DSPOutPipe[T <: Data](a: T) = RegNext(RegNext(RegNext(a, 0.U.asTypeOf(a)), 0.U.asTypeOf(a)), 0.U.asTypeOf(a))
+  def DSPOutPipe[T <: Data](a: T) = RegNext(a, 0.U.asTypeOf(a))
   val mulRes = (DSPInPipe(io.in.bits(0)).asSInt * DSPInPipe(io.in.bits(1)).asSInt)
   io.out.bits := DSPOutPipe(mulRes).asUInt
   io.out.valid := DSPOutPipe(DSPInPipe(io.in.fire()))

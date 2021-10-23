@@ -63,7 +63,7 @@ class MDUIO extends FunctionUnitIO {
 class MDU extends NutCoreModule {
   val io = IO(new MDUIO)
   val useRadix4Div = true
-  val useArrayMult = true
+  val useArrayMult = false
 
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt = {
