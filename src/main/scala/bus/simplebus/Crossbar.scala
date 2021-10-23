@@ -190,3 +190,49 @@ class SimpleBusAutoIDCrossbarNto1(n: Int, userBits: Int = 0) extends Module {
   }
 
 }
+
+// Dirty code
+class ReqBlocker(n: Int, userBits:Int = 0) extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(Vec(n, new SimpleBusUC(userBits)))
+    val out = Vec(n, new SimpleBusUC(userBits))
+  })
+  require(n == 2)
+
+  val s_idle :: s_hi :: s_lo :: s_waitResp_hi :: s_waitResp_lo :: Nil = Enum(5)
+  val state = RegInit(s_idle)
+
+  val chooseHi = io.in(1).req.valid
+  val chooseLo = io.in(0).req.valid && !chooseHi
+
+  switch (state) {
+    is (s_idle) {
+      when(chooseHi) { state := s_hi }
+      when(chooseLo) { state := s_lo }
+    }
+    is (s_hi) {
+      when (io.in(1).req.fire()) { state := s_waitResp_hi }
+    }
+    is (s_lo) {
+      when (io.in(0).req.fire()) { state := s_waitResp_lo }
+    }
+    is (s_waitResp_hi) {
+      when (io.in(1).resp.fire()) { state := s_idle }
+    }
+    is (s_waitResp_lo) {
+      when (io.in(0).resp.fire()) { state := s_idle }
+    }
+  }
+
+  val do_hi = (state === s_hi || state === s_waitResp_hi)
+  val do_lo = (state === s_lo || state === s_waitResp_lo)
+  
+  io.out(0) <> io.in(0)
+  io.out(1) <> io.in(1)
+
+  io.out(1).req.valid := io.in(1).req.valid && do_hi
+  io.in(1).req.ready := io.out(1).req.ready && do_hi
+
+  io.out(0).req.valid := io.in(0).req.valid && do_lo
+  io.in(0).req.ready := io.out(0).req.ready && do_lo
+}

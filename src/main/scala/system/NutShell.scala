@@ -117,9 +117,12 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
     }
     io.master <> memAddrMap.io.out.toAXI4(true)
   } else {
+    val blocker = Module(new ReqBlocker(2))
     val outputXbar = Module(new SimpleBusCrossbarNto1(2))
-    outputXbar.io.in(0) <> memAddrMap.io.out
-    outputXbar.io.in(1) <> extDev
+    blocker.io.in(0) <> memAddrMap.io.out
+    blocker.io.in(1) <> extDev
+    outputXbar.io.in(0) <> blocker.io.out(0)
+    outputXbar.io.in(1) <> blocker.io.out(1)
     io.master <> outputXbar.io.out.toAXI4(true)
   }
 
