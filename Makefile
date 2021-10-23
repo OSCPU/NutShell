@@ -51,9 +51,10 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=$(BOARD) CORE=$(CORE)
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 
-SOC_DIR = ../ysyxSoC-new/ysyx/peripheral
-RAM_DIR = ../ysyxSoC-new/ysyx/ram
-EMU_SOC_V = $(shell find $(SOC_DIR) -name '*.v') $(shell find $(RAM_DIR) -name '*.v') ../ysyxSoC-new/ysyx/soc/ysyxSoCFull.v
+ysyxSoC_DIR = ../ysyxSoC-new
+SOC_DIR = $(ysyxSoC_DIR)/ysyx/peripheral
+RAM_DIR = $(ysyxSoC_DIR)/ysyx/ram
+EMU_SOC_V = $(shell find $(SOC_DIR) -name '*.v') $(shell find $(RAM_DIR) -name '*.v') $(ysyxSoC_DIR)/ysyx/soc/ysyxSoCFull.v
 
 EMU_CSRC_DIR = $(abspath ./src/test/csrc)
 EMU_VSRC_DIR = $(abspath ./src/test/vsrc)
