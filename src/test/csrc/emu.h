@@ -10,11 +10,12 @@
 #include "common.h"
 // #include "VNutShellSimTop.h"
 #include "VysyxSoCFull.h"
-#include "spiFlash.h"
 #if VM_TRACE
 #include <verilated_vcd_c.h>	// Trace file format header
 #endif
 
+extern "C" void flash_init(char *img);
+extern "C" void flash_memcpy(void *src, int len);
 
 class Emulator {
   const char *image;
