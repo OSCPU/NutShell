@@ -25,6 +25,7 @@ $(TOP_V): $(SCALA_FILE)
 	mill chiselModule.runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE)
 	$(MEM_GEN) $(@D)/$(@F).conf >> $@
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
+	sed -i -e 's/ysyx_210000_NutShell/ysyx_210000/g' $@
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
 	@sed -i 's/^/\/\// ' .__head__
