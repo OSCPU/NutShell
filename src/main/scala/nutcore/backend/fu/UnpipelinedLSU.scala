@@ -107,8 +107,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     val cannotAccessMemory = WireInit(false.B)
     BoringUtils.addSink(cannotAccessMemory, "cannot_access_memory")
     BoringUtils.addSource(valid && !scInvalid, "lsu_is_valid")
-    BoringUtils.addSource(loadReq || lrReq, "lsu_is_load")
-    BoringUtils.addSource(Mux(loadReq || storeReq, src1 + src2, src1), "lsu_addr")
+    // Do not rely on valid in lsu_is_load and lsu_addr
+    BoringUtils.addSource(LSUOpType.isLoad(func) || LSUOpType.isLR(func), "lsu_is_load")
+    BoringUtils.addSource(Mux(LSUOpType.isLoad(func) || LSUOpType.isStore(func), src1 + src2, src1), "lsu_addr")
 
     // StoreQueue
     // TODO: inst fence needs storeQueue to be finished
