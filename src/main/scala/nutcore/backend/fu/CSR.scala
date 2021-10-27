@@ -651,12 +651,19 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   BoringUtils.addSource(isuPermitLibStore, name = "isu_perm_lib_st")
 
   val (lsuPermitLibLoad, lsuPermitLibStore) = (io.lsuPermitLibLoad, io.lsuPermitLibStore)
-  val lsuSLibLoadFault  = lsuIsValid &&  lsuIsLoad && priviledgeMode === ModeS && !lsuPermitLibLoad
-  val lsuULibLoadFault  = lsuIsValid &&  lsuIsLoad && priviledgeMode === ModeU && !lsuPermitLibLoad
-  val lsuSLibStoreFault = lsuIsValid && !lsuIsLoad && priviledgeMode === ModeS && !lsuPermitLibStore
-  val lsuULibStoreFault = lsuIsValid && !lsuIsLoad && priviledgeMode === ModeU && !lsuPermitLibStore
 
-  BoringUtils.addSource(lsuSLibLoadFault || lsuULibLoadFault || lsuSLibStoreFault || lsuULibStoreFault, "cannot_access_memory")
+  // Seperate access denying and exception raising
+  val lsuSLibLoadDeny : Bool =  lsuIsLoad && priviledgeMode === ModeS && !lsuPermitLibLoad
+  val lsuULibLoadDeny : Bool =  lsuIsLoad && priviledgeMode === ModeU && !lsuPermitLibLoad
+  val lsuSLibStoreDeny: Bool = !lsuIsLoad && priviledgeMode === ModeS && !lsuPermitLibStore
+  val lsuULibStoreDeny: Bool = !lsuIsLoad && priviledgeMode === ModeU && !lsuPermitLibStore
+  val lsuDeny: Bool = lsuSLibLoadDeny || lsuULibLoadDeny || lsuSLibStoreDeny || lsuULibStoreDeny
+  BoringUtils.addSource(lsuDeny, name = "cannot_access_memory")
+
+  val lsuSLibLoadFault  = lsuIsValid && lsuSLibLoadDeny
+  val lsuULibLoadFault  = lsuIsValid && lsuULibLoadDeny
+  val lsuSLibStoreFault = lsuIsValid && lsuSLibStoreDeny
+  val lsuULibStoreFault = lsuIsValid && lsuULibStoreDeny
 
 //   when (io.cfIn.pc === 0x80202f30L.U)
 //   {
