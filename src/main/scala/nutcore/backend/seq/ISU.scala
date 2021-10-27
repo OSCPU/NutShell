@@ -72,6 +72,7 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
     ((io.in(0).bits.ctrl.src2Type === SrcType.reg) && !src2ForwardNextCycle && !src2Forward) -> rf.read(rfSrc2)
   ))
   io.out.bits.data.imm  := io.in(0).bits.data.imm
+  io.out.bits.data.addr := io.out.bits.data.src1 + io.out.bits.data.imm
 
   io.out.bits.cf <> io.in(0).bits.cf
   io.out.bits.ctrl := io.in(0).bits.ctrl

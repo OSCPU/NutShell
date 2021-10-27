@@ -24,6 +24,7 @@ import bus.simplebus._
 import top.Settings
 
 class UnpipeLSUIO extends FunctionUnitIO {
+  val srcSum = Input(UInt(XLEN.W))  // src1 + src2 calculated in ISU
   val wdata = Input(UInt(XLEN.W))
   val instr = Input(UInt(32.W)) // Atom insts need aq rl funct3 bit from instr
   val dmem = new SimpleBusUC(addrBits = VAddrBits)
@@ -45,6 +46,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     io.out.bits
   }
     val lsExecUnit = Module(new LSExecUnit)
+    lsExecUnit.io.srcSum := io.srcSum
     lsExecUnit.io.instr := DontCare
     io.dtlbPF := lsExecUnit.io.dtlbPF
 
@@ -109,7 +111,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     BoringUtils.addSource(valid && !scInvalid, "lsu_is_valid")
     // Do not rely on valid in lsu_is_load and lsu_addr
     BoringUtils.addSource(LSUOpType.isLoad(func) || LSUOpType.isLR(func), "lsu_is_load")
-    BoringUtils.addSource(Mux(LSUOpType.isLoad(func) || LSUOpType.isStore(func), src1 + src2, src1), "lsu_addr")
+    BoringUtils.addSource(Mux(LSUOpType.isLoad(func) || LSUOpType.isStore(func), io.srcSum, src1), "lsu_addr")
 
     // StoreQueue
     // TODO: inst fence needs storeQueue to be finished
@@ -148,7 +150,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         if(!IndependentAddrCalcState){
           lsExecUnit.io.in.valid     := io.in.valid && !atomReq && !cannotAccessMemory
           lsExecUnit.io.out.ready    := io.out.ready 
-          lsExecUnit.io.in.bits.src1 := src1 + src2
+          lsExecUnit.io.in.bits.src1 := io.srcSum
           lsExecUnit.io.in.bits.src2 := DontCare
           lsExecUnit.io.in.bits.func := func
           lsExecUnit.io.wdata        := io.wdata

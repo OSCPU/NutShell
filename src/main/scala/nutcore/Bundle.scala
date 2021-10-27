@@ -39,6 +39,7 @@ class DataSrcIO extends NutCoreBundle {
   val src1 = Output(UInt(XLEN.W))
   val src2 = Output(UInt(XLEN.W))
   val imm  = Output(UInt(XLEN.W))
+  val addr = Output(UInt(XLEN.W))   // To gain LSU address in ISU stage
 }
 
 class RedirectIO extends NutCoreBundle {
