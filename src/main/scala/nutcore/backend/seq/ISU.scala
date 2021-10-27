@@ -79,13 +79,14 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   val lsuFunc = io.in(0).bits.ctrl.fuOpType
   val isuAddr = Mux(LSUOpType.isLoad(lsuFunc) || LSUOpType.isStore(lsuFunc), addr, src1)
   BoringUtils.addSource(isuAddr, name = "isu_addr")
-  BoringUtils.addSink(io.out.bits.ctrl.permitLibLoad, name = "isu_perm_lib_ld")
-  BoringUtils.addSink(io.out.bits.ctrl.permitLibStore, name = "isu_perm_lib_st")
 
   io.out.bits.cf <> io.in(0).bits.cf
   io.out.bits.ctrl := io.in(0).bits.ctrl
   io.out.bits.ctrl.isSrc1Forward := src1ForwardNextCycle
   io.out.bits.ctrl.isSrc2Forward := src2ForwardNextCycle
+  BoringUtils.addSink(io.out.bits.ctrl.permitLibLoad, name = "isu_perm_lib_ld")
+  BoringUtils.addSink(io.out.bits.ctrl.permitLibStore, name = "isu_perm_lib_st")
+  io.out.bits.ctrl.lsuIsLoad := LSUOpType.isLoad(lsuFunc) || LSUOpType.isLR(lsuFunc)
 
   // retire: write rf
   when (io.wb.rfWen) { rf.write(io.wb.rfDest, io.wb.rfData) }

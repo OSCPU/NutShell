@@ -35,6 +35,7 @@ class CtrlSignalIO extends NutCoreBundle {
   val isBlocked = Output(Bool())   // This inst requires pipeline to be blocked
   val permitLibLoad = Output(Bool())  // CSR Dasics bounds check
   val permitLibStore = Output(Bool())
+  val lsuIsLoad = Output(Bool())  // Load or LR (Instead of store)
 }
 
 class DataSrcIO extends NutCoreBundle {

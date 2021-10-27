@@ -214,6 +214,7 @@ class CSRIO extends FunctionUnitIO {
   // for exception check
   val instrValid = Input(Bool())
   val isBackendException = Input(Bool())
+  val lsuIsLoad = Input(Bool())
   val lsuPermitLibLoad = Input(Bool())
   val lsuPermitLibStore = Input(Bool())
   // for differential testing
@@ -626,12 +627,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   // DASICS -- Check LSU DASICS exception
   val lsuIsValid = WireInit(false.B)
-  val lsuIsLoad = WireInit(false.B)
   val lsuAddr = WireInit(0.U(XLEN.W))  // Memory address where the inst at LSU will access in idle-state
   val isuAddr = WireInit(0.U(XLEN.W))   // Perform some of the calculations in ISU stage
 
   BoringUtils.addSink(lsuIsValid, "lsu_is_valid")
-  BoringUtils.addSink(lsuIsLoad, "lsu_is_load")
   BoringUtils.addSink(lsuAddr, "lsu_addr")
   BoringUtils.addSink(isuAddr, name = "isu_addr")
 
@@ -650,7 +649,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   BoringUtils.addSource(isuPermitLibLoad, name = "isu_perm_lib_ld")
   BoringUtils.addSource(isuPermitLibStore, name = "isu_perm_lib_st")
 
-  val (lsuPermitLibLoad, lsuPermitLibStore) = (io.lsuPermitLibLoad, io.lsuPermitLibStore)
+  val (lsuIsLoad, lsuPermitLibLoad, lsuPermitLibStore) =
+    (io.lsuIsLoad, io.lsuPermitLibLoad, io.lsuPermitLibStore)
 
   // Seperate access denying and exception raising
   val lsuSLibLoadDeny : Bool =  lsuIsLoad && priviledgeMode === ModeS && !lsuPermitLibLoad
