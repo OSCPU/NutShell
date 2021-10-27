@@ -214,6 +214,8 @@ class CSRIO extends FunctionUnitIO {
   // for exception check
   val instrValid = Input(Bool())
   val isBackendException = Input(Bool())
+  val lsuPermitLibLoad = Input(Bool())
+  val lsuPermitLibStore = Input(Bool())
   // for differential testing
   val intrNO = Output(UInt(XLEN.W))
   val imemMMU = Flipped(new MMUIO)
@@ -626,10 +628,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val lsuIsValid = WireInit(false.B)
   val lsuIsLoad = WireInit(false.B)
   val lsuAddr = WireInit(0.U(XLEN.W))  // Memory address where the inst at LSU will access in idle-state
+  val isuAddr = WireInit(0.U(XLEN.W))   // Perform some of the calculations in ISU stage
 
   BoringUtils.addSink(lsuIsValid, "lsu_is_valid")
   BoringUtils.addSink(lsuIsLoad, "lsu_is_load")
   BoringUtils.addSink(lsuAddr, "lsu_addr")
+  BoringUtils.addSink(isuAddr, name = "isu_addr")
 
   val dasicsLibSeq = if (Settings.get("IsRV32"))
                           ((for (i <- 0 until 32 if i % 4 == 0)
@@ -641,9 +645,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
                            (for (i <- 0 until 64 if i % 8 == 0)
                             yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 3) + 8), dasicsLibBoundLoList((i >> 3) + 8))))
 
-  val lsuPermitLibLoad  = inTrustedZone || dasicsLibSeq.map(cfg => detectInZone(lsuAddr, cfg._2, cfg._3, cfg._1(LIBCFG_V) && cfg._1(LIBCFG_R))).foldRight(false.B)(_ || _)  // If there exists one pair, that's ok
-  val lsuPermitLibStore = inTrustedZone || dasicsLibSeq.map(cfg => detectInZone(lsuAddr, cfg._2, cfg._3, cfg._1(LIBCFG_V) && cfg._1(LIBCFG_W))).foldRight(false.B)(_ || _)
+  val isuPermitLibLoad  = inTrustedZone || dasicsLibSeq.map(cfg => detectInZone(isuAddr, cfg._2, cfg._3, cfg._1(LIBCFG_V) && cfg._1(LIBCFG_R))).foldRight(false.B)(_ || _)  // If there exists one pair, that's ok
+  val isuPermitLibStore = inTrustedZone || dasicsLibSeq.map(cfg => detectInZone(isuAddr, cfg._2, cfg._3, cfg._1(LIBCFG_V) && cfg._1(LIBCFG_W))).foldRight(false.B)(_ || _)
+  BoringUtils.addSource(isuPermitLibLoad, name = "isu_perm_lib_ld")
+  BoringUtils.addSource(isuPermitLibStore, name = "isu_perm_lib_st")
 
+  val (lsuPermitLibLoad, lsuPermitLibStore) = (io.lsuPermitLibLoad, io.lsuPermitLibStore)
   val lsuSLibLoadFault  = lsuIsValid &&  lsuIsLoad && priviledgeMode === ModeS && !lsuPermitLibLoad
   val lsuULibLoadFault  = lsuIsValid &&  lsuIsLoad && priviledgeMode === ModeU && !lsuPermitLibLoad
   val lsuSLibStoreFault = lsuIsValid && !lsuIsLoad && priviledgeMode === ModeS && !lsuPermitLibStore
