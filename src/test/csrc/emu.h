@@ -10,6 +10,7 @@
 #include "common.h"
 // #include "VNutShellSimTop.h"
 #include "VysyxSoCFull.h"
+#include "VysyxSoCFull___024root.h"
 #if VM_TRACE
 #include <verilated_vcd_c.h>	// Trace file format header
 #endif
@@ -80,12 +81,22 @@ class Emulator {
 
     // init ram
     extern void init_ram(const char *img);
+    extern void* get_img_start();
+    extern long get_img_size();
     init_ram(image);
+    memcpy(&dut_ptr->rootp->ysyxSoCFull__DOT__mem__DOT__srams__DOT__mem__DOT__mem_ext__DOT__ram,
+        get_img_start(), get_img_size());
 
     // init flash
     // flash_init("/home53/wkf/ysyx/ysyxSoC/src/main/resources/ysyx-peripheral/bin/hello-flash.bin");
     // flash_init("/home53/wkf/ysyx/hello-loader.bin");
-    flash_init("/home53/wkf/ysyx/ysyxSoC-new/ysyx/program/bin/loader/rtthread-loader.bin");
+    //flash_init("/home/yzh/oscpu/ysyxSoC/ysyx/program/bin/loader/rtthread-loader.bin");
+    uint32_t jump_fw [] = {
+      0x0010009b,  // addiw   ra,zero,1
+      0x01f09093,  // slli    ra,ra,0x1f
+      0x00008067,  // ret
+    };
+    flash_memcpy(jump_fw, sizeof(jump_fw));
     // flash_init("/home53/wkf/ysyx/ysyxSoC-new/ysyx/program/bin/flash/rtthread-flash.bin");
     // flash_init("/home53/wkf/ysyx/rt-thread/bsp/qemu-riscv-virt64/rtthread.bin");
 

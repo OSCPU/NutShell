@@ -88,7 +88,7 @@ void init_ram(const char *img) {
   fclose(fp);
 
   //new add
-  addpageSv39();
+  //addpageSv39();
   //new end
 }
 
