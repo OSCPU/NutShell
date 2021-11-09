@@ -39,7 +39,12 @@ class Prefetcher extends Module with HasPrefetcherParameter {
   prefetchReq.cmd := SimpleBusCmd.prefetch
   prefetchReq.addr := io.in.bits.addr + XLEN.U
 
-  val lastReqAddr = (RegEnable(io.in.bits.addr, io.in.fire()))
+  //lastReqAddr not be initted, in vivado simulation maybe fail
+  //val lastReqAddr = (RegEnable(io.in.bits.addr, io.in.fire()))
+  val lastReqAddr = RegInit(0.U(AddrBits.W))
+  when (io.in.fire()) {
+     lastReqAddr := io.in.bits.addr
+  }
   val thisReqAddr = io.in.bits.addr
   val lineMask = Cat(Fill(AddrBits - 6, 1.U(1.W)), 0.U(6.W))
   val neqAddr = (thisReqAddr & lineMask) =/= (lastReqAddr & lineMask)
