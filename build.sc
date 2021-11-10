@@ -1,4 +1,5 @@
 import mill._, scalalib._
+import coursier.maven.MavenRepository
 
 /**
  * Scala 2.12 module that is source-compatible with 2.11.
@@ -30,7 +31,7 @@ trait HasXsource211 extends ScalaModule {
 
 trait HasChisel3 extends ScalaModule {
   override def ivyDeps = Agg(
-    ivy"edu.berkeley.cs::chisel3:3.3.2"
+    ivy"edu.berkeley.cs::chisel3:3.5-SNAPSHOT"
  )
 }
 
@@ -46,6 +47,11 @@ trait HasMacroParadise extends ScalaModule {
   val macroPlugins = Agg(ivy"org.scalamacros:::paradise:2.1.0")
   def scalacPluginIvyDeps = macroPlugins
   def compileIvyDeps = macroPlugins
+  override def repositoriesTask = T.task {
+    super.repositoriesTask() ++ Seq(
+      MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
+    )
+  }
 }
 
 object difftest extends SbtModule with CommonModule with HasChisel3 {
