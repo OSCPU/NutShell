@@ -88,12 +88,13 @@ object AddressSpace extends HasNutCoreParameter {
 }
 
 class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
-  val io = IO(new Bundle {
+  class NutCoreIO extends Bundle {
     val imem = new SimpleBusC
     val dmem = new SimpleBusC
     val mmio = new SimpleBusUC
     val frontend = Flipped(new SimpleBusUC())
-  })
+  }
+  val io = IO(new NutCoreIO)
 
   // Frontend
   val frontend = (Settings.get("IsRV32"), Settings.get("EnableOutOfOrderExec")) match {
@@ -115,7 +116,8 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     val itlb = TLB(in = frontend.io.imem, mem = dmemXbar.io.in(2), flush = frontend.io.flushVec(0) | frontend.io.bpFlush, csrMMU = backend.io.memMMU.imem)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     frontend.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, frontend.io.flushVec(0) | frontend.io.bpFlush), empty = itlb.io.cacheEmpty)(
-      CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
+      CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth)
+    )
     
     val dtlb = TLB(in = backend.io.dtlb, mem = dmemXbar.io.in(1), flush = frontend.io.flushVec(3), csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
     dtlb.io.out := DontCare //FIXIT

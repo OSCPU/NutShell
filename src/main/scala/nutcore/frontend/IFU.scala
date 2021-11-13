@@ -155,8 +155,8 @@ class IFU_ooo extends NutCoreModule with HasResetVector {
     val redirect = new RedirectIO
     val brIdx = Output(Vec(4, Bool()))
   }
-  val mcpResultQueue = Module(new FlushableQueue(new MCPResult, entries = 4, pipe = true, flow = true))
-  mcpResultQueue.io.flush := io.redirect.valid || io.bpFlush
+  val mcpResultQueue = Module(new Queue(new MCPResult, entries = 4, pipe = true, flow = true, hasFlush = true))
+  mcpResultQueue.io.flush.get := io.redirect.valid || io.bpFlush
   mcpResultQueue.io.enq.valid := mcp.io.valid
   mcpResultQueue.io.enq.bits.redirect := mcp.io.out
   mcpResultQueue.io.enq.bits.brIdx := mcp.io.brIdx

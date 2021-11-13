@@ -39,7 +39,7 @@ class SDHelper extends BlackBox with HasBlackBoxInline {
     val data = Output(UInt(32.W))
     val setAddr = Input(Bool())
     val addr = Input(UInt(32.W))
-  })
+  }).suggestName("io")
 
   setInline("SDHelper.v",
     s"""

@@ -63,4 +63,7 @@ init:
 clean:
 	rm -rf $(BUILD_DIR)
 
+bsp:
+	mill -i mill.bsp.BSP/install
+
 .PHONY: verilog emu clean help $(REF_SO)

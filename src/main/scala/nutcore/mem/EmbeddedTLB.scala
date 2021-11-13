@@ -19,12 +19,25 @@ package nutcore
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
-
 import bus.simplebus._
 import bus.axi4._
+import chisel3.experimental.IO
 import utils._
 import top.Settings
 
+trait HasTLBIO extends HasNutCoreParameter with HasTlbConst with HasCSRConst {
+  class TLBIO extends Bundle {
+    val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
+    val out = new SimpleBusUC(userBits = userBits)
+
+    val mem = new SimpleBusUC()
+    val flush = Input(Bool())
+    val csrMMU = new MMUIO
+    val cacheEmpty = Input(Bool())
+    val ipf = Output(Bool())
+  }
+  val io = IO(new TLBIO)
+}
 
 class EmbeddedTLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   val io = IO(new Bundle {
@@ -61,17 +74,7 @@ class EmbeddedTLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   def wready() = !resetState
 }
 
-class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
-  val io = IO(new Bundle {
-    val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
-    val out = new SimpleBusUC(userBits = userBits)
-
-    val mem = new SimpleBusUC()
-    val flush = Input(Bool()) 
-    val csrMMU = new MMUIO
-    val cacheEmpty = Input(Bool())
-    val ipf = Output(Bool())
-  })
+class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasTLBIO {
 
   val satp = WireInit(0.U(XLEN.W))
   BoringUtils.addSink(satp, "CSRSATP")
@@ -403,16 +406,7 @@ class EmbeddedTLBEmpty(implicit val tlbConfig: TLBConfig) extends TlbModule {
   io.out <> io.in
 }
 
-class EmbeddedTLB_fake(implicit val tlbConfig: TLBConfig) extends TlbModule{
-  val io = IO(new Bundle {
-    val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
-    val out = new SimpleBusUC(userBits = userBits)
-    val flush = Input(Bool()) 
-    val csrMMU = new MMUIO
-    val cacheEmpty = Input(Bool())
-    val ipf = Output(Bool())
-  })
-  
+class EmbeddedTLB_fake(implicit val tlbConfig: TLBConfig) extends TlbModule with HasTLBIO {
   io.out <> io.in
   io.csrMMU.loadPF := false.B
   io.csrMMU.storePF := false.B
