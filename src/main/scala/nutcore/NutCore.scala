@@ -65,7 +65,7 @@ trait HasNutCoreLog { this: RawModule =>
 }
 
 trait HasDasicsConst {
-  val dasicsLibGroups = 16
+  val dasicsLibGroups = 8
 
   def SCFG_GLB = 0x2
   def SCFG_ENA = 0x1

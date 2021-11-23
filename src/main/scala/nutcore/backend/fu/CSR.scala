@@ -58,8 +58,8 @@ trait HasCSRConst {
   
   // User DASICS Registers
   val DasicsLibCfg0 = 0x881
-  val DasicsLibCfg1 = 0x882
-  val DasicsLibBoundBase = 0x883  // 16 sets of DASICS-Lib registers, upper-lower
+//  val DasicsLibCfg1 = 0x882
+  val DasicsLibBoundBase = 0x883  // 8 sets of DASICS-Lib registers, upper-lower
 
   val DasicsMaincallEntry = 0x8A3
   val DasicsReturnPC = 0x8A4
@@ -423,14 +423,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val dasicsLibBoundLoMapping = (0 until dasicsLibGroups).map { case i => MaskedRegMap(DasicsLibBoundBase + i * 2 + 0x1, dasicsLibBoundLoList(i)) }
 
   val dasicsLibCfg0  = RegInit(UInt(XLEN.W), 0.U)
-  val dasicsLibCfg1  = RegInit(UInt(XLEN.W), 0.U)
+//  val dasicsLibCfg1  = RegInit(UInt(XLEN.W), 0.U)
   val dasicsReturnPC = RegInit(UInt(XLEN.W), 0.U)
   val dasicsFreeZoneReturnPC = RegInit(UInt(XLEN.W), 0.U)
   val dasicsMaincallEntry    = RegInit(UInt(XLEN.W), 0.U)
 
   val dasicsUserMapping = Map(
     MaskedRegMap(DasicsLibCfg0, dasicsLibCfg0),
-    MaskedRegMap(DasicsLibCfg1, dasicsLibCfg1),
+//    MaskedRegMap(DasicsLibCfg1, dasicsLibCfg1),
     MaskedRegMap(DasicsMaincallEntry, dasicsMaincallEntry),
     MaskedRegMap(DasicsReturnPC, dasicsReturnPC),
     MaskedRegMap(DasicsFreeZoneReturnPC, dasicsFreeZoneReturnPC)
@@ -620,7 +620,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     dasicsLibBoundHiList.foreach(reg => reg := 0.U)
     dasicsLibBoundLoList.foreach(reg => reg := 0.U)
     dasicsLibCfg0 := 0.U
-    dasicsLibCfg1 := 0.U
+//    dasicsLibCfg1 := 0.U
 
     dasicsUMainCfg := Cat(dasicsUMainCfg(XLEN-1, 1), 0.U(1.W))  // Reset CLS bit itself
   }
@@ -636,13 +636,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   val dasicsLibSeq = if (Settings.get("IsRV32"))
                           ((for (i <- 0 until 32 if i % 4 == 0)
-                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 2), dasicsLibBoundLoList(i >> 2))) ++
-                           (for (i <- 0 until 32 if i % 4 == 0)
-                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 2) + 8), dasicsLibBoundLoList((i >> 2) + 8))))
+                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 2), dasicsLibBoundLoList(i >> 2)))) //++
+//                           (for (i <- 0 until 32 if i % 4 == 0)
+//                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 2) + 8), dasicsLibBoundLoList((i >> 2) + 8))))
                      else ((for (i <- 0 until 64 if i % 8 == 0)
-                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 3), dasicsLibBoundLoList(i >> 3))) ++
-                           (for (i <- 0 until 64 if i % 8 == 0)
-                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 3) + 8), dasicsLibBoundLoList((i >> 3) + 8))))
+                            yield (dasicsLibCfg0(i + 3, i), dasicsLibBoundHiList(i >> 3), dasicsLibBoundLoList(i >> 3)))) // ++
+//                           (for (i <- 0 until 64 if i % 8 == 0)
+//                            yield (dasicsLibCfg1(i + 3, i), dasicsLibBoundHiList((i >> 3) + 8), dasicsLibBoundLoList((i >> 3) + 8))))
 
   val isuPermitLibLoad  = inTrustedZone || dasicsLibSeq.map(cfg => detectInZone(isuAddr, cfg._2, cfg._3, cfg._1(LIBCFG_V) && cfg._1(LIBCFG_R))).foldRight(false.B)(_ || _)  // If there exists one pair, that's ok
   val isuPermitLibStore = inTrustedZone || dasicsLibSeq.map(cfg => detectInZone(isuAddr, cfg._2, cfg._3, cfg._1(LIBCFG_V) && cfg._1(LIBCFG_W))).foldRight(false.B)(_ || _)
