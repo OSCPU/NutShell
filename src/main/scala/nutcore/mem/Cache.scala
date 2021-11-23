@@ -177,13 +177,13 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
 
   val hitVec = VecInit(metaWay.map(m => m.valid && (m.tag === addr.tag) && io.in.valid)).asUInt
   val victimWaymask = if (Ways > 1) (1.U << LFSR64()(log2Up(Ways)-1,0)) else "b1".U
-   
+
   val invalidVec = VecInit(metaWay.map(m => !m.valid)).asUInt
   val hasInvalidWay = invalidVec.orR
   val refillInvalidWaymask = Mux(invalidVec >= 8.U, "b1000".U,
     Mux(invalidVec >= 4.U, "b0100".U,
     Mux(invalidVec >= 2.U, "b0010".U, "b0001".U)))
-  
+
   // val waymask = Mux(io.out.bits.hit, hitVec, victimWaymask)
   val waymask = Mux(io.out.bits.hit, hitVec, Mux(hasInvalidWay, refillInvalidWaymask, victimWaymask))
   when(PopCount(waymask) > 1.U){
@@ -555,7 +555,7 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
     val mmio = new SimpleBusUC
     val empty = Output(Bool())
   })
-  
+
   val s_idle :: s_memReq :: s_memResp :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(6)
   val state = RegInit(s_idle)
 
@@ -618,7 +618,7 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
     wdata = wdata, wmask = wmask)
   io.out.mem.req.valid := (state === s_memReq)
   io.out.mem.resp.ready := true.B
-  
+
   io.mmio.req.bits.apply(addr = reqaddr,
     cmd = cmd, size = size,
     wdata = wdata, wmask = wmask)

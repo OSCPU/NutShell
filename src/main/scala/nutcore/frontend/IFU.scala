@@ -113,7 +113,7 @@ class IFU_ooo extends NutCoreModule with HasResetVector {
 
   // predicted next pc
   val pnpc = Mux(crosslineJump, snpc, bpuTarget)
- 
+
   // next pc
   val npc = Wire(UInt(VAddrBits.W))
   npc := Mux(io.redirect.valid, io.redirect.target, Mux(state === s_crosslineJump, crosslineJumpTarget, Mux(bpuValid, pnpc, snpc)))
@@ -136,7 +136,7 @@ class IFU_ooo extends NutCoreModule with HasResetVector {
   // predicted branch position index, 4 bit vector
   val pbrIdx = bpuBrIdx | (crosslineJump << 3)
   brIdx := Mux(io.redirect.valid, 0.U, Mux(state === s_crosslineJump, 0.U, pbrIdx))
-  
+
   // BP will be disabled shortly after a redirect request
   nlp.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
   nlp.io.in.pc.bits := npc  // predict one cycle early
@@ -275,7 +275,7 @@ class IFU_embedded extends NutCoreModule with HasResetVector {
   // predicted next pc
   val pnpc = bpu.io.out.target
   val npc = Mux(io.redirect.valid, io.redirect.target, Mux(bpu.io.out.valid, pnpc, snpc))
-  
+
   bpu.io.in.pc.valid := io.imem.req.fire() // only predict when Icache accepts a request
   bpu.io.in.pc.bits := npc  // predict one cycle early
   bpu.io.flush := io.redirect.valid

@@ -30,23 +30,23 @@ void addpageSv39() {
   uint64_t pdde[ENTRYNUM];
   uint64_t pde[ENTRYNUM];
   uint64_t pte[PTENUM][ENTRYNUM];
-  
+
   //special addr for mmio 0x40000000 - 0x4fffffff
   uint64_t pdemmio[ENTRYNUM];
   uint64_t ptemmio[PTEMMIONUM][ENTRYNUM];
-  
+
   pdde[1] = (((PDDEADDR-PAGESIZE*1) & 0xfffff000) >> 2) | 0x1;
 
   for(int i = 0; i < PTEMMIONUM; i++) {
     pdemmio[i] = (((PDDEADDR-PAGESIZE*(PTEMMIONUM+PDEMMIONUM-i)) & 0xfffff000) >> 2) | 0x1;
   }
-  
+
   for(int outidx = 0; outidx < PTEMMIONUM; outidx++) {
     for(int inidx = 0; inidx < ENTRYNUM; inidx++) {
       ptemmio[outidx][inidx] = (((0x40000000 + outidx*PTEVOLUME + inidx*PAGESIZE) & 0xfffff000) >> 2) | 0xf;
     }
   }
-  
+
   //0x800000000 - 0x87ffffff
   pdde[2] = ((PDEADDR & 0xfffff000) >> 2) | 0x1;
   //pdde[2] = ((0x80000000&0xc0000000) >> 2) | 0xf;

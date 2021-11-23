@@ -42,7 +42,7 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   val falseWire = WireInit(false.B) // make BoringUtils.addSource happy
   BoringUtils.addSource(io.in.valid, "perfCntCondMinstret")
   BoringUtils.addSource(falseWire, "perfCntCondMultiCommit")
-  
+
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(RegNext(io.in.valid), "difftestCommit")
     BoringUtils.addSource(falseWire, "difftestMultiCommit")

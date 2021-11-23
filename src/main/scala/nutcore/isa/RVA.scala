@@ -37,7 +37,7 @@ object RVAInstr extends HasInstrType {
   def AMOMINU = BitPat("b11000_??_?????_?????_01?_?????_0101111")
   def AMOMAXU = BitPat("b11100_??_?????_?????_01?_?????_0101111")
   // funct3 === 010 or 011
-  
+
   val table = Array(
     // LR          -> List(InstrI, FuType.lsu, LSUOpType.lr),
     LR_D        -> List(InstrI, FuType.lsu, LSUOpType.lr),

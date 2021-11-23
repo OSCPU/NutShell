@@ -49,7 +49,7 @@ object LSUOpType { //TODO: refactor LSU fuop
   def amomax  = "b0110000".U
   def amominu = "b0110001".U
   def amomaxu = "b0110010".U
-  
+
   def isAdd(func: UInt) = func(6)
   def isAtom(func: UInt): Bool = func(5)
   def isStore(func: UInt): Bool = func(3)
@@ -354,7 +354,7 @@ class LSU extends NutCoreModule with HasLSUConst {
     }
     moq(i).brMask := updateBrMask(moq(i).brMask) // fixit, AS WELL AS STORE BRMASK !!!!!
   })
-  
+
   // write data to moq
   val vaddrIsMMIO = AddressSpace.isMMIO(addr)
   val paddrIsMMIO = AddressSpace.isMMIO(io.dtlb.resp.bits.rdata)
@@ -390,7 +390,7 @@ class LSU extends NutCoreModule with HasLSUConst {
     moq(moqDmemPtr).finished := true.B
     // store inst does not need to access mem until it is commited
   }
-  
+
   Debug("[LSU MOQ] pc           id vaddr        paddr        func    op      data             mmio   valid   finished    exc     mask\n")
   for(i <- 0 until moqSize){
     Debug(
@@ -429,7 +429,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   val storeQueueFull = storeHeadPtr === storeQueueSize.U 
   io.haveUnfinishedStore := haveUnfinishedStore
   Debug(storeCmtPtr > storeHeadPtr, "retired store should be less than valid store\n")
-    
+
   // assert(storeCmtPtr <= storeHeadPtr, "retired store should be less than valid store")
 
   // alloc a slot when a store tlb request is sent
@@ -463,7 +463,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   when((storeQueueDequeue && !storeQueueSkipInst) && !storeQueueConfirm){nextStoreCmtPtr := storeCmtPtr - 1.U}
   when(!(storeQueueDequeue && !storeQueueSkipInst) && storeQueueConfirm){nextStoreCmtPtr := storeCmtPtr + 1.U}
   storeCmtPtr := nextStoreCmtPtr
-  
+
   // move storeHeadPtr ptr
   when(storeQueueDequeue && !(storeQueueEnqueue || storeQueueAMOEnqueue)){storeHeadPtr := storeHeadPtr - 1.U}
   when(!storeQueueDequeue && (storeQueueEnqueue || storeQueueAMOEnqueue)){storeHeadPtr := storeHeadPtr + 1.U}
@@ -655,7 +655,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   val loadSideUserBundle = Wire(new DCacheUserBundle)
 
   val atomData = Wire(UInt(XLEN.W))
-  
+
   loadSideUserBundle.moqidx := loadDMemReqSrcPick
   loadSideUserBundle.op := moq(loadDMemReqSrcPick).op
 
@@ -694,7 +694,7 @@ class LSU extends NutCoreModule with HasLSUConst {
   // }
 
   // Send request to dmem
-  
+
   def genWmask(addr: UInt, sizeEncode: UInt): UInt = {
     LookupTree(sizeEncode, List(
       "b00".U -> 0x1.U, //0001 << addr(2:0)
@@ -703,7 +703,7 @@ class LSU extends NutCoreModule with HasLSUConst {
       "b11".U -> 0xff.U //11111111
     )) << addr(2, 0)
   }
-  
+
   def genWdata(data: UInt, sizeEncode: UInt): UInt = {
     LookupTree(sizeEncode, List(
       "b00".U -> Fill(8, data(7, 0)),
@@ -775,7 +775,7 @@ class LSU extends NutCoreModule with HasLSUConst {
     ldDataMask(reqRobidx) := genWmask(io.dmem.req.bits.addr, moq(loadDMemReqSrcPick).size)
   }
   Debug(io.dmem.req.fire() && MEMOpID.needLoad(opReq), "[LSU] add load to MOQ pc:%x stmask:%x\n",io.dmem.req.bits.addr(PAddrBits-1, 3), moq(reqRobidx).stMask)
-  
+
   val storeNeedRollback = (0 until robSize).map(i =>{
     ldAddr(i) === Mux(havePendingStqEnq, moq(moqDmemPtr).paddr(PAddrBits-1, 3), io.dtlb.resp.bits.rdata(PAddrBits-1, 3)) &&
     (ldDataMask(i) & genWmask(moq(storeQueueEnqSrcPick).vaddr, moq(moqDmemPtr).size)).orR &&
@@ -786,10 +786,10 @@ class LSU extends NutCoreModule with HasLSUConst {
     moq(storeQueueEnqSrcPick).rollback := true.B
     // printf("%d: Rollback detected at pc %x vaddr %x\n", GTimer(), moq(storeQueueEnqSrcPick).pc, moq(storeQueueEnqSrcPick).vaddr)
   }
-  
+
   // Debug(storeQueueEnqueue, "store backward pc %x lvec %b rob %x addrtag %x\n",moq(storeQueueEnqSrcPick).pc, robLoadInstVec, moq(storeQueueEnqSrcPick).prfidx(prfAddrWidth-1,1), Mux(havePendingStqEnq, moq(moqDmemPtr).paddr(PAddrBits-1, 3), io.dtlb.resp.bits.rdata(PAddrBits-1, 3)))
   // (0 until robSize).map(i =>Debug(storeQueueEnqueue, "%x %x %x "+i+"\n",ldAddr(i),ldStmask(i),robLoadInstVec(i)))
-  
+
   // write back to load queue
   when(dmem.req.fire() && MEMOpID.needLoad(opReq)){
     moq(moqDmemPtr).fdata := dataBack

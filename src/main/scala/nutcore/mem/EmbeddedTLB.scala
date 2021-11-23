@@ -66,7 +66,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
     val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
     val out = new SimpleBusUC(userBits = userBits)
 
-    val mem = new SimpleBusUC()
+    val mem = new SimpleBusUC(userBits = DCacheUserBundleWidth)
     val flush = Input(Bool()) 
     val csrMMU = new MMUIO
     val cacheEmpty = Input(Bool())
@@ -81,7 +81,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val tlbEmpty = Module(new EmbeddedTLBEmpty)
   val mdTLB = Module(new EmbeddedTLBMD)
   val mdUpdate = Wire(Bool())
-  
+
   tlbExec.io.flush := io.flush
   tlbExec.io.satp := satp
   tlbExec.io.mem <> io.mem
@@ -90,9 +90,9 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   tlbExec.io.mdReady := mdTLB.io.ready
   mdTLB.io.rindex := getIndex(io.in.req.bits.addr)
   mdTLB.io.write <> tlbExec.io.mdWrite
-  
+
   io.ipf := false.B
-  
+
   // meta reset
   val flushTLB = WireInit(false.B)
   BoringUtils.addSink(flushTLB, "MOUFlushTLB")
@@ -178,7 +178,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
     val mdWrite = new TLBMDWriteBundle(IndexBits = IndexBits, Ways = Ways, tlbLen = tlbLen)
     val mdReady = Input(Bool())
 
-    val mem = new SimpleBusUC()
+    val mem = new SimpleBusUC(userBits = DCacheUserBundleWidth)
     val flush = Input(Bool()) 
     val satp = Input(UInt(XLEN.W))
     val pf = new MMUIO
@@ -187,7 +187,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   })
 
   val md = io.md//RegEnable(mdTLB.io.tlbmd, io.in.ready)
-  
+
   // lazy renaming
   val req = io.in.bits
   val vpn = req.addr.asTypeOf(vaBundle2).vpn.asTypeOf(vpnBundle)
@@ -227,7 +227,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val hitExec = hitCheck && hitFlag.x
   val hitLoad = hitCheck && (hitFlag.r || pf.status_mxr && hitFlag.x)
   val hitStore = hitCheck && hitFlag.w
-  
+
   val isAMO = WireInit(false.B)
   if (tlbname == "dtlb") {
     BoringUtils.addSink(isAMO, "ISAMO")
@@ -246,7 +246,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val s_idle :: s_memReadReq :: s_memReadResp :: s_write_pte :: s_wait_resp :: s_miss_slpf :: Nil = Enum(6)
   val state = RegInit(s_idle)
   val level = RegInit(Level.U(log2Up(Level).W))
-  
+
   val memRespStore = RegInit(UInt(XLEN.W), 0.U)
   val missMask = WireInit("h3ffff".U(maskLen.W))
   val missMaskStore = RegInit(UInt(maskLen.W), 0.U)
@@ -378,8 +378,9 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   io.out.bits := req
   io.out.bits.addr := Mux(hit, maskPaddr(hitData.ppn, req.addr(PAddrBits-1, 0), hitMask), maskPaddr(memRespStore.asTypeOf(pteBundle).ppn, req.addr(PAddrBits-1, 0), missMaskStore))
   io.out.valid := io.in.valid && Mux(hit && !hitWB, !(io.pf.isPF() || loadPF || storePF), state === s_wait_resp)// && !alreadyOutFire
-  
-  io.in.ready := io.out.ready && (state === s_idle) && !miss && !hitWB && io.mdReady && (!io.pf.isPF() && !loadPF && !storePF)//maybe be optimized
+
+  // io.in.ready := io.out.ready && (state === s_idle) && !miss && !hitWB && io.mdReady && (!io.pf.isPF() && !loadPF && !storePF)//maybe be optimized
+  io.in.ready := io.out.fire() || !io.in.valid || ((state === s_idle) && !miss && !hitWB && io.mdReady && (!io.pf.isPF() && !loadPF && !storePF))
 
   io.ipf := Mux(hit, hitinstrPF, missIPF)
   io.isFinish := io.out.fire() || io.pf.isPF()
@@ -412,7 +413,7 @@ class EmbeddedTLB_fake(implicit val tlbConfig: TLBConfig) extends TlbModule{
     val cacheEmpty = Input(Bool())
     val ipf = Output(Bool())
   })
-  
+
   io.out <> io.in
   io.csrMMU.loadPF := false.B
   io.csrMMU.storePF := false.B

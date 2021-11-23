@@ -30,6 +30,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
     val out = Decoupled(new CommitIO)
     val flush = Input(Bool())
     val dmem = new SimpleBusUC(addrBits = VAddrBits)
+    val vdmem = new SimpleBusUC(userBits = DVMemUserBits, addrBits = VAddrBits)
     val forward = new ForwardIO
     val memMMU = Flipped(new MemMMUIO)
   })
@@ -87,7 +88,30 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   mou.access(valid = fuValids(FuType.mou), src1 = src1, src2 = src2, func = fuOpType)
   mou.io.cfIn := io.in.bits.cf
   mou.io.out.ready := true.B
-  
+
+  // only for debug purpose
+  /*
+  val vreg = Module(new VRegFile)
+  val vreg_foo = Wire(Vec(3, UInt(5.W)))
+  for (i <- 0 until 3) {
+    vreg_foo(i) := 0.U
+  }
+  vreg.io.raddr := vreg_foo
+  vreg.io.waddr := 0.U
+  vreg.io.wdata := 0.U
+  vreg.io.wen := 0.U
+  vreg.io.wmask := 0.U
+   */
+
+  val vpu = Module(new VPU)
+  // vpu does not write register (just for now).
+  val vpuOut = vpu.access(valid = fuValids(FuType.vmu) || fuValids(FuType.vxu), src1 = src1, src2 = src2, func = fuOpType, fuType = fuType)
+  vpu.io.instr := io.in.bits.cf.instr
+  io.vdmem <> vpu.io.dmem.mem
+  vpu.io.out.ready := true.B
+  vpu.io.cfg <> csr.io.vcfg
+
+
   io.out.bits.decode := DontCare
   (io.out.bits.decode.ctrl, io.in.bits.ctrl) match { case (o, i) =>
     o.rfWen := i.rfWen && (!lsuTlbPF && !lsu.io.loadAddrMisaligned && !lsu.io.storeAddrMisaligned || !fuValids(FuType.lsu)) && !(csr.io.wenFix && fuValids(FuType.csr))
@@ -99,14 +123,16 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.out.bits.decode.cf.redirect <>
     Mux(mou.io.redirect.valid, mou.io.redirect,
       Mux(csr.io.redirect.valid, csr.io.redirect, alu.io.redirect))
-  
+
   Debug(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid, "[REDIRECT] mou %x csr %x alu %x \n", mou.io.redirect.valid, csr.io.redirect.valid, alu.io.redirect.valid)
   Debug(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid, "[REDIRECT] flush: %d mou %x csr %x alu %x\n", io.flush, mou.io.redirect.target, csr.io.redirect.target, alu.io.redirect.target)
 
   // FIXME: should handle io.out.ready == false
   io.out.valid := io.in.valid && MuxLookup(fuType, true.B, List(
     FuType.lsu -> lsu.io.out.valid,
-    FuType.mdu -> mdu.io.out.valid
+    FuType.mdu -> mdu.io.out.valid,
+    FuType.vmu -> vpu.io.out.valid,
+    FuType.vxu -> vpu.io.out.valid
   ))
 
   io.out.bits.commits(FuType.alu) := aluOut
@@ -114,6 +140,8 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.out.bits.commits(FuType.csr) := csrOut
   io.out.bits.commits(FuType.mdu) := mduOut
   io.out.bits.commits(FuType.mou) := 0.U
+  io.out.bits.commits(FuType.vmu) := 0.U // TODO: need change to support vsetvl
+  io.out.bits.commits(FuType.vxu) := vpuOut
 
   io.in.ready := !io.in.valid || io.out.fire()
 

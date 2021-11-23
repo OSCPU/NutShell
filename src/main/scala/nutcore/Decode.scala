@@ -29,6 +29,13 @@ trait HasInstrType {
   def InstrJ  = "b0111".U
   def InstrA  = "b1110".U
   def InstrSA = "b1111".U // Atom Inst: SC
+  def InstrVSI= "b1100".U // vector - vsetvli
+  def InstrVS = "b1001".U // src1:scala  - src2:vector
+  def InstrVV = "b1010".U // src1:vector - src2:vector
+  def InstrVI = "b1010".U // src1:imm    - src2:vector. use InstrVV
+  def InstrNS = "b1011".U // src1:scala  - src2:none
+  def InstrSS = "b0011".U // src1:scala  - src2:scala
+  def InstrVSB= "b1101".U // src1:None   - src2:vector, write back
 
   def isrfWen(instrType : UInt): Bool = instrType(2)
 }
@@ -50,23 +57,27 @@ object SrcType {
   def reg = "b0".U
   def pc  = "b1".U
   def imm = "b1".U
+  def vreg = "b1".U
+  def none = "b1".U
   def apply() = UInt(1.W)
 }
 
 object FuType extends HasNutCoreConst {
-  def num = 5
+  def num = 7
   def alu = "b000".U
   def lsu = "b001".U
   def mdu = "b010".U
   def csr = "b011".U
   def mou = "b100".U
-  def bru = if(IndependentBru) "b101".U
+  def vmu = "b101".U
+  def vxu = "b110".U
+  def bru = if(IndependentBru) "b111".U
             else               alu
   def apply() = UInt(log2Up(num).W)
 }
 
 object FuOpType {
-  def apply() = UInt(7.W)
+  def apply() = UInt(9.W) // longer to fit VXU
 }
 
 object Instructions extends HasInstrType with HasNutCoreParameter {
@@ -77,6 +88,7 @@ object Instructions extends HasInstrType with HasNutCoreParameter {
     (if (HasCExtension) RVCInstr.table else Nil) ++
     Priviledged.table ++
     RVAInstr.table ++
+    RVVInstr.table ++
     RVZicsrInstr.table ++ RVZifenceiInstr.table ++
     DasicsInstr.table
 }

@@ -226,7 +226,7 @@ class ReqBlocker(n: Int, userBits:Int = 0) extends Module {
 
   val do_hi = (state === s_hi || state === s_waitResp_hi)
   val do_lo = (state === s_lo || state === s_waitResp_lo)
-  
+
   io.out(0) <> io.in(0)
   io.out(1) <> io.in(1)
 

@@ -108,7 +108,7 @@ class BPU_ooo extends NutCoreModule {
   io.crosslineJump := crosslineJump
   // val crosslineJumpLatch = RegNext(crosslineJump)
   // val crosslineJumpTarget = RegEnable(btbRead.target, crosslineJump)
-  
+
   // PHT
   val pht = List.fill(4)(Mem(NRbtb >> 2, UInt(2.W)))
   val phtTaken = Wire(Vec(4, Bool()))
@@ -331,7 +331,7 @@ class BPU_inorder extends NutCoreModule {
   Debug(btbHit, "[BTBHT1] %d pc=%x tag=%x,%x index=%x bridx=%x tgt=%x,%x flush %x type:%x\n", GTimer(), pcLatch, btbRead.tag, btbAddr.getTag(pcLatch), btbAddr.getIdx(pcLatch), btbRead.brIdx, btbRead.target, io.out.target, flush,btbRead._type)
   Debug(btbHit, "[BTBHT2] btbRead.brIdx %x mask %x\n", btbRead.brIdx, Cat(crosslineJump, Fill(2, io.out.valid)))
   // Debug(btbHit, "[BTBHT5] btbReqValid:%d btbReqSetIdx:%x\n",btb.io.r.req.valid, btb.io.r.req.bits.setId)
-  
+
   // PHT
   // val pht = Mem(NRbtb, UInt(2.W))
   val pht = RegInit(VecInit(Seq.fill(NRbtb)(0.U(2.W))))

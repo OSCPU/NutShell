@@ -31,7 +31,7 @@ object PipelineVector2Connect {
     val ringBufferTail = RegInit(0.U(log2Up(bufferSize).W))
     val ringBufferEmpty = ringBufferHead === ringBufferTail
     val ringBufferAllowin = (0 to 1).map(i => (ringBufferHead + (i+1).U) =/= ringBufferTail).foldRight(true.B)((sum,i)=>sum&i)
-    
+
     //enqueue
     val needEnqueue = Wire(Vec(2, Bool()))
     needEnqueue(0) := in1.valid

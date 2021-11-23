@@ -59,7 +59,7 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   val icachePF = io.in.bits.icachePF
   instrVec := instr.asTypeOf(Vec(4, UInt(16.W)))
   (0 to 3).map(i => isRVC(i.U) := instrVec(i.U)(1,0) =/= "b11".U)
-  
+
   //ibuf enqueue
   //if valid & ringBufferAllowin, enqueue
   val needEnqueue = Wire(Vec(4, Bool()))

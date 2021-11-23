@@ -36,7 +36,7 @@ sealed trait Sv39Const extends HasNutCoreParameter{
   val vpn1Len = 9
   val vpn0Len = 9
   val vpnLen = vpn2Len + vpn1Len + vpn0Len
-  
+
   //val paddrLen = PAddrBits
   //val vaddrLen = VAddrBits
   val satpLen = XLEN
@@ -88,7 +88,7 @@ sealed trait Sv39Const extends HasNutCoreParameter{
   def paddrApply(ppn: UInt, vpnn: UInt):UInt = {
     Cat(Cat(ppn, vpnn), 0.U(3.W))
   }
-  
+
   def pteBundle = new Bundle {
     val reserved  = UInt(pteResLen.W)
     val ppn  = UInt(ppnLen.W)
@@ -209,7 +209,7 @@ sealed class TLBMDWriteBundle (val IndexBits: Int, val Ways: Int, val tlbLen: In
   val windex = Output(UInt(IndexBits.W))
   val waymask = Output(UInt(Ways.W))
   val wdata = Output(UInt(tlbLen.W))
-  
+
   def apply(wen: UInt, windex: UInt, waymask: UInt, vpn: UInt, asid: UInt, mask: UInt, flag: UInt, ppn: UInt, pteaddr: UInt) {
     this.wen := wen
     this.windex := windex
@@ -272,7 +272,7 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val tlbExec = Module(new TLBExec)
   val mdTLB = Module(new TLBMD)
   val mdUpdate = Wire(Bool())
-  
+
   tlbExec.io.flush := io.flush
   tlbExec.io.satp := satp
   tlbExec.io.mem <> io.mem
@@ -281,9 +281,9 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
   tlbExec.io.mdReady := mdTLB.io.ready
   mdTLB.io.rindex := getIndex(io.in.req.bits.addr)
   mdTLB.io.write <> tlbExec.io.mdWrite
-  
+
   io.ipf := false.B
-  
+
   // meta reset
   val flushTLB = WireInit(false.B)
   BoringUtils.addSink(flushTLB, "MOUFlushTLB")
@@ -377,7 +377,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   })
 
   val md = io.md//RegEnable(mdTLB.io.tlbmd, io.in.ready)
-  
+
   // lazy renaming
   val req = io.in.bits
   val vpn = req.addr.asTypeOf(vaBundle2).vpn.asTypeOf(vpnBundle)
@@ -432,7 +432,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val s_idle :: s_memReadReq :: s_memReadResp :: s_write_pte :: s_wait_resp :: s_miss_slpf :: Nil = Enum(6)
   val state = RegInit(s_idle)
   val level = RegInit(Level.U(log2Up(Level).W))
-  
+
   val memRespStore = Reg(UInt(XLEN.W))
   val missMask = WireInit("h3ffff".U(maskLen.W))
   val missMaskStore = Reg(UInt(maskLen.W))
@@ -578,7 +578,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   io.out.bits := req
   io.out.bits.addr := Mux(hit, maskPaddr(hitData.ppn, req.addr(PAddrBits-1, 0), hitMask), maskPaddr(memRespStore.asTypeOf(pteBundle).ppn, req.addr(PAddrBits-1, 0), missMaskStore))
   io.out.valid := io.in.valid && Mux(hit && !hitWB, !(io.pf.isPF() || loadPF || storePF), state === s_wait_resp)// && !alreadyOutFire
-  
+
   io.in.ready := io.out.ready && (state === s_idle) && !miss && !hitWB && io.mdReady && (!io.pf.isPF() && !loadPF && !storePF)//maybe be optimized
 
   io.ipf := Mux(hit, hitinstrPF, missIPF)

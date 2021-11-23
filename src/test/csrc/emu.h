@@ -52,6 +52,28 @@ class Emulator {
     r[DIFFTEST_MCAUSE ] = dut_ptr->io_difftest_mcause;
     r[DIFFTEST_SCAUSE ] = dut_ptr->io_difftest_scause;
 #endif
+    #define Vmacro(x) r[39 + x] = dut_ptr->io_difftest_vr_##x // TODO: how to simplify
+        Vmacro(0);   Vmacro(1);   Vmacro(2);   Vmacro(3);   Vmacro(4);   Vmacro(5);   Vmacro(6);   Vmacro(7);
+        Vmacro(8);   Vmacro(9);   Vmacro(10);  Vmacro(11);  Vmacro(12);  Vmacro(13);  Vmacro(14);  Vmacro(15);
+        Vmacro(16);  Vmacro(17);  Vmacro(18);  Vmacro(19);  Vmacro(20);  Vmacro(21);  Vmacro(22);  Vmacro(23);
+        Vmacro(24);  Vmacro(25);  Vmacro(26);  Vmacro(27);  Vmacro(28);  Vmacro(29);  Vmacro(30);  Vmacro(31);
+        Vmacro(32);  Vmacro(33);  Vmacro(34);  Vmacro(35);  Vmacro(36);  Vmacro(37);  Vmacro(38);  Vmacro(39);
+        Vmacro(40);  Vmacro(41);  Vmacro(42);  Vmacro(43);  Vmacro(44);  Vmacro(45);  Vmacro(46);  Vmacro(47);
+        Vmacro(48);  Vmacro(49);  Vmacro(50);  Vmacro(51);  Vmacro(52);  Vmacro(53);  Vmacro(54);  Vmacro(55);
+        Vmacro(56);  Vmacro(57);  Vmacro(58);  Vmacro(59);  Vmacro(60);  Vmacro(61);  Vmacro(62);  Vmacro(63);
+        Vmacro(64);  Vmacro(65);  Vmacro(66);  Vmacro(67);  Vmacro(68);  Vmacro(69);  Vmacro(70);  Vmacro(71);
+        Vmacro(72);  Vmacro(73);  Vmacro(74);  Vmacro(75);  Vmacro(76);  Vmacro(77);  Vmacro(78);  Vmacro(79);
+        Vmacro(80);  Vmacro(81);  Vmacro(82);  Vmacro(83);  Vmacro(84);  Vmacro(85);  Vmacro(86);  Vmacro(87);
+        Vmacro(88);  Vmacro(89);  Vmacro(90);  Vmacro(91);  Vmacro(92);  Vmacro(93);  Vmacro(94);  Vmacro(95);
+        Vmacro(96);  Vmacro(97);  Vmacro(98);  Vmacro(99);  Vmacro(100); Vmacro(101); Vmacro(102); Vmacro(103);
+        Vmacro(104); Vmacro(105); Vmacro(106); Vmacro(107); Vmacro(108); Vmacro(109); Vmacro(110); Vmacro(111);
+        Vmacro(112); Vmacro(113); Vmacro(114); Vmacro(115); Vmacro(116); Vmacro(117); Vmacro(118); Vmacro(119);
+        Vmacro(120); Vmacro(121); Vmacro(122); Vmacro(123); Vmacro(124); Vmacro(125); Vmacro(126); Vmacro(127);
+    r[DIFFTEST_VSTART] = dut_ptr->io_difftest_vstart;
+    r[DIFFTEST_VXSAT ] = dut_ptr->io_difftest_vxsat;
+    r[DIFFTEST_VXRM  ] = dut_ptr->io_difftest_vxrm;
+    r[DIFFTEST_VL    ] = dut_ptr->io_difftest_vl;
+    r[DIFFTEST_VTYPE ] = dut_ptr->io_difftest_vtype;
   }
 */
 
@@ -122,6 +144,12 @@ class Emulator {
   void single_cycle() {
     dut_ptr->clock = 0;
     dut_ptr->eval();
+
+#if VM_TRACE
+    tfp->dump(cycles);
+#endif
+
+    cycles ++;
 
     dut_ptr->clock = 1;
     dut_ptr->eval();

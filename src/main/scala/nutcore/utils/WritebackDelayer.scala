@@ -33,7 +33,7 @@ class WritebackDelayer(bru: Boolean = false, name: String = "unnamedDelayer") ex
 
   val valid = RegInit(false.B)
   val brMask = Reg(UInt(checkpointSize.W))
-  
+
   def needMispredictionRecovery(brMask: UInt) = {
     io.mispredictRec.valid && io.mispredictRec.redirect.valid && brMask(io.mispredictRec.checkpoint)
   }

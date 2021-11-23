@@ -38,7 +38,7 @@ trait HasCSRConst {
   val Ustatus       = 0x000 
   val Uie           = 0x004
   val Utvec         = 0x005
-  
+
   // User Trap Handling
   val Uscratch      = 0x040
   val Uepc          = 0x041
@@ -55,7 +55,7 @@ trait HasCSRConst {
   val Cycle         = 0xC00
   val Time          = 0xC01
   val Instret       = 0xC02
-  
+
   // User DASICS Registers
   val DasicsLibCfg0 = 0x881
   val DasicsLibCfg1 = 0x882
@@ -64,6 +64,14 @@ trait HasCSRConst {
   val DasicsMaincallEntry = 0x8A3
   val DasicsReturnPC = 0x8A4
   val DasicsFreeZoneReturnPC = 0x8A5
+
+  // Vector - privilege: URW
+  val Vstart        = 0x008 //but vstart should not support write
+  val Vxsat         = 0x009
+  val Vxrm          = 0x00a
+  // Vector - privilege: URO
+  val Vl            = 0xc20
+  val Vtype         = 0xc21
 
   // Supervisor Trap Setup
   val Sstatus       = 0x100
@@ -222,6 +230,7 @@ class CSRIO extends FunctionUnitIO {
   val imemMMU = Flipped(new MMUIO)
   val dmemMMU = Flipped(new MMUIO)
   val wenFix = Output(Bool())
+  val vcfg = new VCFGIO
 }
 
 class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
@@ -246,7 +255,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }
 
   val csrNotImplemented = RegInit(UInt(XLEN.W), 0.U)
-   
+
   class MstatusStruct extends Bundle {
     val sd = Output(UInt(1.W))
 
@@ -283,7 +292,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }
 
   // Machine-Level CSRs
-  
+
   val mtvec = RegInit(UInt(XLEN.W), 0.U)
   val mcounteren = RegInit(UInt(XLEN.W), 0.U)
   val mcause = RegInit(UInt(XLEN.W), 0.U)
@@ -455,6 +464,33 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     lrAddr := setLrAddr
   }
 
+  // Vector - CSRs
+
+  val vstart = RegInit(UInt(XLEN.W), 0.U)
+  val vxsat  = RegInit(UInt(XLEN.W), 0.U)
+  val vxrm   = RegInit(UInt(XLEN.W), 0.U)
+  val vl     = RegInit(UInt(XLEN.W), 0.U)
+  val vtype  = RegInit(UInt(XLEN.W), 0.U)
+  val vtype_mask = ZeroExt("h1f".U(5.W), 5) // TODO: only support low 4 bit now
+  val vsetvl_req = WireInit(0.U(XLEN.W))
+  val vsetvl_wen = WireInit(false.B)
+
+  BoringUtils.addSink(vsetvl_req, "VSETVL")
+  BoringUtils.addSink(vsetvl_wen, "VSETVLWEN")
+
+  when(vsetvl_wen) {
+    vl := vsetvl_req(XLEN-1, 0)
+    vtype := src2 & vtype_mask
+  }
+
+  io.vcfg.vsew := vtype(3,2) // only support 64-bit
+  io.vcfg.vlmul := vtype(1,0)
+  // io.vcfg.vediv := vtype(6,5)
+  io.vcfg.vlen := vl
+
+  // TODO: all the vector vCSRs don't need XLEN-bits, how to simplify it?
+  // vstart support write but program should not do that.
+
   // Hart Priviledge Mode
   val priviledgeMode = RegInit(UInt(2.W), ModeM)
 
@@ -509,6 +545,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
     // Supervisor Protection and Translation
     MaskedRegMap(Satp, satp),
+
+    // User Vector CSRs
+    // TODO: Vector CSRs may be user-level and how to do
+    MaskedRegMap(Vstart, vstart),
+    MaskedRegMap(Vxsat, vxsat),
+    MaskedRegMap(Vxrm, vxrm),
+    MaskedRegMap(Vl, vl, 0.U,  MaskedRegMap.Unwritable),
+    MaskedRegMap(Vtype, vtype, 0.U,  MaskedRegMap.Unwritable),
 
     // Machine Information Registers 
     MaskedRegMap(Mvendorid, mvendorid, 0.U, MaskedRegMap.Unwritable), 
@@ -841,7 +885,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   mipWire.t.m := mtip
   mipWire.e.m := meip
   mipWire.s.m := msip
-  
+
   // SEIP from PLIC is only used to raise interrupt,
   // but it is not stored in the CSR
   val seip = meip    // FIXME: PLIC should generate SEIP different from MEIP
@@ -857,7 +901,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
   BoringUtils.addSource(intrVec, "intrVecIDU")
   // val intrNO = PriorityEncoder(intrVec)
-  
+
   val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
   // val intrNO = PriorityEncoder(io.cfIn.intrVec)
   val raiseIntr = io.cfIn.intrVec.asUInt.orR
@@ -1172,6 +1216,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     BoringUtils.addSource(RegNext(sepc), "difftestSepc")
     BoringUtils.addSource(RegNext(mcause), "difftestMcause")
     BoringUtils.addSource(RegNext(scause), "difftestScause")
+    BoringUtils.addSource(RegNext(vstart), "difftestVstart")
+    BoringUtils.addSource(RegNext(vxsat), "difftestVxsat")
+    BoringUtils.addSource(RegNext(vxrm), "difftestVxrm")
+    BoringUtils.addSource(RegNext(vl), "difftestVl")
+    BoringUtils.addSource(RegNext(vtype), "difftestVtype")
   } else {
     if (!p.FPGAPlatform) {
       BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")

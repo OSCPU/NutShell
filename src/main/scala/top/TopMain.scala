@@ -43,7 +43,7 @@ object TopMain extends App {
   }
   val board = parseArgs("BOARD", args)
   val core = parseArgs("CORE", args)
-  
+
   val s = (board match {
     case "sim"    => Nil
     case "pynq"   => PynqSettings()

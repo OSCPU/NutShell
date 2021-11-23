@@ -140,3 +140,42 @@ class SimpleBusC(val userBits: Int = 0) extends SimpleBusBundle {
 
   def memtoMemPort() = this.mem.toMemPort
 }
+
+// id -> user
+class SimpleBusID2User(val userBits: Int = 0, val addrBits: Int = 32, val idBits: Int = 0) extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(new SimpleBusUC(userBits, addrBits, idBits))
+    val out = new SimpleBusUC(userBits+idBits, addrBits)
+  })
+
+  val inReq = io.in.req.bits
+  val outReq = io.out.req.bits
+  val inResp = io.in.resp.bits
+  val outResp = io.out.resp.bits
+
+  io.in.req.ready := io.out.req.ready
+  io.out.req.valid := io.in.req.valid
+
+  io.in.resp.valid := io.out.resp.valid
+  io.out.resp.ready := io.in.resp.ready
+
+  outReq.addr := inReq.addr
+  outReq.size := inReq.size
+  outReq.cmd  := inReq.cmd
+  outReq.wmask:= inReq.wmask
+  outReq.wdata:= inReq.wdata
+  if(userBits > 0) {
+    outReq.user.get := Cat(inReq.id.get, inReq.user.get)
+  }else {
+    outReq.user.get := inReq.id.get
+  }
+  // outReq.user.get := if(userBits+idBits==0) None else Cat(if (idBits > 0) Some(Output(UInt(idBits.W))) else None, if (userBits > 0) Some(Output(UInt(userBits.W))) else None)
+
+  val outRespUser = outResp.user.get
+  inResp.cmd  := outResp.cmd
+  inResp.rdata:= outResp.rdata
+  if(userBits > 0) {
+    inResp.user.get := outRespUser(userBits-1,0)
+  }
+  inResp.id.get := outRespUser(userBits+idBits-1, userBits)
+}

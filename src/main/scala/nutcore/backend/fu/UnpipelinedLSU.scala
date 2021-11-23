@@ -124,7 +124,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     //   storeQueue.io.enq.bits.func := func
     //   storeQueue.io.deq.ready := lsExecUnit.io.out.fire()
     // }
-    
+
     lsExecUnit.io.in.valid     := false.B
     lsExecUnit.io.out.ready    := DontCare
     lsExecUnit.io.in.bits.src1 := DontCare
@@ -161,7 +161,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         when(amoReq && !cannotAccessMemory){state := s_amo_l}
         when(lrReq && !cannotAccessMemory){state := s_lr}
         when(scReq && !cannotAccessMemory){state := Mux(scInvalid, s_idle, s_sc)}
-        
+
       } 
 
       is(s_exec){

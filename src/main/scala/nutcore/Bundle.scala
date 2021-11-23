@@ -129,7 +129,7 @@ class MMUIO extends NutCoreBundle {
   val loadPF = Output(Bool())
   val storePF = Output(Bool())
   val addr = Output(UInt(VAddrBits.W)) 
-  
+
   def isPF() = loadPF || storePF
 }
 

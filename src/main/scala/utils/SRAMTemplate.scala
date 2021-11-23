@@ -174,7 +174,7 @@ class BTBSRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
   val wordType = UInt(gen.getWidth.W)
   // val array = SyncReadMem(set, Vec(way, wordType))
   val sram = Module(new S011HD1P_X32Y2D128())
-  
+
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
 
   if (shouldReset) {

@@ -56,6 +56,10 @@ object ALUOpType {
   def call = "b1011100".U
   def ret  = "b1011110".U
 
+  // for RVV
+  def vcfg = "b001001".U
+  def vcfgm= "b001010".U
+
   // for dasics protection
   def pulpret = "b1111110".U  // Use func5 to make difference
 
@@ -77,14 +81,19 @@ class ALUIO extends FunctionUnitIO {
 class ALU(hasBru: Boolean = false) extends NutCoreModule {
   val io = IO(new ALUIO)
 
-  val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
+  val (valid, src1, t_src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt = {
     this.valid := valid
     this.src1 := src1
-    this.src2 := src2
+    this.t_src2 := src2
     this.func := func
     io.out.bits
   }
+
+  // ugly operation: vector wanna use alu to compare vl_req and vl_max, and return min(vl_req, vl_max)
+  val src2_vcfg = (8.U(7.W) >> t_src2(3,2)) << t_src2(1,0) // high latency
+  val vl_max = ZeroExt(Cat(src2_vcfg, 0.U(2.W)), XLEN)
+  val src2 = Mux(func === ALUOpType.vcfg || func === ALUOpType.vcfgm, vl_max, t_src2)
 
   val isAdderSub = !ALUOpType.isAdd(func)
   val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
@@ -105,7 +114,9 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
     ALUOpType.srl  -> (shsrc1  >> shamt),
     ALUOpType.or   -> (src1  |  src2),
     ALUOpType.and  -> (src1  &  src2),
-    ALUOpType.sra  -> ((shsrc1.asSInt >> shamt).asUInt)
+    ALUOpType.sra  -> ((shsrc1.asSInt >> shamt).asUInt),
+    ALUOpType.vcfg -> Mux(sltu, src1, src2),
+    ALUOpType.vcfgm-> src2
   ))
   val aluRes = Mux(ALUOpType.isWordOp(func), SignExt(res(31,0), 64), res)
 
@@ -162,9 +173,12 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
   bpuUpdateReq.btbType := LookupTree(func, RV32I_BRUInstr.bruFuncTobtbTypeTable)
   bpuUpdateReq.isRVC := isRVC
 
+  BoringUtils.addSource(res, "VSETVL")
+  BoringUtils.addSource((func===ALUOpType.vcfg || func===ALUOpType.vcfgm) && valid , "VSETVLWEN")
+
   if(hasBru){
     BoringUtils.addSource(RegNext(bpuUpdateReq, 0.U.asTypeOf(bpuUpdateReq)), "bpuUpdateReq")
-  
+
     val right = valid && isBru && !predictWrong
     val wrong = valid && isBru && predictWrong
     BoringUtils.addSource(right && isBranch, "MbpBRight")

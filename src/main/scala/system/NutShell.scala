@@ -93,7 +93,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   val memMapBase = Settings.getLong("MemMapBase")
   val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))
   memAddrMap.io.in <> mem
-  
+
   nutcore.io.imem.coh.resp.ready := true.B
   nutcore.io.imem.coh.req.valid := false.B
   nutcore.io.imem.coh.req.bits := DontCare
@@ -138,7 +138,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   plic.io.extra.get.intrVec := RegNext(RegNext(io.interrupt, false.B), false.B)
   val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
-  
+
 
   // ILA
   if (p.FPGAPlatform) {

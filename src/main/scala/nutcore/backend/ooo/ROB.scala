@@ -471,7 +471,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       when(ringBufferTail === i.U){Debug("  tail")}
       Debug("\n")
     }
-    
+
     // for(i <- 0 to (robSize - 1)){
     //   Debug("[ROB] %b %b " + i + "\n", brMask(i)(0), brMask(i)(1))
     // }
@@ -495,7 +495,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
   BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
   val retirePC = SignExt(decode(ringBufferTail)(firstValidInst).cf.pc, AddrBits)
-  
+
   if (!p.FPGAPlatform) {
     BoringUtils.addSource(RegNext(retireATerm), "difftestCommit")
     BoringUtils.addSource(RegNext(retireMultiTerms), "difftestMultiCommit")

@@ -28,6 +28,7 @@ import top.Settings
 trait HasNutCoreParameter {
   // General Parameter for NutShell
   val XLEN = if (Settings.get("IsRV32")) 32 else 64
+  val VLEN = if (Settings.get("IsRV32")) 128 else 256
   val HasMExtension = true
   val HasCExtension = Settings.get("EnableRVC")
   val HasNExtension = Settings.get("EnableRVN")
@@ -56,7 +57,11 @@ trait HasNutCoreParameter {
 trait HasNutCoreConst extends HasNutCoreParameter {
   val CacheReadWidth = 8
   val ICacheUserBundleWidth = VAddrBits*2 + 9
-  val DCacheUserBundleWidth = 16
+
+  val PositionLen = 18
+  val DVMemUserBits = PositionLen + 3 + 6
+  val DCacheUserBundleWidth = DVMemUserBits + 2 // should be greater than 16
+  // val DCacheUserBundleWidth = 16
   val IndependentBru = if (Settings.get("EnableOutOfOrderExec")) true else false
 }
 
@@ -214,7 +219,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     case (false, true)  => Module(new Frontend_ooo)
     case (false, false) => Module(new Frontend_inorder)
   }
-  
+
   // Backend
   if (EnableOutOfOrderExec) {
     val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
@@ -229,7 +234,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     frontend.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, frontend.io.flushVec(0) | frontend.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
-    
+
     val dtlb = TLB(in = backend.io.dtlb, mem = dmemXbar.io.in(1), flush = frontend.io.flushVec(3), csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
     dtlb.io.out := DontCare //FIXIT
     dtlb.io.out.req.ready := true.B //FIXIT
@@ -259,7 +264,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     PipelineVector2Connect(new DecodeIO, frontend.io.out(0), frontend.io.out(1), backend.io.in(0), backend.io.in(1), frontend.io.flushVec(1), 4)
 
     val mmioXbar = Module(new SimpleBusCrossbarNto1(2))
-    val dmemXbar = Module(new SimpleBusCrossbarNto1(4))
+    val dmemXbar = Module(new SimpleBusAutoIDCrossbarNto1(4, userBits = if (HasDcache) DCacheUserBundleWidth else 0))
 
     val mmioBridge = Module(new MMIOBridge())
     val immioBus = WireInit(0.U.asTypeOf(new SimpleBusUC))
@@ -271,17 +276,27 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     immioBus <> mmioBridge.io.in
     mmioXbar.io.in(0) <> mmioBridge.io.out
 
+    val exumemXbar = Module(new SimpleBusAutoIDCrossbarNto1(2, userBits = if (HasDcache) DVMemUserBits else 0))
+    val dMemExp = Module(new SimpleBusUCExpender(userBits = DCacheUserBundleWidth, userVal = 0.U))
+    dMemExp.io.in <> backend.io.dmem
+    exumemXbar.io.in(0) <> dMemExp.io.out
+    exumemXbar.io.in(1) <> backend.io.vdmem
+    val exuSimTran = Module(new SimpleBusID2User(DVMemUserBits, PAddrBits, 2))
+    exuSimTran.io.in <> exumemXbar.io.out
     // dtlb
-    val dtlb = EmbeddedTLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", totalEntry = 64))
+    val dtlb = EmbeddedTLB(in = exuSimTran.io.out, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
-    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache"))
+    io.dmem <> Cache(in = dmemXbar.io.out, mmio = mmioXbar.io.in.drop(1), flush = "b00".U, empty = dtlb.io.cacheEmpty, enable = HasDcache)(CacheConfig(ro = false, name = "dcache", userBits = DCacheUserBundleWidth, idBits = 4))
 
     // redirect
     frontend.io.redirect <> backend.io.redirect
     backend.io.flush := frontend.io.flushVec(3,2)
 
     // Make DMA access through L1 DCache to keep coherence
-    dmemXbar.io.in(3) <> io.frontend
+    val expender = Module(new SimpleBusUCExpender(userBits = DCacheUserBundleWidth, userVal = 0.U))
+    expender.io.in <> io.frontend
+    dmemXbar.io.in(3) <> expender.io.out//io.frontend
+    // dmemXbar.io.in(3) <> io.frontend
 
     io.mmio <> mmioXbar.io.out
   }

@@ -134,7 +134,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   )
 
   val inst = Wire(Vec(DispatchWidth + 1, new RenamedDecodeIO))
-  
+
   List.tabulate(DispatchWidth)(i => {
     inst(i).decode := io.in(i).bits
     inst(i).prfDest := Cat(rob.io.index, i.U(1.W))
@@ -360,7 +360,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)
   val lsuTlbPF = WireInit(false.B)
-  
+
   val lsuUop = lsurs.io.out.bits
 
   val lsuOut = lsu.access(
@@ -659,7 +659,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
     BoringUtils.addSink(instrCnt, "simInstrCnt")
     BoringUtils.addSource(nutcoretrap, "nutcoretrap")
   }
-  
+
 }
 
 class Backend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
@@ -667,6 +667,7 @@ class Backend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
     val in = Vec(2, Flipped(Decoupled(new DecodeIO)))
     val flush = Input(UInt(2.W))
     val dmem = new SimpleBusUC(addrBits = VAddrBits)
+    val vdmem = new SimpleBusUC(userBits = DVMemUserBits, addrBits = VAddrBits)
     val memMMU = Flipped(new MemMMUIO)
 
     val redirect = new RedirectIO
@@ -680,7 +681,7 @@ class Backend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
   PipelineConnect(exu.io.out, wbu.io.in, true.B, io.flush(1))
 
   isu.io.in <> io.in
-  
+
   isu.io.flush := io.flush(0)
   exu.io.flush := io.flush(1)
 
@@ -692,4 +693,5 @@ class Backend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.memMMU.imem <> exu.io.memMMU.imem
   io.memMMU.dmem <> exu.io.memMMU.dmem
   io.dmem <> exu.io.dmem
+  io.vdmem <> exu.io.vdmem
 }

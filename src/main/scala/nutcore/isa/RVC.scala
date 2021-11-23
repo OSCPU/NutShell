@@ -133,7 +133,7 @@ object RVCInstr extends HasInstrType with HasRVCConst {
   // TODO: RES
 
 //   def is_C_ADDI4SPN(op: UInt) = op(12,5) =/= 0.U
-  
+
   val table = Array(
     C_ILLEGAL    -> List(InstrN, FuType.csr, CSROpType.jmp),
     C_ADDI4SPN   -> List(InstrI, FuType.alu, ALUOpType.add),
