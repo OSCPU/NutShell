@@ -41,8 +41,8 @@ trait HasFrontendIO {
 class Frontend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasFrontendIO {
   def pipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
     isFlush: Bool, entries: Int = 4, pipe: Boolean = false) = {
-    // TODO: depend on https://github.com/chipsalliance/chisel3/pull/2245
-    right <> Queue(left,  entries = entries, pipe = pipe)
+    // NOTE: depend on https://github.com/chipsalliance/chisel3/pull/2245
+    right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
   }
 
   val ifu  = Module(new IFU_ooo)
@@ -98,8 +98,8 @@ class Frontend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule with
 
   def PipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
     isFlush: Bool, entries: Int = 4, pipe: Boolean = false) = {
-    // TODO: depend on https://github.com/chipsalliance/chisel3/pull/2245
-    right <> Queue(left,  entries = entries, pipe = pipe)
+    // NOTE: depend on https://github.com/chipsalliance/chisel3/pull/2245
+    right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
   }
 
   PipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
