@@ -57,20 +57,28 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   BoringUtils.addSource(falseWire, "perfCntCondMultiCommit")
   
   if (!p.FPGAPlatform) {
-    val difftest = Module(new DifftestInstrCommit)
-    difftest.io.clock    := clock
-    difftest.io.coreid   := 0.U
-    difftest.io.index    := 0.U
+    val difftest_commit = Module(new DifftestInstrCommit)
+    difftest_commit.io.clock    := clock
+    difftest_commit.io.coreid   := 0.U
+    difftest_commit.io.index    := 0.U
 
-    difftest.io.valid    := RegNext(io.in.valid)
-    difftest.io.pc       := RegNext(SignExt(io.in.bits.decode.cf.pc, AddrBits))
-    difftest.io.instr    := RegNext(io.in.bits.decode.cf.instr)
-    difftest.io.skip     := RegNext(io.in.bits.isMMIO)
-    difftest.io.isRVC    := RegNext(io.in.bits.decode.cf.instr(1,0)=/="b11".U)
-    difftest.io.scFailed := RegNext(false.B) // TODO: fixme
-    difftest.io.wen      := RegNext(io.wb.rfWen && io.wb.rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
-    difftest.io.wdata    := RegNext(io.wb.rfData)
-    difftest.io.wdest    := RegNext(io.wb.rfDest)
+    difftest_commit.io.valid    := RegNext(io.in.valid)
+    difftest_commit.io.pc       := RegNext(SignExt(io.in.bits.decode.cf.pc, AddrBits))
+    difftest_commit.io.instr    := RegNext(io.in.bits.decode.cf.instr)
+    difftest_commit.io.skip     := RegNext(io.in.bits.isMMIO)
+    difftest_commit.io.isRVC    := RegNext(io.in.bits.decode.cf.instr(1,0)=/="b11".U)
+    difftest_commit.io.scFailed := RegNext(false.B) // TODO: fixme
+    difftest_commit.io.wen      := RegNext(io.wb.rfWen && io.wb.rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
+    // difftest.io.wdata    := RegNext(io.wb.rfData)
+    difftest_commit.io.wdest    := RegNext(io.wb.rfDest)
+    difftest_commit.io.wpdest   := RegNext(io.wb.rfDest)
+
+    val difftest_wb = Module(new DifftestIntWriteback)
+    difftest_wb.io.clock := clock
+    difftest_wb.io.coreid := 0.U
+    difftest_wb.io.valid := RegNext(io.wb.rfWen && io.wb.rfDest =/= 0.U)
+    difftest_wb.io.dest := RegNext(io.wb.rfDest)
+    difftest_wb.io.data := RegNext(io.wb.rfData)
 
     val runahead_commit = Module(new DifftestRunaheadCommitEvent)
     runahead_commit.io.clock := clock
