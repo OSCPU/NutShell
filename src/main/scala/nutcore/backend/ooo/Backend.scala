@@ -207,7 +207,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val blockReg = RegInit(false.B)
   val haveUnfinishedStore = Wire(Bool())
   when((rob.io.empty || flushBackend) && !haveUnfinishedStore){ blockReg := false.B }
-  when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire()){ blockReg := true.B }
+  when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire){ blockReg := true.B }
   val mispredictionRecoveryReg = RegInit(false.B)
   when(io.redirect.valid && io.redirect.rtype === 1.U){ mispredictionRecoveryReg := true.B }
   when(rob.io.empty || flushBackend){ mispredictionRecoveryReg := false.B }
@@ -271,9 +271,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val brMask = Wire(Vec(robWidth+2, UInt(checkpointSize.W)))
   val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.bru)
   brMask(0) := brMaskGen
-  brMask(1) := brMaskGen | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(0).fire() && isBranch(0)))
+  brMask(1) := brMaskGen | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(0).fire && isBranch(0)))
   brMask(2) := DontCare
-  brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire() && isBranch(1)))
+  brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire && isBranch(1)))
   brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bruDelayer.io.out.bits.brMask), brMask(3)))
 
   Debug("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
@@ -342,8 +342,8 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
 
   // commit redirect
   bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
-  bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire()
-  mispredictRec.valid := bruDelayer.io.out.fire()
+  bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire
+  mispredictRec.valid := bruDelayer.io.out.fire
   mispredictRec.checkpoint := bruDelayer.io.freeCheckpoint.get.bits
   mispredictRec.prfidx := bruDelayer.io.out.bits.prfidx
   mispredictRec.redirect := bruRedirect
@@ -373,7 +373,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   )
   lsu.io.uopIn := lsuUop
   lsu.io.stMaskIn := lsurs.io.stMaskOut.get
-  lsu.io.robAllocate.valid := io.in(0).fire()
+  lsu.io.robAllocate.valid := io.in(0).fire
   lsu.io.robAllocate.bits := rob.io.index
   lsu.io.mispredictRec := mispredictRec
   lsu.io.scommit := rob.io.scommit
@@ -397,7 +397,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
   // backend exceptions only come from LSU
-  raiseBackendException := lsucommit.exception && lsu.io.out.fire()
+  raiseBackendException := lsucommit.exception && lsu.io.out.fire
   // for backend exceptions, we reuse 'intrNO' field in ROB
   // when ROB.exception(x) === 1, intrNO(x) represents backend exception vec for this inst
   lsucommit.intrNO := lsucommit.decode.cf.exceptionVec.asUInt
@@ -585,28 +585,28 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
 
   // Performance Counter
 
-  BoringUtils.addSource(alu1.io.out.fire(), "perfCntCondMaluInstr")
-  BoringUtils.addSource(bru.io.out.fire(), "perfCntCondMbruInstr")
-  BoringUtils.addSource(lsu.io.out.fire(), "perfCntCondMlsuInstr")
-  BoringUtils.addSource(mdu.io.out.fire(), "perfCntCondMmduInstr")
+  BoringUtils.addSource(alu1.io.out.fire, "perfCntCondMaluInstr")
+  BoringUtils.addSource(bru.io.out.fire, "perfCntCondMbruInstr")
+  BoringUtils.addSource(lsu.io.out.fire, "perfCntCondMlsuInstr")
+  BoringUtils.addSource(mdu.io.out.fire, "perfCntCondMmduInstr")
   BoringUtils.addSource(!rob.io.in(0).ready, "perfCntCondMrobFull")
   BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMalu1rsFull")
   BoringUtils.addSource(!alu2rs.io.in.ready, "perfCntCondMalu2rsFull")
   BoringUtils.addSource(!brurs.io.in.ready, "perfCntCondMbrursFull")
   BoringUtils.addSource(!lsurs.io.in.ready, "perfCntCondMlsursFull")
   BoringUtils.addSource(!mdurs.io.in.ready, "perfCntCondMmdursFull")
-  BoringUtils.addSource(lsurs.io.out.fire(), "perfCntCondMlsuIssue")
-  BoringUtils.addSource(mdurs.io.out.fire(), "perfCntCondMmduIssue")
+  BoringUtils.addSource(lsurs.io.out.fire, "perfCntCondMlsuIssue")
+  BoringUtils.addSource(mdurs.io.out.fire, "perfCntCondMmduIssue")
   BoringUtils.addSource(rob.io.empty, "perfCntCondMrobEmpty")
   BoringUtils.addSource(cmtStrHaz(0), "perfCntCondMcmtCnt0")
   BoringUtils.addSource(cmtStrHaz(1), "perfCntCondMcmtCnt1")
   BoringUtils.addSource(cmtStrHaz(2), "perfCntCondMcmtCnt2")
   BoringUtils.addSource(cmtStrHaz(3), "perfCntCondMcmtStrHaz1")
   BoringUtils.addSource(cmtStrHaz(4), "perfCntCondMcmtStrHaz2")
-  BoringUtils.addSource(alu2.io.out.fire(), "perfCntCondMaluInstr2")
-  BoringUtils.addSource(!(rob.io.in(0).fire() | rob.io.in(1).fire()), "perfCntCondMdispatch0")
-  BoringUtils.addSource(rob.io.in(0).fire() ^ rob.io.in(1).fire(), "perfCntCondMdispatch1")
-  BoringUtils.addSource(rob.io.in(0).fire() & rob.io.in(1).fire(), "perfCntCondMdispatch2")
+  BoringUtils.addSource(alu2.io.out.fire, "perfCntCondMaluInstr2")
+  BoringUtils.addSource(!(rob.io.in(0).fire | rob.io.in(1).fire), "perfCntCondMdispatch0")
+  BoringUtils.addSource(rob.io.in(0).fire ^ rob.io.in(1).fire, "perfCntCondMdispatch1")
+  BoringUtils.addSource(rob.io.in(0).fire & rob.io.in(1).fire, "perfCntCondMdispatch2")
 
   val inst1RSfull = !LookupTree(io.in(0).bits.ctrl.fuType, List(
     FuType.bru -> brurs.io.in.ready,
@@ -681,7 +681,7 @@ class Backend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
   val exu  = Module(new EXU)
   val wbu  = Module(new WBU)
 
-  PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire(), io.flush(0))
+  PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire, io.flush(0))
   PipelineConnect(exu.io.out, wbu.io.in, true.B, io.flush(1))
 
   isu.io.in <> io.in

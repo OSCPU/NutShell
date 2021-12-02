@@ -36,7 +36,7 @@ class AXI4Flash extends AXI4SlaveModule(new AXI4Lite) {
 
   val rdata = Wire(UInt(64.W))
   RegMap.generate(mapping, getOffset(raddr), rdata,
-    getOffset(waddr), in.w.fire(), in.w.bits.data, MaskExpand(in.w.bits.strb))
+    getOffset(waddr), in.w.fire, in.w.bits.data, MaskExpand(in.w.bits.strb))
 
   in.r.bits.data := RegEnable(RegNext(Fill(2, rdata(31,0))), ren)
 }

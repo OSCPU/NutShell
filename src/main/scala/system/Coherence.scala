@@ -73,27 +73,27 @@ class CoherenceManager extends Module with HasCoherenceParameter {
 
   switch (state) {
     is (s_idle) {
-      when (thisReq.fire()) {
+      when (thisReq.fire) {
         when (thisReq.bits.isRead()) { state := Mux(supportCoh.B, s_probeResp, s_memReadResp) }
         .elsewhen (thisReq.bits.isWriteLast()) { state := s_memWriteResp }
       }
     }
     is (s_probeResp) {
-      when (io.out.coh.resp.fire()) {
+      when (io.out.coh.resp.fire) {
         state := Mux(io.out.coh.resp.bits.isProbeHit(), s_probeForward, s_memReadReq)
       }
     }
     is (s_probeForward) {
       val thisResp = io.in.resp
       thisResp <> io.out.coh.resp
-      when (thisResp.fire() && thisResp.bits.isReadLast()) { state := s_idle }
+      when (thisResp.fire && thisResp.bits.isReadLast()) { state := s_idle }
     }
     is (s_memReadReq) {
       io.out.mem.req.bits := reqLatch
       io.out.mem.req.valid := true.B
-      when (io.out.mem.req.fire()) { state := s_memReadResp }
+      when (io.out.mem.req.fire) { state := s_memReadResp }
     }
-    is (s_memReadResp) { when (io.out.mem.resp.fire() && io.out.mem.resp.bits.isReadLast()) { state := s_idle } }
-    is (s_memWriteResp) { when (io.out.mem.resp.fire()) { state := s_idle } }
+    is (s_memReadResp) { when (io.out.mem.resp.fire && io.out.mem.resp.bits.isReadLast()) { state := s_idle } }
+    is (s_memWriteResp) { when (io.out.mem.resp.fire) { state := s_idle } }
   }
 }

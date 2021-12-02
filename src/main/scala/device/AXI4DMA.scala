@@ -50,20 +50,20 @@ class AXI4DMA extends AXI4SlaveModule(new AXI4Lite, new DMABundle) {
     }
   }
   when (state === s_idle && len =/= 0.U) { state := s_read_req }
-  when (state === s_read_req && dma.ar.fire()) { state := s_read_wait_resp }
-  when (state === s_read_wait_resp && dma.r.fire()) {
+  when (state === s_read_req && dma.ar.fire) { state := s_read_wait_resp }
+  when (state === s_read_wait_resp && dma.r.fire) {
     data := dma.r.bits.data.asTypeOf(Vec(8 / step, UInt(stepBits.W)))(src(2, log2Ceil(step)))
     state := s_write_req
   }
 
   val wSend = Wire(Bool())
   val wlast = dma.w.bits.last
-  val awAck = BoolStopWatch(dma.aw.fire(), wSend)
-  val wAck = BoolStopWatch(dma.w.fire() && wlast, wSend)
-  wSend := (dma.aw.fire() && dma.w.fire() && wlast) || (awAck && wAck)
+  val awAck = BoolStopWatch(dma.aw.fire, wSend)
+  val wAck = BoolStopWatch(dma.w.fire && wlast, wSend)
+  wSend := (dma.aw.fire && dma.w.fire && wlast) || (awAck && wAck)
 
   when (state === s_write_req && wSend) { state := s_write_wait_resp }
-  when (state === s_write_wait_resp && dma.b.fire()) {
+  when (state === s_write_wait_resp && dma.b.fire) {
     len := len - step.U
     dest := dest + step.U
     src := src + step.U
@@ -99,5 +99,5 @@ class AXI4DMA extends AXI4SlaveModule(new AXI4Lite, new DMABundle) {
   )
 
   RegMap.generate(mapping, raddr(3,0), in.r.bits.data,
-    waddr(3,0), in.w.fire(), in.w.bits.data, MaskExpand(in.w.bits.strb >> waddr(2,0)))
+    waddr(3,0), in.w.fire, in.w.bits.data, MaskExpand(in.w.bits.strb >> waddr(2,0)))
 }

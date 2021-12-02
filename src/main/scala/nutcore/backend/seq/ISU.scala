@@ -83,20 +83,20 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   when (io.wb.rfWen) { rf.write(io.wb.rfDest, io.wb.rfData) }
 
   val wbClearMask = Mux(io.wb.rfWen && !isDepend(io.wb.rfDest, io.forward.wb.rfDest, forwardRfWen), sb.mask(io.wb.rfDest), 0.U(NRReg.W))
-  // val isuFireSetMask = Mux(io.out.fire(), sb.mask(rfDest), 0.U)
-  val isuFireSetMask = Mux(io.out.fire(), sb.mask(rfDest1), 0.U)
+  // val isuFireSetMask = Mux(io.out.fire, sb.mask(rfDest), 0.U)
+  val isuFireSetMask = Mux(io.out.fire, sb.mask(rfDest1), 0.U)
   when (io.flush) { sb.update(0.U, Fill(NRReg, 1.U(1.W))) }
   .otherwise { sb.update(isuFireSetMask, wbClearMask) }
 
-  io.in(0).ready := !io.in(0).valid || io.out.fire()
+  io.in(0).ready := !io.in(0).valid || io.out.fire
   io.in(1).ready := false.B
 
-  Debug(io.out.fire(), "issue: pc %x npc %x instr %x src1 %x src2 %x imm %x\n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr, io.out.bits.data.src1, io.out.bits.data.src2, io.out.bits.data.imm)
+  Debug(io.out.fire, "issue: pc %x npc %x instr %x src1 %x src2 %x imm %x\n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr, io.out.bits.data.src1, io.out.bits.data.src2, io.out.bits.data.imm)
 
   // read after write
   BoringUtils.addSource(io.in(0).valid && !io.out.valid, "perfCntCondMrawStall")
-  BoringUtils.addSource(io.out.valid && !io.out.fire(), "perfCntCondMexuBusy")
-  BoringUtils.addSource(io.out.fire(), "perfCntCondISUIssue")
+  BoringUtils.addSource(io.out.valid && !io.out.fire, "perfCntCondMexuBusy")
+  BoringUtils.addSource(io.out.fire, "perfCntCondISUIssue")
 
   if (!p.FPGAPlatform) {
     val difftest = Module(new DifftestArchIntRegState)

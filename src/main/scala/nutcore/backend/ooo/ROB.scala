@@ -438,8 +438,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   // Generate Debug Info
-    Debug(io.in(0).fire(), "[DISPATCH1] pc = 0x%x inst %x wen %x wdst %x\n", io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)
-    Debug(io.in(1).fire(), "[DISPATCH2] pc = 0x%x inst %x wen %x wdst %x\n", io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)
+    Debug(io.in(0).fire, "[DISPATCH1] pc = 0x%x inst %x wen %x wdst %x\n", io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)
+    Debug(io.in(1).fire, "[DISPATCH2] pc = 0x%x inst %x wen %x wdst %x\n", io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)
     Debug(io.cdb(0).valid, "[COMMIT1] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(0).bits.decode.cf.pc, io.cdb(0).bits.decode.cf.instr, io.cdb(0).bits.decode.ctrl.rfWen, io.cdb(0).bits.decode.ctrl.rfDest, io.cdb(0).bits.commits)
     Debug(io.cdb(1).valid, "[COMMIT2] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(1).bits.decode.cf.pc, io.cdb(1).bits.decode.cf.instr, io.cdb(1).bits.decode.ctrl.rfWen, io.cdb(1).bits.decode.ctrl.rfDest, io.cdb(1).bits.commits)
     Debug(retireATerm && valid(ringBufferTail)(0), "[RETIRE1] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", decode(ringBufferTail)(0).cf.pc, decode(ringBufferTail)(0).cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, isMMIO(ringBufferTail)(0), intrNO(ringBufferTail)(0))

@@ -113,7 +113,7 @@ class AXI4DummySD extends AXI4SlaveModule(new AXI4Lite) with HasSDConst {
 
   val sdHelper = Module(new SDHelper)
   sdHelper.io.clk := clock
-  sdHelper.io.ren := (getOffset(raddr) === 0x40.U && io.in.ar.fire())
+  sdHelper.io.ren := (getOffset(raddr) === 0x40.U && io.in.ar.fire)
   sdHelper.io.setAddr := setAddr
   sdHelper.io.addr := regs(sdarg)
   def sdRead = sdHelper.io.data
@@ -138,7 +138,7 @@ class AXI4DummySD extends AXI4SlaveModule(new AXI4Lite) with HasSDConst {
              else Mux(waddr(2), in.w.bits.strb(7,4), in.w.bits.strb(3,0))
   val rdata = Wire(UInt(DataBits.W))
   RegMap.generate(mapping, getOffset(raddr), rdata,
-    getOffset(waddr), in.w.fire(), in.w.bits.data, MaskExpand(strb))
+    getOffset(waddr), in.w.fire, in.w.bits.data, MaskExpand(strb))
 
   in.r.bits.data := (if (DataBits == 32) RegEnable(RegNext(rdata(31,0)), ren)
                      else RegEnable(RegNext(Fill(2, rdata(31,0))), ren))

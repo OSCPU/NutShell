@@ -39,7 +39,7 @@ class Prefetcher extends Module with HasPrefetcherParameter {
   prefetchReq.cmd := SimpleBusCmd.prefetch
   prefetchReq.addr := io.in.bits.addr + XLEN.U
 
-  val lastReqAddr = (RegEnable(io.in.bits.addr, io.in.fire()))
+  val lastReqAddr = (RegEnable(io.in.bits.addr, io.in.fire))
   val thisReqAddr = io.in.bits.addr
   val lineMask = Cat(Fill(AddrBits - 6, 1.U(1.W)), 0.U(6.W))
   val neqAddr = (thisReqAddr & lineMask) =/= (lastReqAddr & lineMask)
@@ -47,13 +47,13 @@ class Prefetcher extends Module with HasPrefetcherParameter {
   when (!getNewReq) {
     io.out.bits <> io.in.bits
     io.out.valid := io.in.valid
-    io.in.ready := !io.in.valid || io.out.fire()
-    getNewReq := io.in.fire() && io.in.bits.isBurst() && neqAddr
+    io.in.ready := !io.in.valid || io.out.fire
+    getNewReq := io.in.fire && io.in.bits.isBurst() && neqAddr
   }.otherwise {
     io.out.bits <> prefetchReq
     io.out.valid := !AddressSpace.isMMIO(prefetchReq.addr)
     io.in.ready := false.B
-    getNewReq := !(io.out.fire() || AddressSpace.isMMIO(prefetchReq.addr))
+    getNewReq := !(io.out.fire || AddressSpace.isMMIO(prefetchReq.addr))
   }
   
   Debug() {

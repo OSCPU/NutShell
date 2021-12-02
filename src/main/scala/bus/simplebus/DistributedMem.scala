@@ -56,16 +56,16 @@ class DistributedMem(memByte: Int, dualPort: Boolean, delayCycles: Int = 0, data
     val state = RegInit(s_idle)
     switch (state) {
       is (s_idle) {
-        when (p.req.fire()) { state := Mux(p.resp.fire(), s_idle, s_reading) }
+        when (p.req.fire) { state := Mux(p.resp.fire, s_idle, s_reading) }
       }
       is (s_reading) {
-        when (p.resp.fire()) { state := s_idle }
+        when (p.resp.fire) { state := s_idle }
       }
     }
 
     p.req.ready := state === s_idle
     p.resp.bits.rdata := rdata
-    p.resp.valid := (if (delayCycles == 0) p.req.fire() else Counter(state === s_reading, delayCycles)._2)
+    p.resp.valid := (if (delayCycles == 0) p.req.fire else Counter(state === s_reading, delayCycles)._2)
   }
 
   readPort(io.rw, rwData)

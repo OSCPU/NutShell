@@ -122,10 +122,10 @@ class AXI4(val dataBits: Int = AXI4Parameters.dataBits, val idBits: Int = AXI4Pa
   override val r  = Flipped(Decoupled(new AXI4BundleR(dataBits, idBits)))
 
   def dump(name: String) = {
-    when (aw.fire()) { printf(p"${GTimer()},[${name}.aw] ${aw.bits}\n") }
-    when (w.fire()) { printf(p"${GTimer()},[${name}.w] ${w.bits}\n") }
-    when (b.fire()) { printf(p"${GTimer()},[${name}.b] ${b.bits}\n") }
-    when (ar.fire()) { printf(p"${GTimer()},[${name}.ar] ${ar.bits}\n") }
-    when (r.fire()) { printf(p"${GTimer()},[${name}.r] ${r.bits}\n") }
+    when (aw.fire) { printf(p"${GTimer()},[${name}.aw] ${aw.bits}\n") }
+    when (w.fire) { printf(p"${GTimer()},[${name}.w] ${w.bits}\n") }
+    when (b.fire) { printf(p"${GTimer()},[${name}.b] ${b.bits}\n") }
+    when (ar.fire) { printf(p"${GTimer()},[${name}.ar] ${ar.bits}\n") }
+    when (r.fire) { printf(p"${GTimer()},[${name}.r] ${r.bits}\n") }
   }
 }

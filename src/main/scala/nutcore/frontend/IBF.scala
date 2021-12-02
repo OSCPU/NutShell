@@ -71,11 +71,11 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   // NOTE: needEnqueue is always of fmt "0?1?0?"
   // therefore we first shift input data, then enqueue
   // val enqueueSize = List.tabulate(4)(i => needEnqueue(i).asUInt).foldRight(0.U)((sum, i)=>sum+&i) // count(true) in needEnqueue
-  val enqueueSize = needEnqueue(0).asUInt()+&needEnqueue(1).asUInt()+&needEnqueue(2).asUInt()+&needEnqueue(3).asUInt() // count(true) in needEnqueue
+  val enqueueSize = needEnqueue(0).asUInt+&needEnqueue(1).asUInt+&needEnqueue(2).asUInt+&needEnqueue(3).asUInt // count(true) in needEnqueue
   val shiftSize = Mux(needEnqueue(0), 0.U, Mux(needEnqueue(1), 1.U, Mux(needEnqueue(2), 2.U, 3.U))) // count 0 in low addr in needEnqueue
   val enqueueFire = (0 to 3).map(i => enqueueSize >= (i+1).U)
 
-  val ibufWen = io.in.fire() // i.e. ringBufferAllowin && io.in.valid
+  val ibufWen = io.in.fire // i.e. ringBufferAllowin && io.in.valid
   def ibufWrite(targetSlot: Int, shiftSize: UInt){
       ringInstBuffer(targetSlot.U + ringBufferHead) := instrVec(shiftSize + targetSlot.U)
       pcRingMeta(targetSlot.U + ringBufferHead) := Cat(io.in.bits.pc(VAddrBits-1, 3), shiftSize + targetSlot.U, 0.U(1.W))
@@ -124,9 +124,9 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   io.out(0).valid := dequeueIsValid(0) && (dequeueIsRVC(0) || dequeueIsValid(1)) && !io.flush
   io.out(0).bits.exceptionVec.map(_ => false.B)
   io.out(0).bits.exceptionVec(instrPageFault) := ipfRingMeta(ringBufferTail) || !dequeueIsRVC(0) && ipfRingMeta(ringBufferTail + 1.U)
-  val dequeueSize1 = Mux(io.out(0).fire(), Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
-    Debug(io.out(0).fire(), "dequeue: bufferhead %x buffertail %x\n", ringBufferHead, ringBufferTail)
-    Debug(io.out(0).fire(), "dequeue1: inst %x pc %x npc %x br %x ipf %x(%x)\n", io.out(0).bits.instr, io.out(0).bits.pc, io.out(0).bits.pnpc, io.out(0).bits.brIdx, io.out(0).bits.exceptionVec(instrPageFault), io.out(0).bits.crossPageIPFFix)
+  val dequeueSize1 = Mux(io.out(0).fire, Mux(dequeueIsRVC(0), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
+    Debug(io.out(0).fire, "dequeue: bufferhead %x buffertail %x\n", ringBufferHead, ringBufferTail)
+    Debug(io.out(0).fire, "dequeue1: inst %x pc %x npc %x br %x ipf %x(%x)\n", io.out(0).bits.instr, io.out(0).bits.pc, io.out(0).bits.pnpc, io.out(0).bits.brIdx, io.out(0).bits.exceptionVec(instrPageFault), io.out(0).bits.crossPageIPFFix)
 
   //dequeue socket 2
   val inst2_StartIndex = ringBufferTail + dequeueSize1
@@ -147,8 +147,8 @@ class IBF extends NutCoreModule with HasInstrType with HasIBUFConst{
   }
   io.out(1).bits.exceptionVec.map(_ => false.B)
   io.out(1).bits.exceptionVec(instrPageFault) := ipfRingMeta(inst2_StartIndex) || !dequeueIsRVC(dequeueSize1) && ipfRingMeta(inst2_StartIndex + 1.U)
-  val dequeueSize2 = Mux(io.out(1).fire(), Mux(dequeueIsRVC(dequeueSize1), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
-  Debug(io.out(1).fire(), "dequeue2: inst %x pc %x npc %x br %x ipf %x(%x)\n", io.out(1).bits.instr, io.out(1).bits.pc, io.out(1).bits.pnpc, io.out(1).bits.brIdx, io.out(1).bits.exceptionVec(instrPageFault), io.out(1).bits.crossPageIPFFix)
+  val dequeueSize2 = Mux(io.out(1).fire, Mux(dequeueIsRVC(dequeueSize1), 1.U, 2.U), 0.U) // socket 2 will use dequeueSize1 to get its inst
+  Debug(io.out(1).fire, "dequeue2: inst %x pc %x npc %x br %x ipf %x(%x)\n", io.out(1).bits.instr, io.out(1).bits.pc, io.out(1).bits.pnpc, io.out(1).bits.brIdx, io.out(1).bits.exceptionVec(instrPageFault), io.out(1).bits.crossPageIPFFix)
 
   val dequeueSize = dequeueSize1 +& dequeueSize2
 

@@ -113,7 +113,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     //   storeQueue.io.enq.bits.src2 := src2
     //   storeQueue.io.enq.bits.wdata := io.wdata
     //   storeQueue.io.enq.bits.func := func
-    //   storeQueue.io.deq.ready := lsExecUnit.io.out.fire()
+    //   storeQueue.io.deq.ready := lsExecUnit.io.out.fire
     // }
     
     lsExecUnit.io.in.valid     := false.B
@@ -144,7 +144,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
           lsExecUnit.io.in.bits.src2 := DontCare
           lsExecUnit.io.in.bits.func := func
           lsExecUnit.io.wdata        := io.wdata
-          io.in.ready                := lsExecUnit.io.out.fire() || scInvalid
+          io.in.ready                := lsExecUnit.io.out.fire || scInvalid
           io.out.valid               := lsExecUnit.io.out.valid  || scInvalid
           state := s_idle
         }
@@ -162,10 +162,10 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := func
         lsExecUnit.io.wdata        := io.wdata
-        io.in.ready                := lsExecUnit.io.out.fire() 
+        io.in.ready                := lsExecUnit.io.out.fire 
         io.out.valid               := lsExecUnit.io.out.valid  
         assert(!atomReq || !amoReq || !lrReq || !scReq)
-        when(io.out.fire()){state := s_idle}
+        when(io.out.fire){state := s_idle}
       }
 
       // is(s_load){
@@ -175,9 +175,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
       //   lsExecUnit.io.in.bits.src2 := src2
       //   lsExecUnit.io.in.bits.func := func
       //   lsExecUnit.io.wdata        := DontCare
-      //   io.in.ready                := lsExecUnit.io.out.fire()
+      //   io.in.ready                := lsExecUnit.io.out.fire
       //   io.out.valid               := lsExecUnit.io.out.valid
-      //   when(lsExecUnit.io.out.fire()){state := s_idle}//load finished
+      //   when(lsExecUnit.io.out.fire){state := s_idle}//load finished
       // }
 
       is(s_amo_l){
@@ -189,7 +189,7 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         lsExecUnit.io.wdata        := DontCare
         io.in.ready                := false.B
         io.out.valid               := false.B
-        when(lsExecUnit.io.out.fire()){
+        when(lsExecUnit.io.out.fire){
           state := s_amo_a; 
           Debug("[AMO-L] lsExecUnit.io.out.bits %x addr %x src2 %x\n", lsExecUnit.io.out.bits, lsExecUnit.io.in.bits.src1, io.wdata)
         }
@@ -218,9 +218,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.sd, LSUOpType.sw)
         lsExecUnit.io.wdata        := atomMemReg
-        io.in.ready                := lsExecUnit.io.out.fire()
-        io.out.valid               := lsExecUnit.io.out.fire()
-        when(lsExecUnit.io.out.fire()){
+        io.in.ready                := lsExecUnit.io.out.fire
+        io.out.valid               := lsExecUnit.io.out.fire
+        when(lsExecUnit.io.out.fire){
           state := s_idle; 
           Debug("[AMO-S] atomRegReg %x addr %x\n", atomRegReg, lsExecUnit.io.in.bits.src1)
         }
@@ -232,9 +232,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.ld, LSUOpType.lw)
         lsExecUnit.io.wdata        := DontCare
-        io.in.ready                := lsExecUnit.io.out.fire()
-        io.out.valid               := lsExecUnit.io.out.fire()
-        when(lsExecUnit.io.out.fire()){
+        io.in.ready                := lsExecUnit.io.out.fire
+        io.out.valid               := lsExecUnit.io.out.fire
+        when(lsExecUnit.io.out.fire){
           state := s_idle; 
           Debug("[LR]\n")
         }
@@ -246,9 +246,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
         lsExecUnit.io.in.bits.src2 := DontCare
         lsExecUnit.io.in.bits.func := Mux(atomWidthD, LSUOpType.sd, LSUOpType.sw)
         lsExecUnit.io.wdata        := io.wdata
-        io.in.ready                := lsExecUnit.io.out.fire()
-        io.out.valid               := lsExecUnit.io.out.fire()
-        when(lsExecUnit.io.out.fire()){
+        io.in.ready                := lsExecUnit.io.out.fire
+        io.out.valid               := lsExecUnit.io.out.fire
+        when(lsExecUnit.io.out.fire){
           state := s_idle; 
           Debug("[SC] \n")
         }
@@ -260,14 +260,14 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
       io.in.ready := true.B
     }
 
-  Debug(io.out.fire(), "[LSU-AGU] state %x inv %x inr %x\n", state, io.in.valid, io.in.ready)
+  Debug(io.out.fire, "[LSU-AGU] state %x inv %x inr %x\n", state, io.in.valid, io.in.ready)
     // controled by FSM 
     // io.in.ready := lsExecUnit.io.in.ready
     // lsExecUnit.io.wdata := io.wdata
     // io.out.valid := lsExecUnit.io.out.valid 
 
     //Set LR/SC bits
-    setLr := io.out.fire() && (lrReq || scReq)
+    setLr := io.out.fire && (lrReq || scReq)
     setLrVal := lrReq
     setLrAddr := src1
 
@@ -350,21 +350,21 @@ class LSExecUnit extends NutCoreModule {
 
   switch (state) {
     is (s_idle) { 
-      when (dmem.req.fire() && dtlbEnable)  { state := s_wait_tlb  }
-      when (dmem.req.fire() && !dtlbEnable) { state := s_wait_resp } 
-      //when (dmem.req.fire()) { state := Mux(isStore, s_partialLoad, s_wait_resp) }
+      when (dmem.req.fire && dtlbEnable)  { state := s_wait_tlb  }
+      when (dmem.req.fire && !dtlbEnable) { state := s_wait_resp } 
+      //when (dmem.req.fire) { state := Mux(isStore, s_partialLoad, s_wait_resp) }
     }
     is (s_wait_tlb) {
       when (dtlbFinish && dtlbPF ) { state := s_idle }
       when (dtlbFinish && !dtlbPF) { state := s_wait_resp/*Mux(isStore, s_partialLoad, s_wait_resp) */} 
     }
-    is (s_wait_resp) { when (dmem.resp.fire()) { state := Mux(partialLoad, s_partialLoad, s_idle) } }
+    is (s_wait_resp) { when (dmem.resp.fire) { state := Mux(partialLoad, s_partialLoad, s_idle) } }
     is (s_partialLoad) { state := s_idle }
   }
 
-  Debug(dmem.req.fire(), "[LSU] %x, size %x, wdata_raw %x, isStore %x\n", addr, func(1,0), io.wdata, isStore)
-  Debug(dmem.req.fire(), "[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x\n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire(), dmem.resp.fire(), dmem.resp.bits.rdata)
-  Debug(dtlbFinish && dtlbEnable, "[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x\n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire(), dmem.resp.fire(), dmem.resp.bits.rdata)
+  Debug(dmem.req.fire, "[LSU] %x, size %x, wdata_raw %x, isStore %x\n", addr, func(1,0), io.wdata, isStore)
+  Debug(dmem.req.fire, "[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x\n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire, dmem.resp.fire, dmem.resp.bits.rdata)
+  Debug(dtlbFinish && dtlbEnable, "[LSU] dtlbFinish:%d dtlbEnable:%d dtlbPF:%d state:%d addr:%x dmemReqFire:%d dmemRespFire:%d dmemRdata:%x\n",dtlbFinish, dtlbEnable, dtlbPF, state,  dmem.req.bits.addr, dmem.req.fire, dmem.resp.fire, dmem.resp.bits.rdata)
 
   val size = func(1,0)
   val reqAddr  = if (XLEN == 32) SignExt(addr, VAddrBits) else addr(VAddrBits-1,0)
@@ -379,10 +379,10 @@ class LSExecUnit extends NutCoreModule {
   dmem.req.valid := valid && (state === s_idle) && !io.loadAddrMisaligned && !io.storeAddrMisaligned
   dmem.resp.ready := true.B
 
-  io.out.valid := Mux( dtlbPF && state =/= s_idle || io.loadAddrMisaligned || io.storeAddrMisaligned, true.B, Mux(partialLoad, state === s_partialLoad, dmem.resp.fire() && (state === s_wait_resp)))
+  io.out.valid := Mux( dtlbPF && state =/= s_idle || io.loadAddrMisaligned || io.storeAddrMisaligned, true.B, Mux(partialLoad, state === s_partialLoad, dmem.resp.fire && (state === s_wait_resp)))
   io.in.ready := (state === s_idle) || dtlbPF
 
-  Debug(io.out.fire(), "[LSU-EXECUNIT] state %x dresp %x dpf %x lm %x sm %x\n", state, dmem.resp.fire(), dtlbPF, io.loadAddrMisaligned, io.storeAddrMisaligned)
+  Debug(io.out.fire, "[LSU-EXECUNIT] state %x dresp %x dpf %x lm %x sm %x\n", state, dmem.resp.fire, dtlbPF, io.loadAddrMisaligned, io.storeAddrMisaligned)
 
   val rdata = dmem.resp.bits.rdata
   val rdataLatch = RegNext(rdata)
@@ -431,8 +431,8 @@ class LSExecUnit extends NutCoreModule {
 
   Debug(io.loadAddrMisaligned || io.storeAddrMisaligned, "misaligned addr detected\n")
 
-  BoringUtils.addSource(dmem.isRead() && dmem.req.fire(), "perfCntCondMloadInstr")
-  BoringUtils.addSource(BoolStopWatch(dmem.isRead(), dmem.resp.fire()), "perfCntCondMloadStall")
-  BoringUtils.addSource(BoolStopWatch(dmem.isWrite(), dmem.resp.fire()), "perfCntCondMstoreStall")
+  BoringUtils.addSource(dmem.isRead() && dmem.req.fire, "perfCntCondMloadInstr")
+  BoringUtils.addSource(BoolStopWatch(dmem.isRead(), dmem.resp.fire), "perfCntCondMloadStall")
+  BoringUtils.addSource(BoolStopWatch(dmem.isWrite(), dmem.resp.fire), "perfCntCondMstoreStall")
   BoringUtils.addSource(io.isMMIO, "perfCntCondMmmioInstr")
 }

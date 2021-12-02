@@ -331,7 +331,7 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
     io.in.resp.bits.cmd := DontCare
     io.in.resp.bits.user.map(_ := tlbExec.io.out.bits.user.getOrElse(0.U))
     val alreadyOutFinish = RegEnable(true.B, init=false.B, tlbExec.io.out.valid && !tlbExec.io.out.ready)
-    // when(alreadyOutFinish && tlbExec.io.out.fire()) { alreadyOutFinish := false.B}
+    // when(alreadyOutFinish && tlbExec.io.out.fire) { alreadyOutFinish := false.B}
     when(alreadyOutFinish && tlbExec.io.out.valid) { alreadyOutFinish := false.B}//???
     val tlbFinish = (tlbExec.io.out.valid && !alreadyOutFinish) || tlbExec.io.pf.isPF()
     BoringUtils.addSource(tlbFinish, "DTLBFINISH")
@@ -451,7 +451,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val isFlush = needFlush || ioFlush
   when (ioFlush && (state =/= s_idle)) { needFlush := true.B}
   if(tlbname == "itlb"){
-    when (io.out.fire() && needFlush) { needFlush := false.B}
+    when (io.out.fire && needFlush) { needFlush := false.B}
   }
   if(tlbname == "dtlb"){
     when (io.out.valid && needFlush) { needFlush := false.B}
@@ -479,12 +479,12 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
       when (isFlush) {
         state := s_idle
         needFlush := false.B
-      }.elsewhen (io.mem.req.fire()) { state := s_memReadResp}
+      }.elsewhen (io.mem.req.fire) { state := s_memReadResp}
     }
 
     is (s_memReadResp) { 
       val missflag = memRdata.flag.asTypeOf(flagBundle)
-      when (io.mem.resp.fire()) {
+      when (io.mem.resp.fire) {
         when (isFlush) {
           state := s_idle
           needFlush := false.B
@@ -541,12 +541,12 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
       when (isFlush) {
         state := s_idle
         needFlush := false.B
-      }.elsewhen (io.mem.req.fire()) { state := s_wait_resp }
+      }.elsewhen (io.mem.req.fire) { state := s_wait_resp }
     }
 
     is (s_wait_resp) { 
       if(tlbname == "itlb"){
-        when (io.out.fire() || ioFlush || alreadyOutFire){
+        when (io.out.fire || ioFlush || alreadyOutFire){
           state := s_idle
           missIPF := false.B
           alreadyOutFire := false.B
@@ -585,7 +585,7 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   io.in.ready := io.out.ready && (state === s_idle) && !miss && !hitWB && io.mdReady && (!io.pf.isPF() && !loadPF && !storePF)//maybe be optimized
 
   io.ipf := Mux(hit, hitinstrPF, missIPF)
-  io.isFinish := io.out.fire() || io.pf.isPF()
+  io.isFinish := io.out.fire || io.pf.isPF()
 
   if(tlbname == "dtlb") {
     io.isFinish := io.out.valid || io.pf.isPF()

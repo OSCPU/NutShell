@@ -47,7 +47,7 @@ class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Int,
 
   val wIdx = index(waddr) + writeBeatCnt
   val rIdx = index(raddr) + readBeatCnt
-  val wen = in.w.fire() && inRange(wIdx)
+  val wen = in.w.fire && inRange(wIdx)
 
   val rdata = if (useBlackBox) {
     val mem = Module(new RAMHelper(memByte))

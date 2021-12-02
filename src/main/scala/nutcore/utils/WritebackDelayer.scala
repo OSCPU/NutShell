@@ -43,19 +43,19 @@ class WritebackDelayer(bru: Boolean = false, name: String = "unnamedDelayer") ex
   }
 
   brMask := updateBrMask(brMask)
-  when(io.in.fire()){brMask := updateBrMask(io.in.bits.brMask)}
-  when(needMispredictionRecovery(brMask) || io.out.fire()){valid := false.B}
-  when(io.in.fire()){valid := true.B}
+  when(io.in.fire){brMask := updateBrMask(io.in.bits.brMask)}
+  when(needMispredictionRecovery(brMask) || io.out.fire){valid := false.B}
+  when(io.in.fire){valid := true.B}
   when(io.flush) {valid := false.B}
 
-  io.in.ready := (!valid || io.out.fire()) && !needMispredictionRecovery(io.in.bits.brMask)
-  io.out.bits <> RegEnable(io.in.bits, io.in.fire())
+  io.in.ready := (!valid || io.out.fire) && !needMispredictionRecovery(io.in.bits.brMask)
+  io.out.bits <> RegEnable(io.in.bits, io.in.fire)
   io.out.bits.brMask := brMask
   io.out.valid := valid
 
   if(bru){
-    io.freeCheckpoint.get.bits <> RegEnable(io.checkpointIn.get, io.in.fire())
-    io.freeCheckpoint.get.valid := io.out.fire()
+    io.freeCheckpoint.get.bits <> RegEnable(io.checkpointIn.get, io.in.fire)
+    io.freeCheckpoint.get.valid := io.out.fire
   }
 
   Debug(valid, "[WBDelay-"+name+"] delayer valid: pc %x brMask %x\n", io.out.bits.decode.cf.pc, brMask)

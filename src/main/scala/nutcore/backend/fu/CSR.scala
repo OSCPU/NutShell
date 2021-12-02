@@ -623,7 +623,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
-  val raiseExceptionVec = csrExceptionVec.asUInt() | iduExceptionVec.asUInt()
+  val raiseExceptionVec = csrExceptionVec.asUInt | iduExceptionVec.asUInt
   val raiseException = raiseExceptionVec.orR
   val exceptionNO = ExcPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(raiseExceptionVec(i), i.U, sum))
   io.wenFix := raiseException
@@ -638,7 +638,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   io.redirect.rtype := 0.U
   io.redirect.target := Mux(resetSatp, io.cfIn.pc + 4.U, Mux(raiseExceptionIntr, trapTarget, retTarget))
 
-  Debug(raiseExceptionIntr, "excin %b excgen %b", csrExceptionVec.asUInt(), iduExceptionVec.asUInt())
+  Debug(raiseExceptionIntr, "excin %b excgen %b", csrExceptionVec.asUInt, iduExceptionVec.asUInt)
   Debug(raiseExceptionIntr, "int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
   Debug(raiseExceptionIntr, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
   Debug(io.redirect.valid, "redirect to %x\n", io.redirect.target)

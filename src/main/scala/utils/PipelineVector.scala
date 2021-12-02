@@ -37,10 +37,10 @@ object PipelineVector2Connect {
     needEnqueue(0) := in1.valid
     needEnqueue(1) := in2.valid
 
-    val enqueueSize = needEnqueue(0).asUInt()+&needEnqueue(1).asUInt() // count(true) in needEnqueue
+    val enqueueSize = needEnqueue(0).asUInt+&needEnqueue(1).asUInt // count(true) in needEnqueue
     val enqueueFire = (0 to 1).map(i => enqueueSize >= (i+1).U)
 
-    val wen = in1.fire() || in2.fire() // i.e. ringBufferAllowin && in.valid
+    val wen = in1.fire || in2.fire // i.e. ringBufferAllowin && in.valid
     when(wen){
         when(enqueueFire(0)){dataBuffer(0.U + ringBufferHead) := Mux(needEnqueue(0), in1.bits, in2.bits)}
         when(enqueueFire(1)){dataBuffer(1.U + ringBufferHead) := in2.bits}
@@ -61,7 +61,7 @@ object PipelineVector2Connect {
     out2.valid := ringBufferHead =/= deq2_StartIndex && out1.valid
 
     //dequeue control
-    val dequeueSize = out1.fire().asUInt() +& out2.fire().asUInt
+    val dequeueSize = out1.fire.asUInt +& out2.fire.asUInt
     val dequeueFire = dequeueSize > 0.U
     when(dequeueFire){
         ringBufferTail := ringBufferTail + dequeueSize;
@@ -74,7 +74,7 @@ object PipelineVector2Connect {
     }
 
     Debug(){
-        printf("[DPQ] size %x head %x tail %x enq %x deq %x\n", (bufferSize.asUInt() +& ringBufferHead.asUInt() - ringBufferTail.asUInt()) % bufferSize.asUInt(), ringBufferHead, ringBufferTail ,enqueueSize, dequeueSize)
+        printf("[DPQ] size %x head %x tail %x enq %x deq %x\n", (bufferSize.asUInt +& ringBufferHead.asUInt - ringBufferTail.asUInt) % bufferSize.asUInt, ringBufferHead, ringBufferTail ,enqueueSize, dequeueSize)
     }
 
   }
