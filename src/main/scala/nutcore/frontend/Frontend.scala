@@ -42,7 +42,8 @@ class Frontend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with Has
   def pipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
     isFlush: Bool, entries: Int = 4, pipe: Boolean = false) = {
     // NOTE: depend on https://github.com/chipsalliance/chisel3/pull/2245
-    right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
+    // right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
+    right <> FlushableQueue(left, isFlush, entries = entries, pipe = pipe)
   }
 
   val ifu  = Module(new IFU_ooo)
@@ -99,7 +100,8 @@ class Frontend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule with
   def PipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
     isFlush: Bool, entries: Int = 4, pipe: Boolean = false) = {
     // NOTE: depend on https://github.com/chipsalliance/chisel3/pull/2245
-    right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
+    // right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
+    right <> FlushableQueue(left, isFlush, entries = entries, pipe = pipe)
   }
 
   PipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
