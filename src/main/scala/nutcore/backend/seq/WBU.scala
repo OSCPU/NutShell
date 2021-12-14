@@ -67,7 +67,6 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
     difftest_commit.io.instr    := RegNext(io.in.bits.decode.cf.instr)
     difftest_commit.io.skip     := RegNext(io.in.bits.isMMIO)
     difftest_commit.io.isRVC    := RegNext(io.in.bits.decode.cf.instr(1,0)=/="b11".U)
-    difftest_commit.io.scFailed := RegNext(false.B) // TODO: fixme
     difftest_commit.io.wen      := RegNext(io.wb.rfWen && io.wb.rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
     // difftest.io.wdata    := RegNext(io.wb.rfData)
     difftest_commit.io.wdest    := RegNext(io.wb.rfDest)
