@@ -5,13 +5,13 @@
 LOG_BEGIN ?= 0
 LOG_END ?= 0
 
-ARCH = ARCH=riscv64-noop
+ARCH = ARCH=riscv64-nutshell
 # ------------------------------------------------------------------
 
 SINGLETEST = recursion
 RVTEST_TARGET = towers
 NANOS_HOME ?= $(AM_HOME)/../nanos-lite
-EMU_ARGS = LOG_BEGIN=$(LOG_BEGIN) LOG_END=$(LOG_END)
+EMU_ARGS = B=$(LOG_BEGIN) E=$(LOG_END)
 CPU_TEST_RESULT = $(shell cat cpu.log | grep -E "different|stuck")
 MB_RESULT = $(shell cat microbench.log | grep IPC)
 MBT_RESULT = $(shell cat microbench-train.log | grep IPC)

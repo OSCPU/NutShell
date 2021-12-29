@@ -141,7 +141,7 @@ sealed case class TLBConfig (
   ways: Int = 4
 )
 
-sealed trait HasTlbConst extends Sv39Const{
+trait HasTlbConst extends Sv39Const{
   implicit val tlbConfig: TLBConfig
 
   val AddrBits: Int
@@ -219,12 +219,13 @@ sealed class TLBMDWriteBundle (val IndexBits: Int, val Ways: Int, val tlbLen: In
 }
 
 sealed class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
-  val io = IO(new Bundle {
+  class TLBMDIO extends Bundle {
     val tlbmd = Output(Vec(Ways, UInt(tlbLen.W)))
     val write = Flipped(new TLBMDWriteBundle(IndexBits = IndexBits, Ways = Ways, tlbLen = tlbLen))
     val rindex = Input(UInt(IndexBits.W))
     val ready = Output(Bool())
-  })
+  }
+  val io = IO(new TLBMDIO)
 
   //val tlbmd = Reg(Vec(Ways, UInt(tlbLen.W)))
   val tlbmd = Mem(Sets, Vec(Ways, UInt(tlbLen.W)))
@@ -254,16 +255,17 @@ sealed class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
 }
 
 class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
-  val io = IO(new Bundle {
+  class TLBIO extends Bundle {
     val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
     val out = new SimpleBusUC(userBits = userBits)
 
     val mem = new SimpleBusUC(userBits = userBits)
-    val flush = Input(Bool()) 
+    val flush = Input(Bool())
     val csrMMU = new MMUIO
     val cacheEmpty = Input(Bool())
     val ipf = Output(Bool())
-  })
+  }
+  val io = IO(new TLBIO)
 
   val satp = WireInit(0.U(XLEN.W))
   BoringUtils.addSink(satp, "CSRSATP")
@@ -360,7 +362,7 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
 }
 
 sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
-  val io = IO(new Bundle {
+  class TLBExecIO extends Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, addrBits = VAddrBits)))
     val out = Decoupled(new SimpleBusReqBundle(userBits = userBits))
 
@@ -369,12 +371,13 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
     val mdReady = Input(Bool())
 
     val mem = new SimpleBusUC(userBits = userBits)
-    val flush = Input(Bool()) 
+    val flush = Input(Bool())
     val satp = Input(UInt(XLEN.W))
     val pf = new MMUIO
     val ipf = Output(Bool())
     val isFinish = Output(Bool())
-  })
+  }
+  val io = IO(new TLBExecIO)
 
   val md = io.md//RegEnable(mdTLB.io.tlbmd, io.in.ready)
   
@@ -599,10 +602,11 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
 }
 
 sealed class TLBEmpty(implicit val tlbConfig: TLBConfig) extends TlbModule {
-  val io = IO(new Bundle {
+  class TLBEmptyIO extends Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits)))
     val out = Decoupled(new SimpleBusReqBundle(userBits = userBits))
-  })
+  }
+  val io = IO(new TLBEmptyIO)
 
   io.out <> io.in
 }

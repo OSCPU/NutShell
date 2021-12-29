@@ -1,18 +1,5 @@
-/**************************************************************************************
-* Copyright (c) 2020 Institute of Computing Technology, CAS
-* Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
-*
-* See the Mulan PSL v2 for more details.  
-***************************************************************************************/
+// https://github.com/chipsalliance/chisel3/pull/2155 is not included in edu.berkeley.cs::chisel3:3.5.0-RC1
+// For now, we keep this file to make CI stable
 
 package utils
 
@@ -20,7 +7,10 @@ import chisel3._
 import chisel3.util._
 import chisel3.internal.naming._  // can't use chisel3_ version because of compile order
 
-class FlushableQueueIO[T <: Data](private val gen: T, entries: Int) extends QueueIO(gen, entries) {
+class FlushableQueueIO[T <: Data](private val gen: T, entries: Int) extends Bundle {
+  val enq = Flipped(EnqIO(gen))
+  val deq = Flipped(DeqIO(gen))
+  val count = Output(UInt(log2Ceil(entries + 1).W))
   val flush = Input(Bool())
 }
 

@@ -22,6 +22,7 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import bus.simplebus._
+import difftest._
 
 trait HasBackendConst{
   // val multiIssue = true
@@ -639,25 +640,29 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   BoringUtils.addSource(!io.in(0).valid, "perfCntCondMdpNoInst")
 
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(VecInit((0 to NRReg-1).map(i => rf.read(i.U))), "difftestRegs")
+    val difftestGpr = Module(new DifftestArchIntRegState)
+    difftestGpr.io.clock  := clock
+    difftestGpr.io.coreid := 0.U // TODO
+    difftestGpr.io.gpr    := VecInit((0 to NRReg-1).map(i => rf.read(i.U)))
   }
 
   if (!p.FPGAPlatform) {
-    val mon = Module(new Monitor)
     val cycleCnt = WireInit(0.U(XLEN.W))
     val instrCnt = WireInit(0.U(XLEN.W))
     val nutcoretrap = csrrs.io.out.bits.decode.ctrl.isNutCoreTrap && csrrs.io.out.valid
-    mon.io.clk := clock
-    mon.io.reset := reset.asBool
-    mon.io.isNutCoreTrap := nutcoretrap
-    mon.io.trapCode := csrrs.io.out.bits.decode.data.src1
-    mon.io.trapPC := csrrs.io.out.bits.decode.cf.pc
-    mon.io.cycleCnt := cycleCnt
-    mon.io.instrCnt := instrCnt
 
     BoringUtils.addSink(cycleCnt, "simCycleCnt")
     BoringUtils.addSink(instrCnt, "simInstrCnt")
     BoringUtils.addSource(nutcoretrap, "nutcoretrap")
+
+    val difftest = Module(new DifftestTrapEvent)
+    difftest.io.clock    := clock
+    difftest.io.coreid   := 0.U // TODO: nutshell does not support coreid auto config
+    difftest.io.valid    := nutcoretrap
+    difftest.io.code     := csrrs.io.out.bits.decode.data.src1
+    difftest.io.pc       := csrrs.io.out.bits.decode.cf.pc
+    difftest.io.cycleCnt := cycleCnt
+    difftest.io.instrCnt := instrCnt
   }
   
 }

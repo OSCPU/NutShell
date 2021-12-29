@@ -19,9 +19,10 @@ package top
 import nutcore.NutCoreConfig
 import system.NutShell
 import device.{AXI4VGA}
-import sim.NutShellSimTop
+import sim.SimTop
 
 import chisel3._
+import chisel3.stage._
 
 class Top extends Module {
   val io = IO(new Bundle{})
@@ -63,8 +64,12 @@ object TopMain extends App {
       println(f + " = " + v)
   }
   if (board == "sim") {
-    Driver.execute(args, () => new NutShellSimTop)
+    (new ChiselStage).execute(args, Seq(
+      ChiselGeneratorAnnotation(() => new SimTop))
+    )
   } else {
-    Driver.execute(args, () => new Top)
+    (new ChiselStage).execute(args, Seq(
+      ChiselGeneratorAnnotation(() => new Top))
+    )
   }
 }
