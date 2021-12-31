@@ -26,7 +26,7 @@ trait HasChisel3 extends ScalaModule {
     )
   }
    override def ivyDeps = Agg(
-    ivy"edu.berkeley.cs::chisel3:3.5-SNAPSHOT"
+    ivy"edu.berkeley.cs::chisel3:3.5.0-RC1"
  )
 }
 
