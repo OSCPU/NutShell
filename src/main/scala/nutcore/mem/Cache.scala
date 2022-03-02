@@ -113,7 +113,7 @@ sealed class Stage1IO(implicit val cacheConfig: CacheConfig) extends CacheBundle
 }
 
 class CacheIO(implicit val cacheConfig: CacheConfig) extends Bundle with HasNutCoreParameter with HasCacheConst {
-  val in = Flipped(new SimpleBusUC(userBits = userBits))
+  val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
   val flush = Input(UInt(2.W))
   val out = new SimpleBusC
   val mmio = new SimpleBusUC
