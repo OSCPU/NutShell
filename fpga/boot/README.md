@@ -79,7 +79,7 @@ Vivado -> File -> Export -> Export Hardware
 ```
 * set the correct path of device tree repo
 ```
-git clone --depth 1 https://github.com/xilinx/device-tree-xlnx
+git clone --depth 1 -b xilinx-v2019.1 https://github.com/xilinx/device-tree-xlnx
 # modify the `device_tree_repo_path` variable in `mk.tcl` to the repo just cloned
 ```
 * generate BOOT.BIN and device tree source
