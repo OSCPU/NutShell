@@ -30,7 +30,7 @@ To use ready-to run image (recommended) :
 
 To build image yourself:
 
-* Set a new environment variable `NEMU_HOME` to the **absolute path** of the [NEMU project](https://github.com/OSCPU/nemu.git).
+* Set a new environment variable `NEMU_HOME` to the **absolute path** of the [NEMU project](https://github.com/OpenXiangShan/NEMU).
 * Set a new environment variable `NUTSHELL_HOME` to the **absolute path** of the NutShell project.
 * Clone the [AM project](https://github.com/OSCPU/nexus-am.git).
 * Set a new environment variable `AM_HOME` to the **absolute path** of the AM project.
