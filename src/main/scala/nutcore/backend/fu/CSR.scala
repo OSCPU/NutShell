@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -36,10 +36,10 @@ object CSROpType {
 
 trait HasCSRConst {
   // User Trap Setup
-  val Ustatus       = 0x000 
+  val Ustatus       = 0x000
   val Uie           = 0x004
   val Utvec         = 0x005
-  
+
   // User Trap Handling
   val Uscratch      = 0x040
   val Uepc          = 0x041
@@ -56,7 +56,7 @@ trait HasCSRConst {
   val Cycle         = 0xC00
   val Time          = 0xC01
   val Instret       = 0xC02
-  
+
   // Supervisor Trap Setup
   val Sstatus       = 0x100
   val Sedeleg       = 0x102
@@ -75,11 +75,11 @@ trait HasCSRConst {
   // Supervisor Protection and Translation
   val Satp          = 0x180
 
-  // Machine Information Registers 
-  val Mvendorid     = 0xF11 
-  val Marchid       = 0xF12 
-  val Mimpid        = 0xF13 
-  val Mhartid       = 0xF14 
+  // Machine Information Registers
+  val Mvendorid     = 0xF11
+  val Marchid       = 0xF12
+  val Mimpid        = 0xF13
+  val Mhartid       = 0xF14
 
   // Machine Trap Setup
   val Mstatus       = 0x300
@@ -88,10 +88,10 @@ trait HasCSRConst {
   val Mideleg       = 0x303
   val Mie           = 0x304
   val Mtvec         = 0x305
-  val Mcounteren    = 0x306 
+  val Mcounteren    = 0x306
 
   // Machine Trap Handling
-  val Mscratch      = 0x340 
+  val Mscratch      = 0x340
   val Mepc          = 0x341
   val Mcause        = 0x342
   val Mtval         = 0x343
@@ -103,10 +103,10 @@ trait HasCSRConst {
   val Pmpcfg1       = 0x3A1
   val Pmpcfg2       = 0x3A2
   val Pmpcfg3       = 0x3A3
-  val PmpaddrBase   = 0x3B0 
+  val PmpaddrBase   = 0x3B0
 
-  // Machine Counter/Timers 
-  // Currently, NutCore uses perfcnt csr set instead of standard Machine Counter/Timers 
+  // Machine Counter/Timers
+  // Currently, NutCore uses perfcnt csr set instead of standard Machine Counter/Timers
   // 0xB80 - 0x89F are also used as perfcnt csr
 
   // Machine Counter Setup (not implemented)
@@ -124,17 +124,17 @@ trait HasCSRConst {
   def ModeS     = 0x1.U
   def ModeU     = 0x0.U
 
-  def IRQ_UEIP  = 0 
+  def IRQ_UEIP  = 0
   def IRQ_SEIP  = 1
-  def IRQ_MEIP  = 3 
+  def IRQ_MEIP  = 3
 
-  def IRQ_UTIP  = 4 
-  def IRQ_STIP  = 5 
-  def IRQ_MTIP  = 7 
+  def IRQ_UTIP  = 4
+  def IRQ_STIP  = 5
+  def IRQ_MTIP  = 7
 
-  def IRQ_USIP  = 8 
-  def IRQ_SSIP  = 9 
-  def IRQ_MSIP  = 11 
+  def IRQ_USIP  = 8
+  def IRQ_SSIP  = 9
+  def IRQ_MSIP  = 11
 
   val IntPriority = Seq(
     IRQ_MEIP, IRQ_MSIP, IRQ_MTIP,
@@ -211,7 +211,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }
 
   val csrNotImplemented = RegInit(UInt(XLEN.W), 0.U)
-   
+
   class MstatusStruct extends Bundle {
     val sd = Output(UInt(1.W))
 
@@ -248,7 +248,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }
 
   // Machine-Level CSRs
-  
+
   val mtvec = RegInit(UInt(XLEN.W), 0.U)
   val mcounteren = RegInit(UInt(XLEN.W), 0.U)
   val mcause = RegInit(UInt(XLEN.W), 0.U)
@@ -262,12 +262,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val mip = (mipWire.asUInt | mipReg).asTypeOf(new Interrupt)
 
   def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
-  def getMisaExt(ext: Char): UInt = {1.U << (ext.toInt - 'a'.toInt)} 
+  def getMisaExt(ext: Char): UInt = {1.U << (ext.toInt - 'a'.toInt)}
   var extList = List('a', 's', 'i', 'u')
   if(HasMExtension){ extList = extList :+ 'm'}
   if(HasCExtension){ extList = extList :+ 'c'}
-  val misaInitVal = getMisaMxl(2) | extList.foldLeft(0.U)((sum, i) => sum | getMisaExt(i)) //"h8000000000141105".U 
-  val misa = RegInit(UInt(XLEN.W), misaInitVal) 
+  val misaInitVal = getMisaMxl(2) | extList.foldLeft(0.U)((sum, i) => sum | getMisaExt(i)) //"h8000000000141105".U
+  val misa = RegInit(UInt(XLEN.W), misaInitVal)
   // MXL = 2          | 0 | EXT = b 00 0000 0100 0001 0001 0000 0101
   // (XLEN-1, XLEN-2) |   |(25, 0)  ZY XWVU TSRQ PONM LKJI HGFE DCBA
 
@@ -280,7 +280,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // mstatus Value Table
   // | sd   |
   // | pad1 |
-  // | sxl  | hardlinked to 10, use 00 to pass xv6 test  
+  // | sxl  | hardlinked to 10, use 00 to pass xv6 test
   // | uxl  | hardlinked to 00
   // | pad0 |
   // | tsr  |
@@ -311,10 +311,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val pmpcfg1 = RegInit(UInt(XLEN.W), 0.U)
   val pmpcfg2 = RegInit(UInt(XLEN.W), 0.U)
   val pmpcfg3 = RegInit(UInt(XLEN.W), 0.U)
-  val pmpaddr0 = RegInit(UInt(XLEN.W), 0.U) 
-  val pmpaddr1 = RegInit(UInt(XLEN.W), 0.U) 
-  val pmpaddr2 = RegInit(UInt(XLEN.W), 0.U) 
-  val pmpaddr3 = RegInit(UInt(XLEN.W), 0.U) 
+  val pmpaddr0 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpaddr1 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpaddr2 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpaddr3 = RegInit(UInt(XLEN.W), 0.U)
 
   // Superviser-Level CSRs
 
@@ -378,10 +378,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val mapping = Map(
 
     // User Trap Setup
-    // MaskedRegMap(Ustatus, ustatus), 
+    // MaskedRegMap(Ustatus, ustatus),
     // MaskedRegMap(Uie, uie, 0.U, MaskedRegMap.Unwritable),
     // MaskedRegMap(Utvec, utvec),
-    
+
     // User Trap Handling
     // MaskedRegMap(Uscratch, uscratch),
     // MaskedRegMap(Uepc, uepc),
@@ -398,7 +398,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // MaskedRegMap(Cycle, cycle),
     // MaskedRegMap(Time, time),
     // MaskedRegMap(Instret, instret),
-    
+
     // Supervisor Trap Setup
     MaskedRegMap(Sstatus, mstatus, sstatusWmask, mstatusUpdateSideEffect, sstatusRmask),
 
@@ -418,11 +418,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // Supervisor Protection and Translation
     MaskedRegMap(Satp, satp),
 
-    // Machine Information Registers 
-    MaskedRegMap(Mvendorid, mvendorid, 0.U, MaskedRegMap.Unwritable), 
-    MaskedRegMap(Marchid, marchid, 0.U, MaskedRegMap.Unwritable), 
-    MaskedRegMap(Mimpid, mimpid, 0.U, MaskedRegMap.Unwritable), 
-    MaskedRegMap(Mhartid, mhartid, 0.U, MaskedRegMap.Unwritable), 
+    // Machine Information Registers
+    MaskedRegMap(Mvendorid, mvendorid, 0.U, MaskedRegMap.Unwritable),
+    MaskedRegMap(Marchid, marchid, 0.U, MaskedRegMap.Unwritable),
+    MaskedRegMap(Mimpid, mimpid, 0.U, MaskedRegMap.Unwritable),
+    MaskedRegMap(Mhartid, mhartid, 0.U, MaskedRegMap.Unwritable),
 
     // Machine Trap Setup
     // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
@@ -432,7 +432,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Mideleg, mideleg, "h222".U),
     MaskedRegMap(Mie, mie),
     MaskedRegMap(Mtvec, mtvec),
-    MaskedRegMap(Mcounteren, mcounteren), 
+    MaskedRegMap(Mcounteren, mcounteren),
 
     // Machine Trap Handling
     MaskedRegMap(Mscratch, mscratch),
@@ -509,7 +509,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // val imemPtex = true.B
   // val imemReq = true.B
   // val imemPermissionCheckPassed = MMUPermissionCheck(imemPtev, imemPteu)
-  // val hasInstrPageFault = imemReq && !(imemPermissionCheckPassed && imemPtex) 
+  // val hasInstrPageFault = imemReq && !(imemPermissionCheckPassed && imemPtex)
   // assert(!hasInstrPageFault)
 
   // dmem
@@ -519,8 +519,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // val dmemPermissionCheckPassed = MMUPermissionCheck(dmemPtev, dmemPteu)
   // val dmemIsStore = true.B
 
-  // val hasLoadPageFault  = dmemReq && !dmemIsStore && !(dmemPermissionCheckPassed) 
-  // val hasStorePageFault = dmemReq &&  dmemIsStore && !(dmemPermissionCheckPassed) 
+  // val hasLoadPageFault  = dmemReq && !dmemIsStore && !(dmemPermissionCheckPassed)
+  // val hasStorePageFault = dmemReq &&  dmemIsStore && !(dmemPermissionCheckPassed)
   // assert(!hasLoadPageFault)
   // assert(!hasStorePageFault)
 
@@ -589,7 +589,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   mipWire.t.m := mtip
   mipWire.e.m := meip
   mipWire.s.m := msip
-  
+
   // SEIP from PLIC is only used to raise interrupt,
   // but it is not stored in the CSR
   val seip = meip    // FIXME: PLIC should generate SEIP different from MEIP
@@ -605,7 +605,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
   BoringUtils.addSource(intrVec, "intrVecIDU")
   // val intrNO = PriorityEncoder(intrVec)
-  
+
   val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
   // val intrNO = PriorityEncoder(io.cfIn.intrVec)
   val raiseIntr = io.cfIn.intrVec.asUInt.orR
@@ -831,7 +831,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // "MmemLBS"  -> (0xb6a, "perfCntCondMmemLBS"   ),//TODO
   )
 
-  val perfCntList = generalPerfCntList ++  (if (EnableOutOfOrderExec) outOfOrderPerfCntList else sequentialPerfCntList) 
+  val perfCntList = generalPerfCntList ++  (if (EnableOutOfOrderExec) outOfOrderPerfCntList else sequentialPerfCntList)
 
 	val perfCntCond = List.fill(0x80)(WireInit(false.B))
   (perfCnts zip perfCntCond).map { case (c, e) => { when (e) { c := c + 1.U } } }
@@ -844,9 +844,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   BoringUtils.addSink(pendingSReq, "perfCntSrcMpendingSReq")
   when(perfCntCond(0xb03 & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
   if (hasPerfCnt) {
-    when(true.B) { perfCnts(0xb63 & 0x7f) := perfCnts(0xb63 & 0x7f) + pendingLS } 
-    when(true.B) { perfCnts(0xb64 & 0x7f) := perfCnts(0xb64 & 0x7f) + pendingSCmt } 
-    when(true.B) { perfCnts(0xb65 & 0x7f) := perfCnts(0xb66 & 0x7f) + pendingSReq } 
+    when(true.B) { perfCnts(0xb63 & 0x7f) := perfCnts(0xb63 & 0x7f) + pendingLS }
+    when(true.B) { perfCnts(0xb64 & 0x7f) := perfCnts(0xb64 & 0x7f) + pendingSCmt }
+    when(true.B) { perfCnts(0xb65 & 0x7f) := perfCnts(0xb66 & 0x7f) + pendingSReq }
   }
 
   BoringUtils.addSource(WireInit(true.B), "perfCntCondMcycle")
@@ -914,10 +914,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val difftestArchEvent = Module(new DifftestArchEvent)
     difftestArchEvent.io.clock := clock
     difftestArchEvent.io.coreid := 0.U // TODO
-    difftestArchEvent.io.intrNO := RegNext(Mux(raiseIntr && io.instrValid && valid, intrNO, 0.U))
-    difftestArchEvent.io.cause := RegNext(Mux(raiseException && io.instrValid && valid, exceptionNO, 0.U))
-    difftestArchEvent.io.exceptionPC := RegNext(SignExt(io.cfIn.pc, XLEN))
-    difftestArchEvent.io.exceptionInst := RegNext(io.cfIn.instr)
+    difftestArchEvent.io.intrNO := RegNext(RegNext(Mux(raiseIntr && io.instrValid && valid, intrNO, 0.U)))
+    difftestArchEvent.io.cause := RegNext(RegNext(Mux(raiseException && io.instrValid && valid, exceptionNO, 0.U)))
+    difftestArchEvent.io.exceptionPC := RegNext(RegNext(SignExt(io.cfIn.pc, XLEN)))
+    difftestArchEvent.io.exceptionInst := RegNext(RegNext(io.cfIn.instr))
 
   } else {
     if (!p.FPGAPlatform) {
