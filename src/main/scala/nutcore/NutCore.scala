@@ -20,6 +20,9 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
+import nutcore.frontend._
+import nutcore.backend._
+
 import bus.simplebus._
 import bus.axi4._
 import utils._
@@ -98,15 +101,15 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
 
   // Frontend
   val frontend = (Settings.get("IsRV32"), Settings.get("EnableOutOfOrderExec")) match {
-    case (true, _)      => Module(new Frontend_embedded)
-    case (false, true)  => Module(new Frontend_ooo)
-    case (false, false) => Module(new Frontend_inorder)
+    case (true, _)      => Module(new FrontendEmbedded)
+    case (false, true)  => Module(new FrontendDynamic)
+    case (false, false) => Module(new FrontendSequential)
   }
   
   // Backend
   if (EnableOutOfOrderExec) {
     val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
-    val backend = Module(new Backend_ooo)
+    val backend = Module(new BackendDynamic)
     PipelineVector2Connect(new DecodeIO, frontend.io.out(0), frontend.io.out(1), backend.io.in(0), backend.io.in(1), frontend.io.flushVec(1), 16)
     backend.io.flush := frontend.io.flushVec(2)
     frontend.io.redirect <> backend.io.redirect
@@ -143,7 +146,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     io.mmio <> mmioXbar.io.out
 
   } else {
-    val backend = Module(new Backend_inorder)
+    val backend = Module(new BackendSequential)
 
     PipelineVector2Connect(new DecodeIO, frontend.io.out(0), frontend.io.out(1), backend.io.in(0), backend.io.in(1), frontend.io.flushVec(1), 4)
 

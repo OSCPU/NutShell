@@ -22,17 +22,17 @@ import chisel3.util._
 import top.Settings
 
 object Priviledged extends HasInstrType {
-  def ECALL   = BitPat("b000000000000_00000_000_00000_1110011")
-  def EBREAK  = BitPat("b000000000001_00000_000_00000_1110011")
-  def MRET    = BitPat("b001100000010_00000_000_00000_1110011")
-  def SRET    = BitPat("b000100000010_00000_000_00000_1110011")
-  def SFANCE_VMA = BitPat("b0001001_?????_?????_000_00000_1110011")
-  def FENCE   = BitPat("b????????????_?????_000_?????_0001111")
-  def WFI     = BitPat("b0001000_00101_00000_000_00000_1110011") 
+  def ECALL      = BitPat("b000000000000_00000_000_00000_1110011")
+  def EBREAK     = BitPat("b000000000001_00000_000_00000_1110011")
+  def MRET       = BitPat("b001100000010_00000_000_00000_1110011")
+  def SRET       = BitPat("b000100000010_00000_000_00000_1110011")
+  def SFENCE_VMA = BitPat("b0001001_?????_?????_000_00000_1110011")
+  def FENCE      = BitPat("b????????????_?????_000_?????_0001111")
+  def WFI        = BitPat("b0001000_00101_00000_000_00000_1110011") 
 
   val table_s = Array(
     SRET           -> List(InstrI, FuType.csr, CSROpType.jmp),
-    SFANCE_VMA     -> List(InstrR, FuType.mou, MOUOpType.sfence_vma)
+    SFENCE_VMA     -> List(InstrR, FuType.mou, MOUOpType.sfence_vma)
   )
 
   val table = Array(
