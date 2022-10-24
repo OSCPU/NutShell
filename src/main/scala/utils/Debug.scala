@@ -59,7 +59,7 @@ object LogUtil {
   }
 }
 
-sealed abstract class LogHelper(val logLevel: LogLevel) {
+abstract class LogHelper(val logLevel: LogLevel) {
 
   def apply(cond: Bool, fmt: String, data: Bits*)(implicit name: String): Any =
     apply(cond, Printable.pack(fmt, data:_*))

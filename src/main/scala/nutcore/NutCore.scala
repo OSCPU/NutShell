@@ -23,6 +23,9 @@ import chisel3.util.experimental.BoringUtils
 import nutcore.frontend._
 import nutcore.backend._
 
+import nutcore.mem.cache._
+import nutcore.mem.tlb._
+
 import bus.simplebus._
 import bus.axi4._
 import utils._
