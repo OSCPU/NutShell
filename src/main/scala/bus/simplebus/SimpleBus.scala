@@ -24,7 +24,7 @@ import utils._
 import bus.axi4._
 import bus.memport._
 
-sealed abstract class SimpleBusBundle extends Bundle with HasNutCoreParameter
+abstract class SimpleBusBundle extends Bundle with HasNutCoreParameter
 
 object SimpleBusCmd {
   // req

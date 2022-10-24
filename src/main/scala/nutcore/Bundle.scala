@@ -19,6 +19,8 @@ package nutcore
 import chisel3._
 import chisel3.util._
 
+import nutcore.backend._
+
 class CtrlSignalIO extends NutCoreBundle {
   val src1Type = Output(SrcType())
   val src2Type = Output(SrcType())

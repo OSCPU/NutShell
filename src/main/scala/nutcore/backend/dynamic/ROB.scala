@@ -14,14 +14,17 @@
 * See the Mulan PSL v2 for more details.  
 ***************************************************************************************/
 
-package nutcore
+package nutcore.backend
 
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
+import nutcore._
+
 import utils._
 import difftest._
+
 
 object physicalRFTools{
   def getPRFAddr(robIndex: UInt, bank: UInt): UInt = {
@@ -110,7 +113,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val rmtMap = Reg(Vec(NRReg, UInt(prfAddrWidth.W)))
   val rmtValid = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
 
-  sealed class Checkpoint extends NutCoreBundle {
+  class Checkpoint extends NutCoreBundle {
     val map = Vec(NRReg, UInt(prfAddrWidth.W))
     val valid = Vec(NRReg, Bool())
   }
