@@ -14,8 +14,8 @@ import utils._
 import top.Settings
 
 // writeback
-class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  class CacheStage3IO extends Bundle {
+class CacheStageWriteBack(implicit val cacheConfig: CacheConfig) extends CacheModule {
+  class CacheStageWriteBackIO extends Bundle {
     val in = Flipped(Decoupled(new Stage2IO))
     val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
     val isFinish = Output(Bool())
@@ -31,7 +31,7 @@ class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheModule {
     // use to distinguish prefetch request and normal request
     val dataReadRespToL1 = Output(Bool())
   }
-  val io = IO(new CacheStage3IO)
+  val io = IO(new CacheStageWriteBackIO)
 
   val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
   val dataWriteArb = Module(new Arbiter(CacheDataArrayWriteBus().req.bits, 2))

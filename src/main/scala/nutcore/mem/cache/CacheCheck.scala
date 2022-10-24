@@ -16,8 +16,8 @@ import top.Settings
 
 // meta read
 // check
-class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  class CacheStage2IO extends Bundle {
+class CacheStageCheck(implicit val cacheConfig: CacheConfig) extends CacheModule {
+  class CacheStageCheckIO extends Bundle {
     val in = Flipped(Decoupled(new Stage1IO))
     val out = Decoupled(new Stage2IO)
     val metaReadResp = Flipped(Vec(Ways, new MetaBundle))
@@ -25,7 +25,7 @@ class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheModule {
     val metaWriteBus = Input(CacheMetaArrayWriteBus())
     val dataWriteBus = Input(CacheDataArrayWriteBus())
   }
-  val io = IO(new CacheStage2IO)
+  val io = IO(new CacheStageCheckIO)
 
   val req = io.in.bits.req
   val addr = req.addr.asTypeOf(addrBundle)

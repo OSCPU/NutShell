@@ -18,14 +18,14 @@ class Stage1IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
   val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
 }
 
-class CacheStage1(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  class CacheStage1IO extends Bundle {
+class CacheStageMetaRead(implicit val cacheConfig: CacheConfig) extends CacheModule {
+  class CacheStageMetaReadIO extends Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val out = Decoupled(new Stage1IO)
     val metaReadBus = CacheMetaArrayReadBus()
     val dataReadBus = CacheDataArrayReadBus()
   }
-  val io = IO(new CacheStage1IO)
+  val io = IO(new CacheStageMetaReadIO)
 
   if (ro) when (io.in.fire()) { assert(!io.in.bits.isWrite()) }
   Debug(io.in.fire(), "[L1$] cache stage1, addr in: %x, user: %x id: %x\n", io.in.bits.addr, io.in.bits.user.getOrElse(0.U), io.in.bits.id.getOrElse(0.U))

@@ -125,9 +125,9 @@ trait HasCacheIO {
 
 class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule with HasCacheIO {
   // cpu pipeline
-  val s1 = Module(new CacheStage1)
-  val s2 = Module(new CacheStage2)
-  val s3 = Module(new CacheStage3)
+  val s1 = Module(new CacheStageMetaRead)
+  val s2 = Module(new CacheStageCheck)
+  val s3 = Module(new CacheStageWriteBack)
   val metaArray = Module(new SRAMTemplateWithArbiter(nRead = 1, new MetaBundle, set = Sets, way = Ways, shouldReset = true))
   val dataArray = Module(new SRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways))
 
