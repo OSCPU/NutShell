@@ -509,9 +509,11 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       difftest_commit.io.isRVC    := RegNext(decode(ringBufferTail)(i).cf.isRVC)
       difftest_commit.io.rfwen    := RegNext(io.wb(i).rfWen && io.wb(i).rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
       difftest_commit.io.fpwen    := false.B
+      difftest_commit.io.vecwen   := false.B
       // difftest.io.wdata    := RegNext(io.wb(i).rfData)
       difftest_commit.io.wdest    := RegNext(io.wb(i).rfDest)
       difftest_commit.io.wpdest   := RegNext(io.wb(i).rfDest)
+      difftest_commit.io.uopIdx   := "b11111".U
 
       val difftest_wb = Module(new DifftestIntWriteback)
       difftest_wb.io.clock := clock
