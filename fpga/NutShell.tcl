@@ -20,15 +20,8 @@ set script_folder [_tcl::get_script_folder]
 ################################################################
 # Check if script is running in correct Vivado version.
 ################################################################
-set scripts_vivado_version 2019.1
-set current_vivado_version [version -short]
 
-if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
-   puts ""
-   catch {common::send_msg_id "BD_TCL-109" "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
-
-   return 1
-}
+# don't check version, stupid vivado
 
 ################################################################
 # START
@@ -56,7 +49,7 @@ if { $list_projs eq "" } {
 
 # CHANGE DESIGN NAME HERE
 variable design_name
-set design_name nutshell
+set design_name nutshell_peripheral
 
 # If you do not already have an existing IP Integrator design open,
 # you can create a design using the following command:
@@ -221,6 +214,114 @@ proc create_root_design { parentCell } {
 
 
   # Create interface ports
+
+  # Begin Exposing NutShell Interface
+  set NutShell_io_frontend [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 NutShell_io_frontend ]
+  set_property -dict [ list \
+   CONFIG.ADDR_WIDTH {32} \
+   CONFIG.ARUSER_WIDTH {1} \
+   CONFIG.AWUSER_WIDTH {1} \
+   CONFIG.BUSER_WIDTH {1} \
+   CONFIG.CLK_DOMAIN {nutshell_coreclk} \
+   CONFIG.DATA_WIDTH {64} \
+   CONFIG.FREQ_HZ {100000000} \
+   CONFIG.HAS_BRESP {1} \
+   CONFIG.HAS_BURST {1} \
+   CONFIG.HAS_CACHE {1} \
+   CONFIG.HAS_LOCK {1} \
+   CONFIG.HAS_PROT {1} \
+   CONFIG.HAS_QOS {1} \
+   CONFIG.HAS_REGION {0} \
+   CONFIG.HAS_RRESP {1} \
+   CONFIG.HAS_WSTRB {1} \
+   CONFIG.ID_WIDTH {1} \
+   CONFIG.INSERT_VIP {0} \
+   CONFIG.MAX_BURST_LENGTH {256} \
+   CONFIG.NUM_READ_OUTSTANDING {2} \
+   CONFIG.NUM_READ_THREADS {1} \
+   CONFIG.NUM_WRITE_OUTSTANDING {2} \
+   CONFIG.NUM_WRITE_THREADS {1} \
+   CONFIG.PHASE {0.0} \
+   CONFIG.PROTOCOL {AXI4} \
+   CONFIG.READ_WRITE_MODE {READ_WRITE} \
+   CONFIG.RUSER_BITS_PER_BYTE {0} \
+   CONFIG.RUSER_WIDTH {1} \
+   CONFIG.SUPPORTS_NARROW_BURST {1} \
+   CONFIG.WUSER_BITS_PER_BYTE {0} \
+   CONFIG.WUSER_WIDTH {0} \
+   ] $NutShell_io_frontend
+
+  set NutShell_io_mem [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 NutShell_io_mem ]
+  set_property -dict [ list \
+   CONFIG.ADDR_WIDTH {32} \
+   CONFIG.ARUSER_WIDTH {1} \
+   CONFIG.AWUSER_WIDTH {1} \
+   CONFIG.BUSER_WIDTH {1} \
+   CONFIG.CLK_DOMAIN {nutshell_coreclk} \
+   CONFIG.DATA_WIDTH {64} \
+   CONFIG.FREQ_HZ {100000000} \
+   CONFIG.HAS_BRESP {1} \
+   CONFIG.HAS_BURST {1} \
+   CONFIG.HAS_CACHE {1} \
+   CONFIG.HAS_LOCK {1} \
+   CONFIG.HAS_PROT {1} \
+   CONFIG.HAS_QOS {1} \
+   CONFIG.HAS_REGION {0} \
+   CONFIG.HAS_RRESP {1} \
+   CONFIG.HAS_WSTRB {1} \
+   CONFIG.ID_WIDTH {1} \
+   CONFIG.INSERT_VIP {0} \
+   CONFIG.MAX_BURST_LENGTH {256} \
+   CONFIG.NUM_READ_OUTSTANDING {2} \
+   CONFIG.NUM_READ_THREADS {1} \
+   CONFIG.NUM_WRITE_OUTSTANDING {2} \
+   CONFIG.NUM_WRITE_THREADS {1} \
+   CONFIG.PHASE {0.0} \
+   CONFIG.PROTOCOL {AXI4} \
+   CONFIG.READ_WRITE_MODE {READ_WRITE} \
+   CONFIG.RUSER_BITS_PER_BYTE {0} \
+   CONFIG.RUSER_WIDTH {1} \
+   CONFIG.SUPPORTS_NARROW_BURST {1} \
+   CONFIG.WUSER_BITS_PER_BYTE {0} \
+   CONFIG.WUSER_WIDTH {0} \
+   ] $NutShell_io_mem
+
+  set NutShell_io_mmio [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 NutShell_io_mmio ]
+  set_property -dict [ list \
+   CONFIG.ADDR_WIDTH {32} \
+   CONFIG.ARUSER_WIDTH {1} \
+   CONFIG.AWUSER_WIDTH {1} \
+   CONFIG.BUSER_WIDTH {1} \
+   CONFIG.CLK_DOMAIN {nutshell_coreclk} \
+   CONFIG.DATA_WIDTH {64} \
+   CONFIG.FREQ_HZ {100000000} \
+   CONFIG.HAS_BRESP {1} \
+   CONFIG.HAS_BURST {1} \
+   CONFIG.HAS_CACHE {1} \
+   CONFIG.HAS_LOCK {1} \
+   CONFIG.HAS_PROT {1} \
+   CONFIG.HAS_QOS {1} \
+   CONFIG.HAS_REGION {0} \
+   CONFIG.HAS_RRESP {1} \
+   CONFIG.HAS_WSTRB {1} \
+   CONFIG.ID_WIDTH {1} \
+   CONFIG.INSERT_VIP {0} \
+   CONFIG.MAX_BURST_LENGTH {256} \
+   CONFIG.NUM_READ_OUTSTANDING {2} \
+   CONFIG.NUM_READ_THREADS {1} \
+   CONFIG.NUM_WRITE_OUTSTANDING {2} \
+   CONFIG.NUM_WRITE_THREADS {1} \
+   CONFIG.PHASE {0.0} \
+   CONFIG.PROTOCOL {AXI4} \
+   CONFIG.READ_WRITE_MODE {READ_WRITE} \
+   CONFIG.RUSER_BITS_PER_BYTE {0} \
+   CONFIG.RUSER_WIDTH {1} \
+   CONFIG.SUPPORTS_NARROW_BURST {1} \
+   CONFIG.WUSER_BITS_PER_BYTE {0} \
+   CONFIG.WUSER_WIDTH {0} \
+   ] $NutShell_io_mmio
+   # End Exposing NutShell Interface
+
   set AXI_DMA [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 AXI_DMA ]
   set_property -dict [ list \
    CONFIG.ADDR_WIDTH {32} \
@@ -278,13 +379,24 @@ proc create_root_design { parentCell } {
 
 
   # Create ports
+
+  # Begin Exposing NutShell ports
+  set NutShell_reset [ create_bd_port -dir O -type RST NutShell_reset ]
+  set NutShell_io_ila_WBUpc [ create_bd_port -dir I -from 38 -to 0 -type data NutShell_io_ila_WBUpc ]
+  set NutShell_io_ila_WBUvalid [ create_bd_port -dir I -type data NutShell_io_ila_WBUvalid ]
+  set NutShell_io_ila_WBUrfWen [ create_bd_port -dir I -type data NutShell_io_ila_WBUrfWen ]
+  set NutShell_io_ila_WBUrfDest [ create_bd_port -dir I -from 4 -to 0 -type data NutShell_io_ila_WBUrfDest ]
+  set NutShell_io_ila_WBUrfData [ create_bd_port -dir I -from 63 -to 0 -type data NutShell_io_ila_WBUrfData ]
+  set NutShell_io_ila_InstrCnt [ create_bd_port -dir I -from 63 -to 0 -type data NutShell_io_ila_InstrCnt ]
+  # End Exposing NutShell ports
+
   set coreclk [ create_bd_port -dir I -type clk coreclk ]
   set_property -dict [ list \
    CONFIG.ASSOCIATED_RESET {corerstn} \
    CONFIG.FREQ_HZ {100000000} \
  ] $coreclk
   set corerstn [ create_bd_port -dir I -type data corerstn ]
-  set intrs [ create_bd_port -dir I -from 4 -to 0 intrs ]
+#   set intrs [ create_bd_port -dir I -from 4 -to 0 intrs ]
   set uncoreclk [ create_bd_port -dir I -type clk uncoreclk ]
   set_property -dict [ list \
    CONFIG.ASSOCIATED_RESET {uncorerstn} \
@@ -295,15 +407,15 @@ proc create_root_design { parentCell } {
   set uncorerstn [ create_bd_port -dir I -type rst uncorerstn ]
 
   # Create instance: NutShell_0, and set properties
-  set block_name NutShell
-  set block_cell_name NutShell_0
-  if { [catch {set NutShell_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_msg_id "BD_TCL-105" "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $NutShell_0 eq "" } {
-     catch {common::send_msg_id "BD_TCL-106" "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
+#   set block_name NutShell
+#   set block_cell_name NutShell_0
+#   if { [catch {set NutShell_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+#      catch {common::send_msg_id "BD_TCL-105" "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+#      return 1
+#    } elseif { $NutShell_0 eq "" } {
+#      catch {common::send_msg_id "BD_TCL-106" "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+#      return 1
+#    }
   
   # Create instance: axi_interconnect_0, and set properties
   set axi_interconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_0 ]
@@ -354,32 +466,53 @@ proc create_root_design { parentCell } {
 
   # Create interface connections
   connect_bd_intf_net -intf_net M_AXI_DMA_1 [get_bd_intf_ports AXI_DMA] [get_bd_intf_pins axi_protocol_convert_0/S_AXI]
-  connect_bd_intf_net -intf_net NutShell_0_io_mem [get_bd_intf_pins NutShell_0/io_mem] [get_bd_intf_pins axi_interconnect_2/S00_AXI]
-  connect_bd_intf_net -intf_net NutShell_0_io_mmio [get_bd_intf_pins NutShell_0/io_mmio] [get_bd_intf_pins axi_interconnect_1/S00_AXI]
+#   connect_bd_intf_net -intf_net NutShell_0_io_mem [get_bd_intf_pins NutShell_0/io_mem] [get_bd_intf_pins axi_interconnect_2/S00_AXI]
+#   connect_bd_intf_net -intf_net NutShell_0_io_mmio [get_bd_intf_pins NutShell_0/io_mmio] [get_bd_intf_pins axi_interconnect_1/S00_AXI]
   connect_bd_intf_net -intf_net S00_AXI_2 [get_bd_intf_pins axi_interconnect_0/S00_AXI] [get_bd_intf_pins axi_protocol_convert_1/M_AXI]
   connect_bd_intf_net -intf_net axi_clock_converter_0_M_AXI [get_bd_intf_ports AXI_MEM] [get_bd_intf_pins axi_interconnect_2/M00_AXI]
-  connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins NutShell_0/io_frontend] [get_bd_intf_pins axi_interconnect_0/M00_AXI]
+#   connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins NutShell_0/io_frontend] [get_bd_intf_pins axi_interconnect_0/M00_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_ports AXI_MMIO] [get_bd_intf_pins axi_interconnect_1/M00_AXI]
   connect_bd_intf_net -intf_net axi_protocol_convert_0_M_AXI [get_bd_intf_pins axi_protocol_convert_0/M_AXI] [get_bd_intf_pins axi_protocol_convert_1/S_AXI]
+  
+  # Connect NutShell external interface
+  connect_bd_intf_net -intf_net NutShell_0_io_mem [get_bd_intf_pins NutShell_io_mem] [get_bd_intf_pins axi_interconnect_2/S00_AXI]
+  connect_bd_intf_net -intf_net NutShell_0_io_mmio [get_bd_intf_pins NutShell_io_mmio] [get_bd_intf_pins axi_interconnect_1/S00_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins NutShell_io_frontend] [get_bd_intf_pins axi_interconnect_0/M00_AXI]
+
 
   # Create port connections
-  connect_bd_net -net NutShell_0_io_ila_InstrCnt [get_bd_pins NutShell_0/io_ila_InstrCnt] [get_bd_pins system_ila_0/probe5]
-  connect_bd_net -net NutShell_0_io_ila_WBUpc [get_bd_pins NutShell_0/io_ila_WBUpc] [get_bd_pins system_ila_0/probe0]
-  connect_bd_net -net NutShell_0_io_ila_WBUrfData [get_bd_pins NutShell_0/io_ila_WBUrfData] [get_bd_pins system_ila_0/probe4]
-  connect_bd_net -net NutShell_0_io_ila_WBUrfDest [get_bd_pins NutShell_0/io_ila_WBUrfDest] [get_bd_pins system_ila_0/probe3]
-  connect_bd_net -net NutShell_0_io_ila_WBUrfWen [get_bd_pins NutShell_0/io_ila_WBUrfWen] [get_bd_pins system_ila_0/probe2]
-  connect_bd_net -net NutShell_0_io_ila_WBUvalid [get_bd_pins NutShell_0/io_ila_WBUvalid] [get_bd_pins system_ila_0/probe1]
+#   connect_bd_net -net NutShell_0_io_ila_InstrCnt [get_bd_pins NutShell_0/io_ila_InstrCnt] [get_bd_pins system_ila_0/probe5]
+#   connect_bd_net -net NutShell_0_io_ila_WBUpc [get_bd_pins NutShell_0/io_ila_WBUpc] [get_bd_pins system_ila_0/probe0]
+#   connect_bd_net -net NutShell_0_io_ila_WBUrfData [get_bd_pins NutShell_0/io_ila_WBUrfData] [get_bd_pins system_ila_0/probe4]
+#   connect_bd_net -net NutShell_0_io_ila_WBUrfDest [get_bd_pins NutShell_0/io_ila_WBUrfDest] [get_bd_pins system_ila_0/probe3]
+#   connect_bd_net -net NutShell_0_io_ila_WBUrfWen [get_bd_pins NutShell_0/io_ila_WBUrfWen] [get_bd_pins system_ila_0/probe2]
+#   connect_bd_net -net NutShell_0_io_ila_WBUvalid [get_bd_pins NutShell_0/io_ila_WBUvalid] [get_bd_pins system_ila_0/probe1]
   connect_bd_net -net c_shift_ram_0_Q [get_bd_ports corerstn] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_2/ARESETN] [get_bd_pins axi_interconnect_2/S00_ARESETN] [get_bd_pins util_vector_logic_0/Op1]
-  connect_bd_net -net coreclk_1 [get_bd_ports coreclk] [get_bd_pins NutShell_0/clock] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_2/ACLK] [get_bd_pins axi_interconnect_2/S00_ACLK] [get_bd_pins system_ila_0/clk]
-  connect_bd_net -net intrs_1 [get_bd_ports intrs] [get_bd_pins NutShell_0/io_meip]
+#   connect_bd_net -net coreclk_1 [get_bd_ports coreclk] [get_bd_pins NutShell_0/clock] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_2/ACLK] [get_bd_pins axi_interconnect_2/S00_ACLK] [get_bd_pins system_ila_0/clk]
+  connect_bd_net -net coreclk_1 [get_bd_ports coreclk] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_2/ACLK] [get_bd_pins axi_interconnect_2/S00_ACLK] [get_bd_pins system_ila_0/clk]
+#   connect_bd_net -net intrs_1 [get_bd_ports intrs] [get_bd_pins NutShell_0/io_meip]
+#   connect_bd_net -net intrs_1 [get_bd_ports intrs] 
   connect_bd_net -net uncoreclk_1 [get_bd_ports uncoreclk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_2/M00_ACLK] [get_bd_pins axi_protocol_convert_0/aclk] [get_bd_pins axi_protocol_convert_1/aclk]
   connect_bd_net -net uncorerstn_2 [get_bd_ports uncorerstn] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_2/M00_ARESETN] [get_bd_pins axi_protocol_convert_0/aresetn] [get_bd_pins axi_protocol_convert_1/aresetn]
-  connect_bd_net -net util_vector_logic_0_Res [get_bd_pins NutShell_0/reset] [get_bd_pins util_vector_logic_0/Res]
+#   connect_bd_net -net util_vector_logic_0_Res [get_bd_pins NutShell_0/reset] [get_bd_pins util_vector_logic_0/Res]
+
+  # Connect NutShell external ports
+  connect_bd_net -net NutShell_0_io_ila_InstrCnt [get_bd_pins NutShell_io_ila_InstrCnt] [get_bd_pins system_ila_0/probe5]
+  connect_bd_net -net NutShell_0_io_ila_WBUpc [get_bd_pins NutShell_io_ila_WBUpc] [get_bd_pins system_ila_0/probe0]
+  connect_bd_net -net NutShell_0_io_ila_WBUrfData [get_bd_pins NutShell_io_ila_WBUrfData] [get_bd_pins system_ila_0/probe4]
+  connect_bd_net -net NutShell_0_io_ila_WBUrfDest [get_bd_pins NutShell_io_ila_WBUrfDest] [get_bd_pins system_ila_0/probe3]
+  connect_bd_net -net NutShell_0_io_ila_WBUrfWen [get_bd_pins NutShell_io_ila_WBUrfWen] [get_bd_pins system_ila_0/probe2]
+  connect_bd_net -net NutShell_0_io_ila_WBUvalid [get_bd_pins NutShell_io_ila_WBUvalid] [get_bd_pins system_ila_0/probe1]
+  connect_bd_net -net util_vector_logic_0_Res [get_bd_pins NutShell_reset] [get_bd_pins util_vector_logic_0/Res]
 
   # Create address segments
-  create_bd_addr_seg -range 0x80000000 -offset 0x80000000 [get_bd_addr_spaces NutShell_0/io_mem] [get_bd_addr_segs AXI_MEM/Reg] SEG_AXI_MEM_Reg
-  create_bd_addr_seg -range 0x40000000 -offset 0x40000000 [get_bd_addr_spaces NutShell_0/io_mmio] [get_bd_addr_segs AXI_MMIO/Reg] SEG_AXI_MMIO_Reg
-  create_bd_addr_seg -range 0x000100000000 -offset 0x00000000 [get_bd_addr_spaces AXI_DMA] [get_bd_addr_segs NutShell_0/io_frontend/reg0] SEG_NutShell_0_reg0
+#   create_bd_addr_seg -range 0x80000000 -offset 0x80000000 [get_bd_addr_spaces NutShell_0/io_mem] [get_bd_addr_segs AXI_MEM/Reg] SEG_AXI_MEM_Reg
+#   create_bd_addr_seg -range 0x40000000 -offset 0x40000000 [get_bd_addr_spaces NutShell_0/io_mmio] [get_bd_addr_segs AXI_MMIO/Reg] SEG_AXI_MMIO_Reg
+#   create_bd_addr_seg -range 0x000100000000 -offset 0x00000000 [get_bd_addr_spaces AXI_DMA] [get_bd_addr_segs NutShell_0/io_frontend/reg0] SEG_NutShell_0_reg0
+  # External address segments
+  create_bd_addr_seg -range 0x80000000 -offset 0x80000000 [get_bd_addr_spaces NutShell_io_mem] [get_bd_addr_segs AXI_MEM/Reg] SEG_AXI_MEM_Reg
+  create_bd_addr_seg -range 0x40000000 -offset 0x40000000 [get_bd_addr_spaces NutShell_io_mmio] [get_bd_addr_segs AXI_MMIO/Reg] SEG_AXI_MMIO_Reg
+  create_bd_addr_seg -range 0x000100000000 -offset 0x00000000 [get_bd_addr_spaces AXI_DMA] [get_bd_addr_segs NutShell_io_frontend/Reg] SEG_NutShell_Reg
 
 
   # Restore current instance
@@ -396,5 +529,4 @@ proc create_root_design { parentCell } {
 ##################################################################
 
 create_root_design ""
-
 
