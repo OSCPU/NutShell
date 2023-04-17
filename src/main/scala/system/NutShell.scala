@@ -26,6 +26,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
+import assertion._
+
 trait HasSoCParameter {
   val EnableILA = Settings.get("EnableILA")
   val HasL2cache = Settings.get("HasL2cache")
@@ -122,7 +124,19 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
   val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
-  
+
+  if (Settings.get("AXIChecker")){
+    val axiChecker = Module(new AXIChecker)
+    axiChecker.io.clk := clock
+    axiChecker.io.axi := io.mem 
+    axiChecker.io.axi_resetn := !reset.asBool
+    if (p.FPGAPlatform){
+      val axiCheckerMMIO = Module(new AXIChecker)
+      axiCheckerMMIO.io.clk := clock
+      axiCheckerMMIO.io.axi := io.mmio
+      axiCheckerMMIO.io.axi_resetn := !reset.asBool
+    }
+  } 
 
   // ILA
   if (p.FPGAPlatform) {
