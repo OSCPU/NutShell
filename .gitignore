@@ -348,3 +348,9 @@ fpga/.Xil/
 
 # vscode temp file
 .vscode/
+
+# metal
+.metals
+
+# vivado
+vivado_*
