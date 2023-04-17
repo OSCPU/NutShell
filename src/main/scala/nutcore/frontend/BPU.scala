@@ -21,6 +21,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import assertion._
 import top.Settings
 
 class TableAddr(val idxBits: Int) extends NutCoreBundle {
@@ -277,6 +278,7 @@ class BPU_embedded extends NutCoreModule {
   io.out.rtype := 0.U
 }
 
+// @chiselName
 class BPU_inorder extends NutCoreModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
@@ -334,7 +336,9 @@ class BPU_inorder extends NutCoreModule {
   
   // PHT
   val pht = Mem(NRbtb, UInt(2.W))
-  val phtTaken = RegEnable(pht.read(btbAddr.getIdx(io.in.pc.bits))(1), io.in.pc.valid)
+  val phtPredictRead = pht.read(btbAddr.getIdx(io.in.pc.bits))
+  val phtTaken = RegEnable(phtPredictRead(1), io.in.pc.valid)
+
 
   // RAS
 
@@ -388,10 +392,12 @@ class BPU_inorder extends NutCoreModule {
 
   val cnt = RegNext(pht.read(btbAddr.getIdx(req.pc)))
   val reqLatch = RegNext(req)
-  when (reqLatch.valid && ALUOpType.isBranch(reqLatch.fuOpType)) {
-    val taken = reqLatch.actualTaken
+  val taken = reqLatch.actualTaken
+  val phtUpdateWEn = if (Settings.get("PHToverflow")) (taken || !taken) else (taken && (cnt =/= "b11".U)) || (!taken && (cnt =/= "b00".U))
+  val branchValid = reqLatch.valid && ALUOpType.isBranch(reqLatch.fuOpType)
+  when (branchValid) {
     val newCnt = Mux(taken, cnt + 1.U, cnt - 1.U)
-    val wen = (taken && (cnt =/= "b11".U)) || (!taken && (cnt =/= "b00".U))
+    val wen = phtUpdateWEn
     when (wen) {
       pht.write(btbAddr.getIdx(reqLatch.pc), newCnt)
       //Debug(){
@@ -399,6 +405,20 @@ class BPU_inorder extends NutCoreModule {
       //}
     }
   }
+  if (Settings.get("BPUChecker")) {
+    val BPUChecker = Module(new BPUCheck())
+    BPUChecker.io.clk := clock
+    BPUChecker.io.phtUpdateReadValue := cnt
+    BPUChecker.io.phtUpdateValue := Mux(taken , cnt + 1.U, cnt - 1.U)
+    BPUChecker.io.phtUpdateEn := phtUpdateWEn && branchValid
+    BPUChecker.io.taken := taken
+
+    BPUChecker.io.phtPredictReadValue := phtPredictRead
+    BPUChecker.io.phtPredictTaken := phtTaken
+    BPUChecker.io.phtPredictEn := io.in.pc.valid
+
+  }
+
   when (req.valid) {
     when (req.fuOpType === ALUOpType.call)  {
       ras.write(sp.value + 1.U, Mux(req.isRVC, req.pc + 2.U, req.pc + 4.U))
