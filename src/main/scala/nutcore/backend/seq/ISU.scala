@@ -21,6 +21,8 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import top.Settings
+import assertion._
 
 // Sequential Inst Issue Unit 
 class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFileParameter {
@@ -57,19 +59,29 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   io.out.valid := io.in(0).valid && src1Ready && src2Ready
 
   val rf = new RegFile
+  val rfReadSrc1Data = rf.read(rfSrc1)
+  val rfReadSrc2Data = rf.read(rfSrc2)
+
+  if(Settings.get("RegFileChecker")){
+    val readRegCheck = Module(new RegFileCheck());
+    readRegCheck.io.clk := clock
+    readRegCheck.io.regAddr := VecInit(rfSrc1, rfSrc2)
+    readRegCheck.io.regData := VecInit(rfReadSrc1Data, rfReadSrc2Data)
+  }
+
 
   // out1
   io.out.bits.data.src1 := Mux1H(List(
     (io.in(0).bits.ctrl.src1Type === SrcType.pc) -> SignExt(io.in(0).bits.cf.pc, AddrBits),
     src1ForwardNextCycle -> io.forward.wb.rfData, //io.forward.wb.rfData,
     (src1Forward && !src1ForwardNextCycle) -> io.wb.rfData, //io.wb.rfData,
-    ((io.in(0).bits.ctrl.src1Type =/= SrcType.pc) && !src1ForwardNextCycle && !src1Forward) -> rf.read(rfSrc1)
+    ((io.in(0).bits.ctrl.src1Type =/= SrcType.pc) && !src1ForwardNextCycle && !src1Forward) -> rfReadSrc1Data
   ))
   io.out.bits.data.src2 := Mux1H(List(
     (io.in(0).bits.ctrl.src2Type =/= SrcType.reg) -> io.in(0).bits.data.imm,
     src2ForwardNextCycle -> io.forward.wb.rfData, //io.forward.wb.rfData,
     (src2Forward && !src2ForwardNextCycle) -> io.wb.rfData, //io.wb.rfData,
-    ((io.in(0).bits.ctrl.src2Type === SrcType.reg) && !src2ForwardNextCycle && !src2Forward) -> rf.read(rfSrc2)
+    ((io.in(0).bits.ctrl.src2Type === SrcType.reg) && !src2ForwardNextCycle && !src2Forward) -> rfReadSrc2Data
   ))
   io.out.bits.data.imm  := io.in(0).bits.data.imm
 
