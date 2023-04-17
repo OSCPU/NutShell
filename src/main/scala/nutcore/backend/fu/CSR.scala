@@ -23,6 +23,8 @@ import chisel3.util.experimental.BoringUtils
 import utils._
 import top.Settings
 
+import assertion._ 
+
 object CSROpType {
   def jmp  = "b000".U
   def wrt  = "b001".U
@@ -862,6 +864,27 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val nutcoretrap = WireInit(false.B)
   BoringUtils.addSink(nutcoretrap, "nutcoretrap")
   def readWithScala(addr: Int): UInt = mapping(addr)._1
+
+  if (Settings.get("CSRChecker")){
+    val csrChecker = Module(new CSRChecker)
+    csrChecker.io.clk := clock
+    csrChecker.io.mstatus := mstatus
+    csrChecker.io.mepc := mepc
+    csrChecker.io.mtvec := mtvec
+    csrChecker.io.mie := mie
+    csrChecker.io.mideleg := mideleg
+    csrChecker.io.medeleg := medeleg
+    csrChecker.io.mcause := mcause
+    csrChecker.io.uRet := isUret
+    csrChecker.io.sRet := isSret
+    csrChecker.io.mRet := isMret
+    csrChecker.io.raiseTrap := raiseExceptionIntr
+    csrChecker.io.raiseIntr := raiseIntr
+    csrChecker.io.instValid := valid
+    csrChecker.io.priviledgeMode := priviledgeMode
+    csrChecker.io.causeNO := causeNO
+    csrChecker.io.raiseExceptionVec := raiseExceptionVec
+  }
 
   if (!p.FPGAPlatform) {
     // to monitor
