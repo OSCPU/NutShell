@@ -23,6 +23,7 @@ import chisel3.util.experimental.BoringUtils
 import bus.simplebus._
 import bus.axi4._
 import utils._
+import assertion._
 import top.Settings
 
 case class CacheConfig (
@@ -86,7 +87,7 @@ sealed trait HasCacheConst {
 sealed abstract class CacheBundle(implicit cacheConfig: CacheConfig) extends Bundle with HasNutCoreParameter with HasCacheConst
 sealed abstract class CacheModule(implicit cacheConfig: CacheConfig) extends Module with HasNutCoreParameter with HasCacheConst with HasNutCoreLog
 
-sealed class MetaBundle(implicit val cacheConfig: CacheConfig) extends CacheBundle {
+class MetaBundle(implicit val cacheConfig: CacheConfig) extends CacheBundle {
   val tag = Output(UInt(TagBits.W))
   val valid = Output(Bool())
   val dirty = Output(Bool())
@@ -108,7 +109,7 @@ sealed class DataBundle(implicit val cacheConfig: CacheConfig) extends CacheBund
   }
 }
 
-sealed class Stage1IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
+class Stage1IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
   val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
 }
 
@@ -136,7 +137,7 @@ sealed class CacheStage1(implicit val cacheConfig: CacheConfig) extends CacheMod
   Debug("in.ready = %d, in.valid = %d, out.valid = %d, out.ready = %d, addr = %x, cmd = %x, dataReadBus.req.valid = %d\n", io.in.ready, io.in.valid, io.out.valid, io.out.ready, io.in.bits.addr, io.in.bits.cmd, io.dataReadBus.req.valid)
 }
 
-sealed class Stage2IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
+class Stage2IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
   val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
   val metas = Vec(Ways, new MetaBundle)
   val datas = Vec(Ways, new DataBundle)
@@ -544,6 +545,21 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
   when (s2.io.in.valid) { Debug(p"[${cacheName}.S2]: ${s2.io.in.bits.req}\n") }
   when (s3.io.in.valid) { Debug(p"[${cacheName}.S3]: ${s3.io.in.bits.req}\n") }
   //s3.io.mem.dump(cacheName + ".mem")
+
+  if (Settings.get("CacheChecker")){
+    val cacheChecker = Module(new CacheCheckerWrapper)
+    cacheChecker.io.stage1Out := s1.io.out
+    cacheChecker.io.stage2In  := s2.io.in
+    cacheChecker.io.stage2Out := s2.io.out
+    cacheChecker.io.stage3In  := s3.io.in
+    cacheChecker.io.flush     := io.flush
+    cacheChecker.io.memReqValid := io.out.mem.req.fire()
+    BoringUtils.bore(s3.mmio, Seq(cacheChecker.mmio))
+    BoringUtils.bore(s3.hit, Seq(cacheChecker.hit))
+    BoringUtils.bore(s3.miss, Seq(cacheChecker.miss))
+    BoringUtils.bore(s3.state, Seq(cacheChecker.stage3MainState))
+    BoringUtils.bore(s3.meta, Seq(cacheChecker.meta))
+  }
 }
 
 class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
