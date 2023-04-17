@@ -43,7 +43,7 @@ object TopMain extends App {
   }
   val board = parseArgs("BOARD", args)
   val core = parseArgs("CORE", args)
-  
+  val bug  = parseArgs("BUG", args)
   val s = (board match {
     case "sim"    => Nil
     case "pynq"   => PynqSettings()
@@ -53,7 +53,10 @@ object TopMain extends App {
     case "inorder"  => InOrderSettings()
     case "ooo"  => OOOSettings()
     case "embedded"=> EmbededSettings()
-  } )
+  } ) ++ ( bug match {
+    case "y" => Hardssert()
+    case _ => Hardssert().mapValues(x => false)
+  })
   s.foreach{Settings.settings += _} // add and overwrite DefaultSettings
   println("====== Settings = (" + board + ", " +  core + ") ======")
   Settings.settings.toList.sortBy(_._1)(Ordering.String).foreach {

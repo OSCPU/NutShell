@@ -94,6 +94,26 @@ object EmbededSettings {
   )
 }
 
+object AssertEnable {
+  def apply() = Map(
+    "AXIChecker" -> true, 
+    "CSRChecker" -> true,
+    "CacheChecker" -> true,
+    "BPUChecker" -> true,
+    "RegFileChecker" -> true
+  )
+}
+object BugBaseEnable {
+  def apply() = Map(
+    "RegFileReadZero" -> false, 
+    // branch predictor bugs
+    "PHToverflow" -> false
+  )
+}
+
+object Hardssert {
+  def apply() = BugBaseEnable() ++ AssertEnable()
+}
 object Settings {
   var settings: Map[String, AnyVal] = DefaultSettings()
   def get(field: String) = {

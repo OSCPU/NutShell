@@ -14,25 +14,27 @@ IMAGE ?= ready-to-run/linux.bin
 DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu3cg
 CORE  ?= inorder  # inorder  ooo  embedded
-
+BUG   ?= n
+ENBALEDEBUG = #--full-stacktrace
 .DEFAULT_GOAL = verilog
-
+ASSERTION_FILES-$(BUG) = build/assertion_*.sv
+ASSERTION_TOP_GEN-$(BUG) = cat $(ASSERTION_FILES-y) > build/top_assertion.sv 
 help:
 	mill chiselModule.runMain top.$(TOP) --help BOARD=$(BOARD) CORE=$(CORE)
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-	mill chiselModule.runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE)
+	mill chiselModule.runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE) BUG=$(BUG) $(ENBALEDEBUG)
 	$(MEM_GEN) $(@D)/$(@F).conf >> $@
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
 	@sed -i 's/^/\/\// ' .__head__
 	@sed -i 's/^/\/\//' .__diff__
-	@cat .__head__ .__diff__ $@ > .__out__
+	@cat .__head__ .__diff__  $@ > .__out__
 	@mv .__out__ $@
 	@rm .__head__ .__diff__
-
+	@$(ASSERTION_TOP_GEN-y)
 deploy: build/top.zip
 
 
@@ -47,7 +49,7 @@ SIM_TOP = NutShellSimTop
 SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
+	mill chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE) BUG=$(BUG)
 
 
 EMU_CSRC_DIR = $(abspath ./src/test/csrc)
