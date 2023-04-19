@@ -8,6 +8,8 @@ module system_top (
   output [0:0]pcie_mgt_txn,
   output [0:0]pcie_mgt_txp,
   
+  output assert_clk,
+  output assert_rstn,
   input  [ 31 : 0 ] cnt_data,
   output [ 31 : 0 ] cnt_addr,
   output            cnt_req,
@@ -133,5 +135,8 @@ module system_top (
     .connect_external(req),
     .connect_external(addr)
   );
+  
+  assign assert_clk = coreclk;
+  assign assert_rstn = corerstn_sync[1];
   
 endmodule
