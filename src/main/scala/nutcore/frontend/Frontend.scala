@@ -19,23 +19,31 @@ package nutcore
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
-
 import utils._
 import bus.simplebus._
+import chisel3.experimental.IO
 
-class Frontend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule {
-  val io = IO(new Bundle {
-    val out = Vec(2, Decoupled(new DecodeIO))
-    val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
-    val flushVec = Output(UInt(4.W))
-    val bpFlush = Output(Bool())
-    val ipf = Input(Bool())
-    val redirect = Flipped(new RedirectIO)
-  })
+class FrontendIO(implicit val p: NutCoreConfig) extends Bundle with HasNutCoreConst {
+  val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
+  val out = Vec(2, Decoupled(new DecodeIO))
+  val flushVec = Output(UInt(4.W))
+  val redirect = Flipped(new RedirectIO)
+  val bpFlush = Output(Bool())
+  val ipf = Input(Bool())
+}
 
+
+trait HasFrontendIO {
+  implicit val p: NutCoreConfig
+  val io = IO(new FrontendIO)
+}
+
+class Frontend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasFrontendIO {
   def pipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
     isFlush: Bool, entries: Int = 4, pipe: Boolean = false) = {
-    right <> FlushableQueue(left, isFlush,  entries = entries, pipe = pipe)
+    // NOTE: depend on https://github.com/chipsalliance/chisel3/pull/2245
+    // right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
+    right <> FlushableQueue(left, isFlush, entries = entries, pipe = pipe)
   }
 
   val ifu  = Module(new IFU_ooo)
@@ -63,16 +71,7 @@ class Frontend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule {
   Debug(idu.io.in(1).valid, "IDU2: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in(1).bits.pc, idu.io.in(1).bits.instr, idu.io.in(1).bits.pnpc)
 }
 
-class Frontend_embedded(implicit val p: NutCoreConfig) extends NutCoreModule {
-  val io = IO(new Bundle {
-    val out = Vec(2, Decoupled(new DecodeIO))
-    val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
-    val flushVec = Output(UInt(4.W))
-    val bpFlush = Output(Bool())
-    val ipf = Input(Bool())
-    val redirect = Flipped(new RedirectIO)
-  })
-
+class Frontend_embedded(implicit val p: NutCoreConfig) extends NutCoreModule with HasFrontendIO {
   val ifu  = Module(new IFU_embedded)
   val idu  = Module(new IDU)
 
@@ -93,23 +92,16 @@ class Frontend_embedded(implicit val p: NutCoreConfig) extends NutCoreModule {
     Debug(idu.io.in(0).valid, "IDU1: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in(0).bits.pc, idu.io.in(0).bits.instr, idu.io.in(0).bits.pnpc)
 }
 
-class Frontend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
-  val io = IO(new Bundle {
-    val out = Vec(2, Decoupled(new DecodeIO))
-    val imem = new SimpleBusUC(userBits = ICacheUserBundleWidth, addrBits = VAddrBits)
-    val flushVec = Output(UInt(4.W))
-    val bpFlush = Output(Bool())
-    val ipf = Input(Bool())
-    val redirect = Flipped(new RedirectIO)
-  })
-
+class Frontend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule with HasFrontendIO {
   val ifu  = Module(new IFU_inorder)
   val ibf = Module(new NaiveRVCAlignBuffer)
   val idu  = Module(new IDU)
 
   def PipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
     isFlush: Bool, entries: Int = 4, pipe: Boolean = false) = {
-    right <> FlushableQueue(left, isFlush,  entries = entries, pipe = pipe)
+    // NOTE: depend on https://github.com/chipsalliance/chisel3/pull/2245
+    // right <> Queue(left,  entries = entries, pipe = pipe, flush = Some(isFlush))
+    right <> FlushableQueue(left, isFlush, entries = entries, pipe = pipe)
   }
 
   PipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))

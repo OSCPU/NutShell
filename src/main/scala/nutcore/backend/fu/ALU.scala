@@ -21,6 +21,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import difftest._
 import top.Settings
 
 object ALUOpType {

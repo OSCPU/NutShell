@@ -33,7 +33,8 @@ class RAMHelper(memByte: Int) extends BlackBox with HasNutCoreParameter {
     val wdata = Input(UInt(DataBits.W))
     val wmask = Input(UInt(DataBits.W))
     val wen = Input(Bool())
-  })
+    val en = Input(Bool())
+  }).suggestName("io")
 }
 
 class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Int,
@@ -56,6 +57,7 @@ class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Int,
     mem.io.wdata := in.w.bits.data
     mem.io.wmask := fullMask
     mem.io.wen := wen
+    mem.io.en := true.B
     mem.io.rdata
   } else {
     val mem = Mem(memByte / DataBytes, Vec(DataBytes, UInt(8.W)))

@@ -8,8 +8,6 @@
 #define PLIC_CLAIM  (PLIC_BASE + 0x200004)
 
 int main() {
-  difftest_disable();
-
   uint32_t claim = inl(PLIC_CLAIM);
   assert(claim == 0);
 

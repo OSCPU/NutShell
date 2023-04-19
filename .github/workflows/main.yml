@@ -1,0 +1,58 @@
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  test-nutshell:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Prepare environment
+        run: |
+            cd $GITHUB_WORKSPACE/..
+            git config --global url."https://github.com/".insteadOf git@github.com:
+            git config --global url."https://".insteadOf git://
+            git clone https://github.com/OpenXiangShan/xs-env
+            cd $GITHUB_WORKSPACE/../xs-env
+            sudo -s ./setup-tools.sh
+            source ./setup.sh
+            rm -r $GITHUB_WORKSPACE/../xs-env/NutShell
+            cp -r $GITHUB_WORKSPACE $GITHUB_WORKSPACE/../xs-env
+            cd $GITHUB_WORKSPACE/../xs-env
+            source ./env.sh
+            cd $GITHUB_WORKSPACE/../xs-env/NutShell
+            source ./env.sh
+            make init
+            
+      - name: Microbench - Nutshell
+        run: |
+            cd $GITHUB_WORKSPACE/../xs-env
+            source ./env.sh
+            cd $GITHUB_WORKSPACE/../xs-env/NutShell
+            source ./env.sh
+            make clean
+            make emu EMU_CXX_EXTRA_FLAGS="-DFIRST_INST_ADDRESS=0x80000000"
+            ./build/emu -b 0 -e 0 -i ./ready-to-run/microbench.bin
+
+      # - name: Microbench - Argo
+      #   run: |
+      #       cd $GITHUB_WORKSPACE/../xs-env
+      #       source ./env.sh
+      #       cd $GITHUB_WORKSPACE/../xs-env/NutShell
+      #       source ./env.sh
+      #       make clean
+      #       make emu CORE=ooo EMU_CXX_EXTRA_FLAGS="-DFIRST_INST_ADDRESS=0x80000000"
+      #       ./build/emu -b 0 -e 0 -i ./ready-to-run/microbench.bin

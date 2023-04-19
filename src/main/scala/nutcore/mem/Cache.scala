@@ -19,9 +19,9 @@ package nutcore
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
-
 import bus.simplebus._
 import bus.axi4._
+import chisel3.experimental.IO
 import utils._
 import assertion._
 import top.Settings
@@ -113,14 +113,27 @@ class Stage1IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
   val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
 }
 
+class CacheIO(implicit val cacheConfig: CacheConfig) extends Bundle with HasNutCoreParameter with HasCacheConst {
+  val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
+  val flush = Input(UInt(2.W))
+  val out = new SimpleBusC
+  val mmio = new SimpleBusUC
+  val empty = Output(Bool())
+}
+trait HasCacheIO {
+  implicit val cacheConfig: CacheConfig
+  val io = IO(new CacheIO)
+}
+
 // meta read
 sealed class CacheStage1(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  val io = IO(new Bundle {
+  class CacheStage1IO extends Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val out = Decoupled(new Stage1IO)
     val metaReadBus = CacheMetaArrayReadBus()
     val dataReadBus = CacheDataArrayReadBus()
-  })
+  }
+  val io = IO(new CacheStage1IO)
 
   if (ro) when (io.in.fire()) { assert(!io.in.bits.isWrite()) }
   Debug(io.in.fire(), "[L1$] cache stage1, addr in: %x, user: %x id: %x\n", io.in.bits.addr, io.in.bits.user.getOrElse(0.U), io.in.bits.id.getOrElse(0.U))
@@ -150,14 +163,15 @@ class Stage2IO(implicit val cacheConfig: CacheConfig) extends CacheBundle {
 
 // check
 sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  val io = IO(new Bundle {
+  class CacheStage2IO extends Bundle {
     val in = Flipped(Decoupled(new Stage1IO))
     val out = Decoupled(new Stage2IO)
     val metaReadResp = Flipped(Vec(Ways, new MetaBundle))
     val dataReadResp = Flipped(Vec(Ways, new DataBundle))
     val metaWriteBus = Input(CacheMetaArrayWriteBus())
     val dataWriteBus = Input(CacheDataArrayWriteBus())
-  })
+  }
+  val io = IO(new CacheStage2IO)
 
   val req = io.in.bits.req
   val addr = req.addr.asTypeOf(addrBundle)
@@ -222,7 +236,7 @@ sealed class CacheStage2(implicit val cacheConfig: CacheConfig) extends CacheMod
 
 // writeback
 sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  val io = IO(new Bundle {
+  class CacheStage3IO extends Bundle {
     val in = Flipped(Decoupled(new Stage2IO))
     val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
     val isFinish = Output(Bool())
@@ -237,7 +251,8 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
 
     // use to distinguish prefetch request and normal request
     val dataReadRespToL1 = Output(Bool())
-  })
+  }
+  val io = IO(new CacheStage3IO)
 
   val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
   val dataWriteArb = Module(new Arbiter(CacheDataArrayWriteBus().req.bits, 2))
@@ -463,15 +478,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
   Debug((state === s_memReadResp) && io.mem.resp.fire(), "[COUTR] cnt %x data %x tag %x idx %x waymask %b \n", readBeatCnt.value, io.mem.resp.bits.rdata, addr.tag, getMetaIdx(req.addr), io.in.bits.waymask)
 }
 
-class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  val io = IO(new Bundle {
-    val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
-    val flush = Input(UInt(2.W))
-    val out = new SimpleBusC
-    val mmio = new SimpleBusUC
-    val empty = Output(Bool())
-  })
-
+class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule with HasCacheIO {
   // cpu pipeline
   val s1 = Module(new CacheStage1)
   val s2 = Module(new CacheStage2)
@@ -562,15 +569,7 @@ class Cache(implicit val cacheConfig: CacheConfig) extends CacheModule {
   }
 }
 
-class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  val io = IO(new Bundle {
-    val in = Flipped(new SimpleBusUC(userBits = userBits))
-    val flush = Input(UInt(2.W))
-    val out = new SimpleBusC
-    val mmio = new SimpleBusUC
-    val empty = Output(Bool())
-  })
-  
+class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule with HasCacheIO {
   val s_idle :: s_memReq :: s_memResp :: s_mmioReq :: s_mmioResp :: s_wait_resp :: Nil = Enum(6)
   val state = RegInit(s_idle)
 
@@ -649,14 +648,7 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule {
   Debug(io.in.resp.fire(), p"in.resp: ${io.in.resp.bits}\n")
 }
 
-class Cache_dummy(implicit val cacheConfig: CacheConfig) extends CacheModule {
-  val io = IO(new Bundle {
-    val in = Flipped(new SimpleBusUC(userBits = userBits))
-    val flush = Input(UInt(2.W))
-    val out = new SimpleBusC
-    val mmio = new SimpleBusUC
-    val empty = Output(Bool())
-  })
+class Cache_dummy(implicit val cacheConfig: CacheConfig) extends CacheModule with HasCacheIO {
 
   val needFlush = RegInit(false.B)
   when (io.flush(0)) {

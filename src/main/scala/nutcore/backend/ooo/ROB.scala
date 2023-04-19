@@ -21,6 +21,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import utils._
+import difftest._
 
 object physicalRFTools{
   def getPRFAddr(robIndex: UInt, bank: UInt): UInt = {
@@ -491,23 +492,37 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1) && !instRedirect(0)
-  val firstValidInst = Mux(valid(ringBufferTail)(0), 0.U, 1.U)
   BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
   BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
-  val retirePC = SignExt(decode(ringBufferTail)(firstValidInst).cf.pc, AddrBits)
   
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(RegNext(retireATerm), "difftestCommit")
-    BoringUtils.addSource(RegNext(retireMultiTerms), "difftestMultiCommit")
-    BoringUtils.addSource(RegNext(retirePC), "difftestThisPC")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.instr), "difftestThisINST")
-    BoringUtils.addSource(RegNext(isMMIO(ringBufferTail)(0) && valid(ringBufferTail)(0) || isMMIO(ringBufferTail)(1) && valid(ringBufferTail)(1) && !(valid(ringBufferTail)(0) && redirect(ringBufferTail)(0).valid)), "difftestIsMMIO")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(firstValidInst).cf.isRVC), "difftestIsRVC")
-    BoringUtils.addSource(RegNext(decode(ringBufferTail)(1).cf.isRVC), "difftestIsRVC2")
-    BoringUtils.addSource(RegNext(intrNO(ringBufferTail)(firstValidInst)), "difftestIntrNO")
+    for (i <- 0 until RetireWidth) {
+      val difftest_commit = Module(new DifftestInstrCommit)
+      difftest_commit.io.clock    := clock
+      difftest_commit.io.coreid   := 0.U
+      difftest_commit.io.index    := i.U
+
+      difftest_commit.io.valid    := {if (i == 0) RegNext(retireATerm) else RegNext(retireMultiTerms)}
+      difftest_commit.io.pc       := RegNext(SignExt(decode(ringBufferTail)(i).cf.pc, AddrBits))
+      difftest_commit.io.instr    := RegNext(decode(ringBufferTail)(i).cf.instr)
+      difftest_commit.io.skip     := RegNext(isMMIO(ringBufferTail)(i) && valid(ringBufferTail)(i))
+      difftest_commit.io.isRVC    := RegNext(decode(ringBufferTail)(i).cf.isRVC)
+      difftest_commit.io.rfwen    := RegNext(io.wb(i).rfWen && io.wb(i).rfDest =/= 0.U) // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
+      difftest_commit.io.fpwen    := false.B
+      // difftest.io.wdata    := RegNext(io.wb(i).rfData)
+      difftest_commit.io.wdest    := RegNext(io.wb(i).rfDest)
+      difftest_commit.io.wpdest   := RegNext(io.wb(i).rfDest)
+
+      val difftest_wb = Module(new DifftestIntWriteback)
+      difftest_wb.io.clock := clock
+      difftest_wb.io.coreid := 0.U
+      difftest_wb.io.valid := RegNext(io.wb(i).rfWen && io.wb(i).rfDest =/= 0.U)
+      difftest_wb.io.dest := RegNext(io.wb(i).rfDest)
+      difftest_wb.io.data := RegNext(io.wb(i).rfData)
+    }
   } else {
     BoringUtils.addSource(retireATerm, "ilaWBUvalid")
-    BoringUtils.addSource(retirePC, "ilaWBUpc")
+    BoringUtils.addSource(SignExt(decode(ringBufferTail)(0).cf.pc, AddrBits), "ilaWBUpc")
     BoringUtils.addSource(io.wb(0).rfWen, "ilaWBUrfWen")
     BoringUtils.addSource(io.wb(0).rfDest, "ilaWBUrfDest")
     BoringUtils.addSource(io.wb(0).rfData, "ilaWBUrfData")

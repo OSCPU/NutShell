@@ -21,6 +21,7 @@ import chisel3.util._
 
 import utils._
 
+// This module does not support burst transaction
 class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC)
@@ -32,58 +33,51 @@ class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
 
   // select the output channel according to the address
   val addr = io.in.req.bits.addr
-  val outSelVec = VecInit(addressSpace.map(
+  val outMatchVec = VecInit(addressSpace.map(
     range => (addr >= range._1.U && addr < (range._1 + range._2).U)))
-  val outSelIdx = PriorityEncoder(outSelVec)
-  val outSel = io.out(outSelIdx)
-  val outSelIdxResp = RegEnable(outSelIdx, outSel.req.fire() && (state === s_idle))
-  val outSelResp = io.out(outSelIdxResp)
+  val outSelVec = VecInit(PriorityEncoderOH(outMatchVec))
+  val outSelRespVec = RegEnable(next=outSelVec,
+                                init=VecInit(Seq.fill(outSelVec.length)(false.B)),
+                                enable=io.in.req.fire() && state === s_idle)
   val reqInvalidAddr = io.in.req.valid && !outSelVec.asUInt.orR
 
-  when((io.in.req.valid && !outSelVec.asUInt.orR) || (io.in.req.valid && outSelVec.asUInt.andR)){
-    Debug(){
+  when (reqInvalidAddr) {
+    Debug() {
       printf("crossbar access bad addr %x, time %d\n", addr, GTimer())
     }
   }
-  // assert(!io.in.req.valid || outSelVec.asUInt.orR, "address decode error, bad addr = 0x%x\n", addr)
-  assert(!(io.in.req.valid && outSelVec.asUInt.andR), "address decode error, bad addr = 0x%x\n", addr)
-
-  // bind out.req channel
-  (io.out zip outSelVec).map { case (o, v) => {
-    o.req.bits := io.in.req.bits
-    o.req.valid := v && (io.in.req.valid && (state === s_idle))
-    o.resp.ready := v
-  }}
+  assert(!reqInvalidAddr, "address decode error, bad addr = 0x%x\n", addr)
 
   switch (state) {
-    is (s_idle) { 
-      when (outSel.req.fire()) { state := s_resp } 
-      when (reqInvalidAddr) { state := s_error } 
+    is (s_idle) {
+      when (io.in.req.fire()) { state := s_resp }
+      when (reqInvalidAddr) { state := s_error }
     }
-    is (s_resp) { when (outSelResp.resp.fire()) { state := s_idle } }
-    is (s_error) { when(io.in.resp.fire()){ state := s_idle } }
+    is (s_resp) { when (io.in.resp.fire()) { state := s_idle } }
+    is (s_error) { when (io.in.resp.fire()) { state := s_idle } }
   }
 
-  io.in.resp.valid := outSelResp.resp.fire() || state === s_error
-  io.in.resp.bits <> outSelResp.resp.bits
+  // bind out.req channel
+  io.in.req.ready := Mux1H(outSelVec, io.out.map(_.req.ready)) || reqInvalidAddr
+  for (i <- 0 until io.out.length) {
+    io.out(i).req.valid := outSelVec(i) && io.in.req.valid && state === s_idle
+    io.out(i).req.bits := io.in.req.bits
+  }
+
+  // bind in.resp channel
+  for (i <- 0 until io.out.length) {
+    io.out(i).resp.ready := outSelRespVec(i) && io.in.resp.ready && state === s_resp
+  }
+  io.in.resp.valid := Mux1H(outSelRespVec, io.out.map(_.resp.valid)) || state === s_error
+  io.in.resp.bits := Mux1H(outSelRespVec, io.out.map(_.resp.bits))
   // io.in.resp.bits.exc.get := state === s_error
-  outSelResp.resp.ready := io.in.resp.ready
-  io.in.req.ready := outSel.req.ready || reqInvalidAddr
 
   Debug() {
-    when (state === s_idle && io.in.req.valid) {
-      printf(p"${GTimer()}: xbar: in.req: ${io.in.req.bits}\n")
+    when (io.in.req.fire()) {
+      printf(p"${GTimer()}: xbar: outSelVec = ${outSelVec}, outSel.req: ${io.in.req.bits}\n")
     }
-
-    when (outSel.req.fire()) {
-      printf(p"${GTimer()}: xbar: outSelIdx = ${outSelIdx}, outSel.req: ${outSel.req.bits}\n")
-    }
-    when (outSel.resp.fire()) {
-      printf(p"${GTimer()}: xbar: outSelIdx= ${outSelIdx}, outSel.resp: ${outSel.resp.bits}\n")
-    }
-
     when (io.in.resp.fire()) {
-      printf(p"${GTimer()}: xbar: in.resp: ${io.in.resp.bits}\n")
+      printf(p"${GTimer()}: xbar: outSelVec = ${outSelVec}, outSel.resp: ${io.in.resp.bits}\n")
     }
   }
 }
@@ -102,7 +96,7 @@ class SimpleBusCrossbarNto1(n: Int, userBits:Int = 0) extends Module {
   (inputArb.io.in zip io.in.map(_.req)).map{ case (arb, in) => arb <> in }
   val thisReq = inputArb.io.out
   assert(!(thisReq.valid && !thisReq.bits.isRead() && !thisReq.bits.isWrite()))
-  val inflightSrc = Reg(UInt(log2Up(n).W))
+  val inflightSrc = RegInit(0.U(log2Up(n).W))
 
   io.out.req.bits := thisReq.bits
   // bind correct valid and ready signals
