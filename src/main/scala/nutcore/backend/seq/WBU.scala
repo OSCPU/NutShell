@@ -58,6 +58,7 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   
   if (!p.FPGAPlatform) {
     val difftest_commit = Module(new DifftestInstrCommit)
+    difftest_commit.io := DontCare
     difftest_commit.io.clock    := clock
     difftest_commit.io.coreid   := 0.U
     difftest_commit.io.index    := 0.U
@@ -81,6 +82,7 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
     difftest_wb.io.data := RegNext(io.wb.rfData)
 
     val runahead_commit = Module(new DifftestRunaheadCommitEvent)
+    runahead_commit.io := DontCare
     runahead_commit.io.clock := clock
     runahead_commit.io.coreid := 0.U
     runahead_commit.io.valid := RegNext(io.in.valid && io.in.bits.decode.cf.isBranch)

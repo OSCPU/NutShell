@@ -209,6 +209,7 @@ class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
 
   // debug runahead
   val runahead = Module(new DifftestRunaheadEvent)
+  runahead.io := DontCare
   runahead.io.clock         := clock
   runahead.io.coreid        := 0.U
   runahead.io.valid         := io.out(0).fire()

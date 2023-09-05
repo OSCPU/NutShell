@@ -95,7 +95,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.out.bits.decode.cf.instr := io.in.bits.cf.instr
   io.out.bits.decode.cf.runahead_checkpoint_id := io.in.bits.cf.runahead_checkpoint_id
   io.out.bits.decode.cf.isBranch := io.in.bits.cf.isBranch
-  io.out.bits.decode.cf.redirect <>
+  io.out.bits.decode.cf.redirect :=
     Mux(mou.io.redirect.valid, mou.io.redirect,
       Mux(csr.io.redirect.valid, csr.io.redirect, alu.io.redirect))
   
@@ -146,5 +146,6 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
     difftest.io.pc       := io.in.bits.cf.pc
     difftest.io.cycleCnt := cycleCnt
     difftest.io.instrCnt := instrCnt
+    difftest.io.hasWFI   := false.B
   }
 }
