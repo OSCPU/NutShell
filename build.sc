@@ -1,8 +1,14 @@
 import mill._, scalalib._
 import coursier.maven.MavenRepository
 
+object ivys {
+  val scala = "2.12.13"
+  val chisel3 = ivy"edu.berkeley.cs::chisel3:3.5.0"
+  val chisel3Plugin = ivy"edu.berkeley.cs:::chisel3-plugin:3.5.0"
+}
+
 trait CommonModule extends ScalaModule {
-  override def scalaVersion = "2.12.13"
+  override def scalaVersion = ivys.scala
 
   override def scalacOptions = Seq("-Xsource:2.11")
 }
@@ -18,14 +24,13 @@ trait HasXsource211 extends ScalaModule {
 }
 
 trait HasChisel3 extends ScalaModule {
-   override def repositoriesTask = T.task {
+  override def repositoriesTask = T.task {
     super.repositoriesTask() ++ Seq(
       MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
     )
   }
-   override def ivyDeps = Agg(
-    ivy"edu.berkeley.cs::chisel3:3.5.0-RC1"
- )
+  override def ivyDeps = Agg(ivys.chisel3)
+  override def scalacPluginIvyDeps = Agg(ivys.chisel3Plugin)
 }
 
 trait HasChiselTests extends CrossSbtModule  {
@@ -45,4 +50,3 @@ object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests w
     difftest
   )
 }
-
