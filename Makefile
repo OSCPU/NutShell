@@ -50,7 +50,7 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 sim-verilog: $(SIM_TOP_V)
 
 emu: sim-verilog
-	$(MAKE) -C ./difftest emu
+	$(MAKE) -C ./difftest emu WITH_CHISELDB=0 WITH_CONSTANTIN=0
 
 emu-run: sim-verilog
 	$(MAKE) -C ./difftest emu-run
