@@ -890,35 +890,52 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     }
 
     // for differential testing
-    val difftest = Module(new DifftestCSRState)
-    difftest.io.clock := clock
-    difftest.io.coreid := 0.U // TODO
-    difftest.io.priviledgeMode := RegNext(priviledgeMode)
-    difftest.io.mstatus := RegNext(mstatus)
-    difftest.io.sstatus := RegNext(mstatus & sstatusRmask)
-    difftest.io.mepc := RegNext(mepc)
-    difftest.io.sepc := RegNext(sepc)
-    difftest.io.mtval:= RegNext(mtval)
-    difftest.io.stval:= RegNext(stval)
-    difftest.io.mtvec := RegNext(mtvec)
-    difftest.io.stvec := RegNext(stvec)
-    difftest.io.mcause := RegNext(mcause)
-    difftest.io.scause := RegNext(scause)
-    difftest.io.satp := RegNext(satp)
-    difftest.io.mip := RegNext(mipReg)
-    difftest.io.mie := RegNext(mie)
-    difftest.io.mscratch := RegNext(mscratch)
-    difftest.io.sscratch := RegNext(sscratch)
-    difftest.io.mideleg := RegNext(mideleg)
-    difftest.io.medeleg := RegNext(medeleg)
+    class CSRDiffWrapper extends Module {
+      val io = IO(new Bundle {
+        val csrState = Input(new DiffCSRState)
+        val archEvent = Input(new DiffArchEvent)
+      })
 
-    val difftestArchEvent = Module(new DifftestArchEvent)
-    difftestArchEvent.io.clock := clock
-    difftestArchEvent.io.coreid := 0.U // TODO
-    difftestArchEvent.io.intrNO := RegNext(RegNext(Mux(raiseIntr && io.instrValid && valid, intrNO, 0.U)))
-    difftestArchEvent.io.cause := RegNext(RegNext(Mux(raiseException && io.instrValid && valid, exceptionNO, 0.U)))
-    difftestArchEvent.io.exceptionPC := RegNext(RegNext(SignExt(io.cfIn.pc, XLEN)))
-    difftestArchEvent.io.exceptionInst := RegNext(RegNext(io.cfIn.instr))
+      val difftest = DifftestModule(new DiffCSRState)
+      difftest := RegNext(io.csrState)
+      difftest.clock := clock
+      difftest.coreid := 0.U // TODO
+
+      val difftestArchEvent = DifftestModule(new DiffArchEvent)
+      difftestArchEvent := RegNext(RegNext(io.archEvent))
+      difftestArchEvent.clock := clock
+      difftestArchEvent.coreid := 0.U // TODO
+    }
+
+    val diffWrapper = Module(new CSRDiffWrapper).io
+    diffWrapper := DontCare
+
+    val difftest = diffWrapper.csrState
+    difftest.priviledgeMode := priviledgeMode
+    difftest.mstatus := mstatus
+    difftest.sstatus := mstatus & sstatusRmask
+    difftest.mepc := mepc
+    difftest.sepc := sepc
+    difftest.mtval:= mtval
+    difftest.stval:= stval
+    difftest.mtvec := mtvec
+    difftest.stvec := stvec
+    difftest.mcause := mcause
+    difftest.scause := scause
+    difftest.satp := satp
+    difftest.mip := mipReg
+    difftest.mie := mie
+    difftest.mscratch := mscratch
+    difftest.sscratch := sscratch
+    difftest.mideleg := mideleg
+    difftest.medeleg := medeleg
+
+    val difftestArchEvent = diffWrapper.archEvent
+    difftestArchEvent.valid         := raiseExceptionIntr
+    difftestArchEvent.interrupt     := Mux(raiseIntr && io.instrValid, intrNO, 0.U)
+    difftestArchEvent.exception     := Mux(raiseException && io.instrValid, exceptionNO, 0.U)
+    difftestArchEvent.exceptionPC   := SignExt(io.cfIn.pc, XLEN)
+    difftestArchEvent.exceptionInst := io.cfIn.instr
 
   } else {
     if (!p.FPGAPlatform) {

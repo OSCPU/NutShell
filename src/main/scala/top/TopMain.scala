@@ -16,13 +16,13 @@
 
 package top
 
-import nutcore.NutCoreConfig
-import system.NutShell
-import device.{AXI4VGA}
-import sim.SimTop
-
 import chisel3._
 import chisel3.stage._
+import device.AXI4VGA
+import difftest.DifftestModule
+import nutcore.NutCoreConfig
+import sim.SimTop
+import system.NutShell
 
 class Top extends Module {
   val io = IO(new Bundle{})
@@ -72,4 +72,5 @@ object TopMain extends App {
       ChiselGeneratorAnnotation(() => new Top))
     )
   }
+  DifftestModule.finish("nutshell")
 }
