@@ -13,16 +13,6 @@ trait CommonModule extends ScalaModule {
   override def scalacOptions = Seq("-Xsource:2.11")
 }
 
-trait HasXsource211 extends ScalaModule {
-  override def scalacOptions = T {
-    super.scalacOptions() ++ Seq(
-      "-deprecation",
-      "-unchecked",
-      "-Xsource:2.11"
-    )
-  }
-}
-
 trait HasChisel3 extends ScalaModule {
   override def repositoriesTask = T.task {
     super.repositoriesTask() ++ Seq(
@@ -33,19 +23,21 @@ trait HasChisel3 extends ScalaModule {
   override def scalacPluginIvyDeps = Agg(ivys.chisel3Plugin)
 }
 
-trait HasChiselTests extends CrossSbtModule  {
-  object test extends Tests {
-    override def ivyDeps = Agg(ivy"org.scalatest::scalatest:3.0.4", ivy"edu.berkeley.cs::chisel-iotesters:1.2+")
-    def testFrameworks = Seq("org.scalatest.tools.Framework")
+trait HasChiselTests extends SbtModule {
+  object test extends SbtModuleTests with TestModule.ScalaTest {
+    override def ivyDeps = Agg(ivy"edu.berkeley.cs::chisel-iotesters:1.2+")
   }
 }
 
-object difftest extends SbtModule with CommonModule with HasChisel3 {
+trait CommonNS extends SbtModule with CommonModule with HasChisel3
+
+object difftest extends CommonNS {
   override def millSourcePath = os.pwd / "difftest"
 }
 
-object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests with HasXsource211 {
-  def crossScalaVersion = "2.12.13"
+object chiselModule extends CommonNS with HasChiselTests {
+  override def millSourcePath = os.pwd
+
   override def moduleDeps = super.moduleDeps ++ Seq(
     difftest
   )
