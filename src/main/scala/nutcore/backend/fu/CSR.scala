@@ -315,6 +315,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val pmpaddr1 = RegInit(UInt(XLEN.W), 0.U)
   val pmpaddr2 = RegInit(UInt(XLEN.W), 0.U)
   val pmpaddr3 = RegInit(UInt(XLEN.W), 0.U)
+  val pmpaddrWmask = "h3fffffff".U // 32bit physical address
 
   // Superviser-Level CSRs
 
@@ -446,10 +447,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Pmpcfg1, pmpcfg1),
     MaskedRegMap(Pmpcfg2, pmpcfg2),
     MaskedRegMap(Pmpcfg3, pmpcfg3),
-    MaskedRegMap(PmpaddrBase + 0, pmpaddr0),
-    MaskedRegMap(PmpaddrBase + 1, pmpaddr1),
-    MaskedRegMap(PmpaddrBase + 2, pmpaddr2),
-    MaskedRegMap(PmpaddrBase + 3, pmpaddr3)
+    MaskedRegMap(PmpaddrBase + 0, pmpaddr0, pmpaddrWmask),
+    MaskedRegMap(PmpaddrBase + 1, pmpaddr1, pmpaddrWmask),
+    MaskedRegMap(PmpaddrBase + 2, pmpaddr2, pmpaddrWmask),
+    MaskedRegMap(PmpaddrBase + 3, pmpaddr3, pmpaddrWmask)
 
   ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
 
