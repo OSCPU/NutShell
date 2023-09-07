@@ -36,7 +36,7 @@ jobs:
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make init
-            
+
       - name: Microbench - Nutshell
         run: |
             cd $GITHUB_WORKSPACE/../xs-env
@@ -46,6 +46,16 @@ jobs:
             make clean
             make emu EMU_CXX_EXTRA_FLAGS="-DFIRST_INST_ADDRESS=0x80000000"
             ./build/emu -b 0 -e 0 -i ./ready-to-run/microbench.bin
+
+      - name: Linux - Nutshell
+        run: |
+            cd $GITHUB_WORKSPACE/../xs-env
+            source ./env.sh
+            cd $GITHUB_WORKSPACE/../xs-env/NutShell
+            source ./env.sh
+            make clean
+            make emu EMU_CXX_EXTRA_FLAGS="-DFIRST_INST_ADDRESS=0x80000000"
+            ./build/emu -b 0 -e 0 -i ./ready-to-run/microbench.bin -C 75000000
 
       # - name: Microbench - Argo
       #   run: |
