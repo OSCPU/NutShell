@@ -275,13 +275,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val marchid = RegInit(UInt(XLEN.W), 0.U) // return 0 to indicate the field is not implemented
   val mimpid = RegInit(UInt(XLEN.W), 0.U) // provides a unique encoding of the version of the processor implementation
   val mhartid = RegInit(UInt(XLEN.W), 0.U) // the hardware thread running the code
-  val mstatus = RegInit(UInt(XLEN.W), "h00001800".U)
+  val mstatus = RegInit(UInt(XLEN.W), "ha00001800".U)
   // val mstatus = RegInit(UInt(XLEN.W), "h8000c0100".U)
   // mstatus Value Table
   // | sd   |
   // | pad1 |
   // | sxl  | hardlinked to 10, use 00 to pass xv6 test
-  // | uxl  | hardlinked to 00
+  // | uxl  | hardlinked to 10
   // | pad0 |
   // | tsr  |
   // | tw   |
