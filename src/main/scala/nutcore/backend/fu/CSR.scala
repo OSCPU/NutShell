@@ -257,8 +257,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   val mie = RegInit(0.U(XLEN.W))
   val mipWire = WireInit(0.U.asTypeOf(new Interrupt))
-  val mipReg  = RegInit(0.U.asTypeOf(new Interrupt).asUInt)
-  val mipFixMask = "h77f".U
+  val mipReg  = RegInit(0.U(64.W))
+  val mipFixMask = "h77f".U(64.W)
   val mip = (mipWire.asUInt | mipReg).asTypeOf(new Interrupt)
 
   def getMisaMxl(mxl: Int): UInt = {mxl.U << (XLEN-2)}
@@ -315,12 +315,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val pmpaddr1 = RegInit(UInt(XLEN.W), 0.U)
   val pmpaddr2 = RegInit(UInt(XLEN.W), 0.U)
   val pmpaddr3 = RegInit(UInt(XLEN.W), 0.U)
-  val pmpaddrWmask = "h3fffffff".U // 32bit physical address
+  val pmpaddrWmask = "h3fffffff".U(64.W) // 32bit physical address
 
   // Superviser-Level CSRs
 
   // val sstatus = RegInit(UInt(XLEN.W), "h00000000".U)
-  val sstatusWmask = "hc6122".U
+  val sstatusWmask = "hc6122".U(64.W)
   // Sstatus Write Mask
   // -------------------------------------------------------
   //    19           9   5     2
@@ -331,8 +331,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // Sstatus Read Mask = (SSTATUS_WMASK | (0xf << 13) | (1ull << 63) | (3ull << 32))
   val stvec = RegInit(UInt(XLEN.W), 0.U)
   // val sie = RegInit(0.U(XLEN.W))
-  val sieMask = "h222".U & mideleg
-  val sipMask  = "h222".U & mideleg
+  val sieMask = "h222".U(64.W) & mideleg
+  val sipMask  = "h222".U(64.W) & mideleg
   // val satp = RegInit(UInt(XLEN.W), "h8000000000087fbe".U)
   val satp = RegInit(UInt(XLEN.W), 0.U)
   val sepc = RegInit(UInt(XLEN.W), 0.U)
@@ -427,10 +427,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
     // Machine Trap Setup
     // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
-    MaskedRegMap(Mstatus, mstatus, "hffffffffffffffff".U, mstatusUpdateSideEffect),
+    MaskedRegMap(Mstatus, mstatus, "hffffffffffffffff".U(64.W), mstatusUpdateSideEffect),
     MaskedRegMap(Misa, misa), // now MXL, EXT is not changeable
-    MaskedRegMap(Medeleg, medeleg, "hbbff".U),
-    MaskedRegMap(Mideleg, mideleg, "h222".U),
+    MaskedRegMap(Medeleg, medeleg, "hbbff".U(64.W)),
+    MaskedRegMap(Mideleg, mideleg, "h222".U(64.W)),
     MaskedRegMap(Mie, mie),
     MaskedRegMap(Mtvec, mtvec),
     MaskedRegMap(Mcounteren, mcounteren),

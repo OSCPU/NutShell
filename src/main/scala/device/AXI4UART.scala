@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package device
@@ -42,6 +42,6 @@ class AXI4UART extends AXI4SlaveModule(new AXI4Lite, _extra = new UARTIO)
   )
 
   RegMap.generate(mapping, raddr(3,0), in.r.bits.data,
-    waddr(3,0), in.w.fire(), in.w.bits.data, MaskExpand(in.w.bits.strb >> waddr(2,0))
+    waddr(3,0), in.w.fire(), in.w.bits.data(31, 0), MaskExpand(in.w.bits.strb >> waddr(2, 0))(31, 0)
   )
 }

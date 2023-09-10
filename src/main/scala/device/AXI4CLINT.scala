@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package device
@@ -34,8 +34,10 @@ class AXI4CLINT(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new 
   val msip = RegInit(0.U(64.W))
 
   val clk = (if (!sim) 40 /* 40MHz / 1000000 */ else 10000)
-  val freq = RegInit(clk.U(16.W))
-  val inc = RegInit(1.U(16.W))
+  val freq_reg = RegInit(clk.U(64.W))
+  val freq = freq_reg(15, 0)
+  val inc_reg = RegInit(1.U(64.W))
+  val inc = inc_reg(15, 0)
 
   val cnt = RegInit(0.U(16.W))
   val nextCnt = cnt + 1.U
@@ -52,8 +54,8 @@ class AXI4CLINT(sim: Boolean = false) extends AXI4SlaveModule(new AXI4Lite, new 
   val mapping = Map(
     RegMap(0x0, msip),
     RegMap(0x4000, mtimecmp),
-    RegMap(0x8000, freq),
-    RegMap(0x8008, inc),
+    RegMap(0x8000, freq_reg),
+    RegMap(0x8008, inc_reg),
     RegMap(0xbff8, mtime)
   )
   def getOffset(addr: UInt) = addr(15,0)
