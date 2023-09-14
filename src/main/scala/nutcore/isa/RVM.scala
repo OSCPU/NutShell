@@ -46,7 +46,7 @@ object RV32MInstr extends HasInstrType with HasNutCoreParameter {
     REM            -> List(InstrR, FuType.mdu, MDUOpType.rem),
     REMU           -> List(InstrR, FuType.mdu, MDUOpType.remu)
   )
-  val table = mulTable ++ (if (HasDiv) divTable else Nil)
+  val table = mulTable ++ (if (HasDiv) divTable else Array.empty)
 }
 
 object RV64MInstr extends HasInstrType with HasNutCoreParameter {
@@ -65,9 +65,9 @@ object RV64MInstr extends HasInstrType with HasNutCoreParameter {
     REMW           -> List(InstrR, FuType.mdu, MDUOpType.remw),
     REMUW          -> List(InstrR, FuType.mdu, MDUOpType.remuw)
   )
-  val table = mulTable ++ (if (HasDiv) divTable else Nil)
+  val table = mulTable ++ (if (HasDiv) divTable else Array.empty)
 }
 
 object RVMInstr extends HasNutCoreParameter {
-  val table = RV32MInstr.table ++ (if (XLEN == 64) RV64MInstr.table else Nil)
+  val table = RV32MInstr.table ++ (if (XLEN == 64) RV64MInstr.table else Array.empty)
 }
