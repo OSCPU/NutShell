@@ -3,15 +3,14 @@ import coursier.maven.MavenRepository
 
 object ivys {
   val scala = "2.13.10"
-  val chisel3 = ivy"edu.berkeley.cs::chisel3:3.5.6"
-  val chisel3Plugin = ivy"edu.berkeley.cs:::chisel3-plugin:3.5.6"
+  val chisel3 = ivy"org.chipsalliance::chisel:6.0.0-M3"
+  val chisel3Plugin = ivy"org.chipsalliance:::chisel-plugin:6.0.0-M3"
 }
 
 trait CommonModule extends ScalaModule {
   override def scalaVersion = ivys.scala
 
-  override def scalacOptions = Seq("-Ymacro-annotations") ++
-    Seq("-Xfatal-warnings", "-feature", "-deprecation", "-language:reflectiveCalls")
+  override def scalacOptions = Seq("-Ymacro-annotations")
 }
 
 trait HasChisel3 extends ScalaModule {
