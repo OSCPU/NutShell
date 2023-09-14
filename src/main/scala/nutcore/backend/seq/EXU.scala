@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -84,7 +84,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   mou.access(valid = fuValids(FuType.mou), src1 = src1, src2 = src2, func = fuOpType)
   mou.io.cfIn := io.in.bits.cf
   mou.io.out.ready := true.B
-  
+
   io.out.bits.decode := DontCare
   (io.out.bits.decode.ctrl, io.in.bits.ctrl) match { case (o, i) =>
     o.rfWen := i.rfWen && (!lsuTlbPF && !lsu.io.loadAddrMisaligned && !lsu.io.storeAddrMisaligned || !fuValids(FuType.lsu)) && !(csr.io.wenFix && fuValids(FuType.csr))
@@ -98,7 +98,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.out.bits.decode.cf.redirect :=
     Mux(mou.io.redirect.valid, mou.io.redirect,
       Mux(csr.io.redirect.valid, csr.io.redirect, alu.io.redirect))
-  
+
   Debug(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid, "[REDIRECT] mou %x csr %x alu %x \n", mou.io.redirect.valid, csr.io.redirect.valid, alu.io.redirect.valid)
   Debug(mou.io.redirect.valid || csr.io.redirect.valid || alu.io.redirect.valid, "[REDIRECT] flush: %d mou %x csr %x alu %x\n", io.flush, mou.io.redirect.target, csr.io.redirect.target, alu.io.redirect.target)
 
@@ -114,20 +114,20 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.out.bits.commits(FuType.mdu) := mduOut
   io.out.bits.commits(FuType.mou) := 0.U
 
-  io.in.ready := !io.in.valid || io.out.fire()
+  io.in.ready := !io.in.valid || io.out.fire
 
   io.forward.valid := io.in.valid
   io.forward.wb.rfWen := io.in.bits.ctrl.rfWen
   io.forward.wb.rfDest := io.in.bits.ctrl.rfDest
-  io.forward.wb.rfData := Mux(alu.io.out.fire(), aluOut, lsuOut)
+  io.forward.wb.rfData := Mux(alu.io.out.fire, aluOut, lsuOut)
   io.forward.fuType := io.in.bits.ctrl.fuType
 
   val isBru = ALUOpType.isBru(fuOpType)
-  BoringUtils.addSource(alu.io.out.fire() && !isBru, "perfCntCondMaluInstr")
-  BoringUtils.addSource(alu.io.out.fire() && isBru, "perfCntCondMbruInstr")
-  BoringUtils.addSource(lsu.io.out.fire(), "perfCntCondMlsuInstr")
-  BoringUtils.addSource(mdu.io.out.fire(), "perfCntCondMmduInstr")
-  BoringUtils.addSource(csr.io.out.fire(), "perfCntCondMcsrInstr")
+  BoringUtils.addSource(alu.io.out.fire && !isBru, "perfCntCondMaluInstr")
+  BoringUtils.addSource(alu.io.out.fire && isBru, "perfCntCondMbruInstr")
+  BoringUtils.addSource(lsu.io.out.fire, "perfCntCondMlsuInstr")
+  BoringUtils.addSource(mdu.io.out.fire, "perfCntCondMmduInstr")
+  BoringUtils.addSource(csr.io.out.fire, "perfCntCondMcsrInstr")
 
   if (!p.FPGAPlatform) {
     val cycleCnt = WireInit(0.U(64.W))

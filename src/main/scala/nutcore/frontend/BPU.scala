@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -61,7 +61,7 @@ class BPUUpdateReq extends NutCoreBundle {
 class BPU_ooo extends NutCoreModule {
   val io = IO(new Bundle {
     val in = new Bundle { val pc = Flipped(Valid((UInt(VAddrBits.W)))) }
-    val out = new RedirectIO 
+    val out = new RedirectIO
     val flush = Input(Bool())
     val brIdx = Output(Vec(4, Bool()))
     // val target = Output(Vec(4, UInt(VAddrBits.W)))
@@ -102,13 +102,13 @@ class BPU_ooo extends NutCoreModule {
   // we should latch the input pc for one cycle
   val pcLatch = RegEnable(io.in.pc.bits, io.in.pc.valid)
   val btbHit = Wire(Vec(4, Bool()))
-  (0 to 3).map(i => btbHit(i) := btbRead(i).valid && btbRead(i).tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb(i).io.r.req.fire(), init = false.B))
+  (0 to 3).map(i => btbHit(i) := btbRead(i).valid && btbRead(i).tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb(i).io.r.req.fire, init = false.B))
   // btbHit will ignore pc(2,0). pc(2,0) is used to build brIdx
   val crosslineJump = btbRead(3).crosslineJump && btbHit(3) && !io.brIdx(0) && !io.brIdx(1) && !io.brIdx(2)
   io.crosslineJump := crosslineJump
   // val crosslineJumpLatch = RegNext(crosslineJump)
   // val crosslineJumpTarget = RegEnable(btbRead.target, crosslineJump)
-  
+
   // PHT
   val pht = List.fill(4)(Mem(NRbtb >> 2, UInt(2.W)))
   val phtTaken = Wire(Vec(4, Bool()))
@@ -129,7 +129,7 @@ class BPU_ooo extends NutCoreModule {
   btbWrite.target := req.actualTarget
   btbWrite._type := req.btbType
   btbWrite.crosslineJump := req.pc(2,1)==="h3".U && !req.isRVC // ((pc_offset % 8) == 6) && inst is 32bit in length
-  btbWrite.valid := true.B 
+  btbWrite.valid := true.B
   // NOTE: We only update BTB at a miss prediction.
   // If a miss prediction is found, the pipeline will be flushed
   // in the next cycle. Therefore it is safe to use single-port
@@ -182,7 +182,7 @@ class BPU_ooo extends NutCoreModule {
   Debug(io.out.valid, "[BPU] pc %x io.brIdx.asUInt %b phtTaken %x %x %x %x valid %x %x %x %x\n", pcLatch, io.brIdx.asUInt, phtTaken(0), phtTaken(1), phtTaken(2), phtTaken(3), btbRead(0).valid, btbRead(1).valid, btbRead(2).valid, btbRead(3).valid)
 
   // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !crosslineJump || crosslineJumpLatch && !flush && !crosslineJump
-  // Note: 
+  // Note:
   // btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !crosslineJump : normal branch predict
   // crosslineJumpLatch && !flush && !crosslineJump : cross line branch predict, bpu will require imem to fetch the next 16bit of current inst in next instline
   // `&& !crosslineJump` is used to make sure this logic will run correctly when imem stalls (pcUpdate === false)
@@ -317,7 +317,7 @@ class BPU_inorder extends NutCoreModule {
   // since there is one cycle latency to read SyncReadMem,
   // we should latch the input pc for one cycle
   val pcLatch = RegEnable(io.in.pc.bits, io.in.pc.valid)
-  val btbHit = btbRead.valid && btbRead.tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb.io.r.req.fire(), init = false.B) && !(pcLatch(1) && btbRead.brIdx(0))
+  val btbHit = btbRead.valid && btbRead.tag === btbAddr.getTag(pcLatch) && !flush && RegNext(btb.io.r.req.fire, init = false.B) && !(pcLatch(1) && btbRead.brIdx(0))
   // btbHit will ignore pc(1,0). pc(1,0) is used to build brIdx
   // !(pcLatch(1) && btbRead.brIdx(0)) is used to deal with the following case:
   // -------------------------------------------------
@@ -331,7 +331,7 @@ class BPU_inorder extends NutCoreModule {
   Debug(btbHit, "[BTBHT1] %d pc=%x tag=%x,%x index=%x bridx=%x tgt=%x,%x flush %x type:%x\n", GTimer(), pcLatch, btbRead.tag, btbAddr.getTag(pcLatch), btbAddr.getIdx(pcLatch), btbRead.brIdx, btbRead.target, io.out.target, flush,btbRead._type)
   Debug(btbHit, "[BTBHT2] btbRead.brIdx %x mask %x\n", btbRead.brIdx, Cat(crosslineJump, Fill(2, io.out.valid)))
   // Debug(btbHit, "[BTBHT5] btbReqValid:%d btbReqSetIdx:%x\n",btb.io.r.req.valid, btb.io.r.req.bits.setId)
-  
+
   // PHT
   val pht = Mem(NRbtb, UInt(2.W))
   val phtTaken = RegEnable(pht.read(btbAddr.getIdx(io.in.pc.bits))(1), io.in.pc.valid)
@@ -358,14 +358,14 @@ class BPU_inorder extends NutCoreModule {
     //  Debug("[BTBHT6] btbWrite.type is BTBtype.R/RET!!! Inpc:%x btbWrite.brIdx:%x setIdx:%x\n", io.in.pc.bits, btbWrite.brIdx, btb.io.w.req.bits.setIdx)
     //  Debug("[BTBHT6] tag:%x target:%x _type:%x bridx:%x\n", btbWrite.tag,btbWrite.target,btbWrite._type,btbWrite.brIdx)
     //  Debug(p"[BTBHT6] req:${req} \n")
-    //} 
+    //}
     //Debug("[BTBHT5] tag: target:%x type:%d brIdx:%d\n", req.actualTarget, req.btbType, Cat(req.pc(2,0)==="h6".U && !req.isRVC, req.pc(1), ~req.pc(1)))
 
   btbWrite.tag := btbAddr.getTag(req.pc)
   btbWrite.target := req.actualTarget
   btbWrite._type := req.btbType
   btbWrite.brIdx := Cat(req.pc(2,0)==="h6".U && !req.isRVC, req.pc(1), ~req.pc(1))
-  btbWrite.valid := true.B 
+  btbWrite.valid := true.B
   // NOTE: We only update BTB at a miss prediction.
   // If a miss prediction is found, the pipeline will be flushed
   // in the next cycle. Therefore it is safe to use single-port
@@ -420,7 +420,7 @@ class BPU_inorder extends NutCoreModule {
   io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B && rasTarget=/=0.U) //TODO: add rasTarget=/=0.U, need fix
   io.out.rtype := 0.U
   // io.out.valid := btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !crosslineJump || crosslineJumpLatch && !flush && !crosslineJump
-  // Note: 
+  // Note:
   // btbHit && Mux(btbRead._type === BTBtype.B, phtTaken, true.B) && !crosslineJump : normal branch predict
   // crosslineJumpLatch && !flush && !crosslineJump : cross line branch predict, bpu will require imem to fetch the next 16bit of current inst in next instline
   // `&& !crosslineJump` is used to make sure this logic will run correctly when imem stalls (pcUpdate === false)
@@ -442,7 +442,7 @@ class DummyPredicter extends NutCoreModule {
   io.valid := io.in.pc.valid // Predicter is returning a result
   io.out.valid := false.B // Need redirect
   io.out.target := DontCare // Redirect target
-  io.out.rtype := DontCare // Predicter does not need to care about it 
+  io.out.rtype := DontCare // Predicter does not need to care about it
   io.brIdx := VecInit(Seq.fill(4)(false.B)) // Which inst triggers jump
 }
 

@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package bus.simplebus
@@ -102,7 +102,7 @@ class AXI42SimpleBusConverter() extends Module {
     }
   }
 
-  when (isState(axi_write) && axi.w.fire()) {
+  when (isState(axi_write) && axi.w.fire) {
     mem.req.valid := true.B
     req.cmd := Mux(aw_reg.len === 0.U, SimpleBusCmd.write,
       Mux(w.last, SimpleBusCmd.writeLast, SimpleBusCmd.writeBurst))
@@ -134,11 +134,11 @@ class AXI42SimpleBusConverter() extends Module {
   axi.b.valid := bresp_en && mem.resp.valid
   axi.b.bits.resp := AXI4Parameters.RESP_OKAY
 
-  when (axi.ar.fire()) { assert(mem.req.fire() && !isInflight()); }
-  when (axi.aw.fire()) { assert(!isInflight()); }
-  when (axi.w.fire()) { assert(mem.req .fire() && isState(axi_write)); }
-  when (axi.b.fire()) { assert(mem.resp.fire() && isState(axi_write)); }
-  when (axi.r.fire()) { assert(mem.resp.fire() && isState(axi_read)); }
+  when (axi.ar.fire) { assert(mem.req.fire && !isInflight()); }
+  when (axi.aw.fire) { assert(!isInflight()); }
+  when (axi.w.fire) { assert(mem.req .fire && isState(axi_write)); }
+  when (axi.b.fire) { assert(mem.resp.fire && isState(axi_write)); }
+  when (axi.r.fire) { assert(mem.resp.fire && isState(axi_read)); }
 }
 
 
@@ -184,14 +184,14 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean)
   mem.resp.bits.cmd  := Mux(rlast, SimpleBusCmd.readLast, 0.U)
 
   val wSend = Wire(Bool())
-  val awAck = BoolStopWatch(axi.aw.fire(), wSend)
-  val wAck = BoolStopWatch(axi.w.fire() && wlast, wSend)
-  wSend := (axi.aw.fire() && axi.w.fire() && wlast) || (awAck && wAck)
-  val wen = RegEnable(mem.req.bits.isWrite(), mem.req.fire())
+  val awAck = BoolStopWatch(axi.aw.fire, wSend)
+  val wAck = BoolStopWatch(axi.w.fire && wlast, wSend)
+  wSend := (axi.aw.fire && axi.w.fire && wlast) || (awAck && wAck)
+  val wen = RegEnable(mem.req.bits.isWrite(), mem.req.fire)
 
-  axi.ar.valid := mem.isRead()
-  axi.aw.valid := mem.isWrite() && !awAck
-  axi.w .valid := mem.isWrite() && !wAck
+  axi.ar.valid := mem.isRead
+  axi.aw.valid := mem.isWrite && !awAck
+  axi.w .valid := mem.isWrite && !wAck
   mem.req.ready  := Mux(mem.req.bits.isWrite(), !wAck && axi.w.ready, axi.ar.ready)
 
   axi.r.ready  := mem.resp.ready

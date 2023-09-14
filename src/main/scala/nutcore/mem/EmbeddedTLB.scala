@@ -20,8 +20,6 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 import bus.simplebus._
-import bus.axi4._
-import chisel3.experimental.IO
 import utils._
 import top.Settings
 
@@ -121,7 +119,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasT
   tlbEmpty.io.out.ready := DontCare
   PipelineConnectTLB(io.in.req, tlbExec.io.in, mdUpdate, tlbExec.io.isFinish, io.flush, vmEnable)
   if(tlbname == "dtlb") {
-    PipelineConnect(tlbExec.io.out, tlbEmpty.io.in, tlbEmpty.io.out.fire(), io.flush)
+    PipelineConnect(tlbExec.io.out, tlbEmpty.io.in, tlbEmpty.io.out.fire, io.flush)
   }
   when(!vmEnable) {
     tlbExec.io.out.ready := true.B // let existed request go out
@@ -142,8 +140,8 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasT
 
   // lsu need dtlb signals
   if(tlbname == "dtlb") {
-    val alreadyOutFinish = RegEnable(true.B, init=false.B, tlbExec.io.out.valid && !tlbExec.io.out.ready)
-    when(alreadyOutFinish && tlbExec.io.out.fire()) { alreadyOutFinish := false.B}
+    val alreadyOutFinish = RegEnable(true.B, false.B, tlbExec.io.out.valid && !tlbExec.io.out.ready)
+    when(alreadyOutFinish && tlbExec.io.out.fire) { alreadyOutFinish := false.B}
     val tlbFinish = (tlbExec.io.out.valid && !alreadyOutFinish) || tlbExec.io.pf.isPF()
     BoringUtils.addSource(tlbFinish, "DTLBFINISH")
     BoringUtils.addSource(io.csrMMU.isPF(), "DTLBPF")
@@ -258,14 +256,14 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val missRefillFlag = WireInit(0.U(8.W))
   val memRdata = io.mem.resp.bits.rdata.asTypeOf(pteBundle)
   val raddr = Reg(UInt(PAddrBits.W))
-  val alreadyOutFire = RegEnable(true.B, init = false.B, io.out.fire)
+  val alreadyOutFire = RegEnable(true.B, false.B, io.out.fire)
 
   //handle flush
   val needFlush = RegInit(false.B)
   val ioFlush = io.flush
   val isFlush = needFlush || ioFlush
   when (ioFlush && (state =/= s_idle)) { needFlush := true.B}
-  when (io.out.fire() && needFlush) { needFlush := false.B}
+  when (io.out.fire && needFlush) { needFlush := false.B}
 
   val missIPF = RegInit(false.B)
 
@@ -289,12 +287,12 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
       when (isFlush) {
         state := s_idle
         needFlush := false.B
-      }.elsewhen (io.mem.req.fire()) { state := s_memReadResp}
+      }.elsewhen (io.mem.req.fire) { state := s_memReadResp}
     }
 
     is (s_memReadResp) {
       val missflag = memRdata.flag.asTypeOf(flagBundle)
-      when (io.mem.resp.fire()) {
+      when (io.mem.resp.fire) {
         when (isFlush) {
           state := s_idle
           needFlush := false.B
@@ -352,10 +350,10 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
       when (isFlush) {
         state := s_idle
         needFlush := false.B
-      }.elsewhen (io.mem.req.fire()) { state := s_wait_resp }
+      }.elsewhen (io.mem.req.fire) { state := s_wait_resp }
     }
 
-    is (s_wait_resp) { when (io.out.fire() || ioFlush || alreadyOutFire){
+    is (s_wait_resp) { when (io.out.fire || ioFlush || alreadyOutFire){
       state := s_idle
       missIPF := false.B
       alreadyOutFire := false.B
@@ -387,7 +385,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   io.in.ready := io.out.ready && (state === s_idle) && !miss && !hitWB && io.mdReady && (!io.pf.isPF() && !loadPF && !storePF)//maybe be optimized
 
   io.ipf := Mux(hit, hitinstrPF, missIPF)
-  io.isFinish := io.out.fire() || io.pf.isPF()
+  io.isFinish := io.out.fire || io.pf.isPF()
 
   Debug("In(%d, %d) Out(%d, %d) InAddr:%x OutAddr:%x cmd:%d \n", io.in.valid, io.in.ready, io.out.valid, io.out.ready, req.addr, io.out.bits.addr, req.cmd)
   Debug("isAMO:%d io.Flush:%d needFlush:%d alreadyOutFire:%d isFinish:%d\n",isAMO, io.flush, needFlush, alreadyOutFire, io.isFinish)

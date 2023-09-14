@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -78,7 +78,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   // Here we listen to commit signal chosen by ROB?
   // If prf === src, mark it as `ready`
 
-  List.tabulate(rsSize)(i => 
+  List.tabulate(rsSize)(i =>
     when(valid(i)){
       List.tabulate(rsCommitWidth)(j =>
         when(!src1Rdy(i) && prfSrc1(i) === io.cdb(j).bits.prfidx && io.cdb(j).valid){
@@ -105,7 +105,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   val emptySlot = ~valid.asUInt
   val enqueueSelect = PriorityEncoder(emptySlot) // TODO: replace PriorityEncoder with other logic
 
-  when(io.in.fire()){
+  when(io.in.fire){
     decode(enqueueSelect) := io.in.bits
     valid(enqueueSelect) := true.B
     prfSrc1(enqueueSelect) := io.in.bits.prfSrc1
@@ -120,7 +120,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   // RS dequeue
   val dequeueSelect = Wire(UInt(log2Up(size).W))
   dequeueSelect := PriorityEncoder(instRdy)
-  when(io.out.fire() || forceDequeue){
+  when(io.out.fire || forceDequeue){
     if(!checkpoint){
       valid(dequeueSelect) := false.B
     }
@@ -133,12 +133,12 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   io.out.bits.decode.data.src2 := src2(dequeueSelect)
 
   when(io.flush){
-    List.tabulate(rsSize)(i => 
+    List.tabulate(rsSize)(i =>
       valid(i) := false.B
     )
   }
 
-  Debug(io.out.fire(), "[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x id %d\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.prfDest)
+  Debug(io.out.fire, "[ISSUE-"+ name + "] " + "TIMER: %d pc = 0x%x inst %x wen %x id %d\n", GTimer(), io.out.bits.decode.cf.pc, io.out.bits.decode.cf.instr, io.out.bits.decode.ctrl.rfWen, io.out.bits.prfDest)
 
   Debug("[RS " + name + "] pc           v src1               src2\n")
   for(i <- 0 to (size -1)){
@@ -148,26 +148,26 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     // Debug("\n")
   }
 
-  // fix unpipelined 
+  // fix unpipelined
   // when `pipelined` === false, RS helps unpipelined FU to store its uop for commit
   // if an unpipelined fu can store uop itself, set `pipelined` to true (it behaves just like a pipelined FU)
   if(!pipelined){
     val fuValidReg = RegInit(false.B)
     val brMaskPReg = RegInit(0.U(checkpointSize.W))
     val fuFlushReg = RegInit(false.B)
-    val fuDecodeReg = RegEnable(io.out.bits, io.out.fire())
+    val fuDecodeReg = RegEnable(io.out.bits, io.out.fire)
     brMaskPReg := updateBrMask(brMaskPReg)
-    when(io.out.fire()){ 
-      fuValidReg := true.B 
+    when(io.out.fire){
+      fuValidReg := true.B
       brMaskPReg := updateBrMask(brMask(dequeueSelect))
     }
     when(io.commit.get){ fuValidReg := false.B }
-    when((io.flush || needMispredictionRecovery(brMaskPReg)) && fuValidReg || (io.flush || needMispredictionRecovery(brMask(dequeueSelect))) && io.out.fire()){ fuFlushReg := true.B }
+    when((io.flush || needMispredictionRecovery(brMaskPReg)) && fuValidReg || (io.flush || needMispredictionRecovery(brMask(dequeueSelect))) && io.out.fire){ fuFlushReg := true.B }
     when(io.commit.get){ fuFlushReg := false.B }
     when(fuValidReg){ io.out.bits := fuDecodeReg }
     when(fuValidReg){ io.out.valid := true.B && !fuFlushReg}
     io.out.bits.brMask := brMaskPReg
-    Debug("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire())
+    Debug("[RS " + name + "] pc 0x%x valid %x flush %x brMaskPReg %x prfidx %d   in %x\n", fuDecodeReg.decode.cf.pc, fuValidReg, fuFlushReg, brMaskPReg, fuDecodeReg.prfDest, io.out.fire)
   }
 
   if(fifo){
@@ -178,15 +178,15 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     }))
     // update priorityMask
     io.out.valid := instRdy(dequeueSelect)
-    List.tabulate(rsSize)(i => 
-      when(needMispredictionRecovery(brMask(i))){ 
-        List.tabulate(rsSize)(j => 
-          priorityMask(j)(i):= false.B 
+    List.tabulate(rsSize)(i =>
+      when(needMispredictionRecovery(brMask(i))){
+        List.tabulate(rsSize)(j =>
+          priorityMask(j)(i):= false.B
         )
       }
     )
-    when(io.in.fire()){priorityMask(enqueueSelect) := valid}
-    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.in.fire){priorityMask(enqueueSelect) := valid}
+    when(io.out.fire){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
 
@@ -197,15 +197,15 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
       !(priorityMask(i).asUInt & instRdy.asUInt).orR & instRdy(i)
     }))
     // update priorityMask
-    List.tabulate(rsSize)(i => 
-      when(needMispredictionRecovery(brMask(i))){ 
-        List.tabulate(rsSize)(j => 
-          priorityMask(j)(i):= false.B 
+    List.tabulate(rsSize)(i =>
+      when(needMispredictionRecovery(brMask(i))){
+        List.tabulate(rsSize)(j =>
+          priorityMask(j)(i):= false.B
         )
       }
     )
-    when(io.in.fire()){ priorityMask(enqueueSelect) := valid}
-    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.in.fire){ priorityMask(enqueueSelect) := valid}
+    when(io.out.fire){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
 
@@ -216,7 +216,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
       valid(i) &&
       Mux(
-        needStore(i), 
+        needStore(i),
         !(priorityMask(i).asUInt.orR), // there is no other inst ahead
         !((priorityMask(i).asUInt & needStore.asUInt).orR) // there is no store (with no valid addr) ahead
       ) &&
@@ -225,18 +225,18 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     dequeueSelect := OHToUInt(dequeueSelectVec)
     io.out.valid := instRdy(dequeueSelect) && dequeueSelectVec(dequeueSelect)
     // update priorityMask
-    List.tabulate(rsSize)(i => 
-      when(needMispredictionRecovery(brMask(i))){ 
-        List.tabulate(rsSize)(j => 
-          priorityMask(j)(i):= false.B 
+    List.tabulate(rsSize)(i =>
+      when(needMispredictionRecovery(brMask(i))){
+        List.tabulate(rsSize)(j =>
+          priorityMask(j)(i):= false.B
         )
       }
     )
-    when(io.in.fire()){
+    when(io.in.fire){
       priorityMask(enqueueSelect) := valid
       needStore(enqueueSelect) := LSUOpType.needMemWrite(io.in.bits.decode.ctrl.fuOpType)
     }
-    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.out.fire){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
   }
 
@@ -250,7 +250,7 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
       val dequeueSelectVec = VecInit(List.tabulate(rsSize)(i => {
         valid(i) &&
         Mux(
-          needStore(i), 
+          needStore(i),
           !(priorityMask(i).asUInt.orR), // there is no other inst ahead
           true.B
         ) &&
@@ -265,18 +265,18 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
       io.out.valid := instRdy(dequeueSelect) && !priorityMask(dequeueSelect).asUInt.orR && valid(dequeueSelect)
     }
     // update priorityMask
-    List.tabulate(rsSize)(i => 
-      when(needMispredictionRecovery(brMask(i))){ 
-        List.tabulate(rsSize)(j => 
-          priorityMask(j)(i):= false.B 
+    List.tabulate(rsSize)(i =>
+      when(needMispredictionRecovery(brMask(i))){
+        List.tabulate(rsSize)(j =>
+          priorityMask(j)(i):= false.B
         )
       }
     )
-    when(io.in.fire()){
+    when(io.in.fire){
       priorityMask(enqueueSelect) := valid
       needStore(enqueueSelect) := LSUOpType.needMemWrite(io.in.bits.decode.ctrl.fuOpType)
     }
-    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.out.fire){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
 
     //update stMask
@@ -285,13 +285,13 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     (0 until robSize).map(i => {
       when(!robStoreInstVec(i)){stMaskReg(i) := false.B}
     })
-    when(io.in.fire() && LSUOpType.needMemWrite(io.in.bits.decode.ctrl.fuOpType)){
+    when(io.in.fire && LSUOpType.needMemWrite(io.in.bits.decode.ctrl.fuOpType)){
       stMaskReg(io.in.bits.prfDest(prfAddrWidth-1,1)) := true.B
     }
-    when(io.in.fire()){
+    when(io.in.fire){
       stMask(enqueueSelect) := stMaskReg
     }
-    when(io.out.fire()){
+    when(io.out.fire){
       stMaskReg(io.out.bits.prfDest(prfAddrWidth-1,1)) := false.B
       (0 until rsSize).map(i => {
         stMask(i)(io.out.bits.prfDest(prfAddrWidth-1,1)) := false.B
@@ -306,27 +306,27 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
   if(checkpoint){
     require(priority)
 
-    io.updateCheckpoint.get.valid := io.in.fire()
+    io.updateCheckpoint.get.valid := io.in.fire
     io.updateCheckpoint.get.bits := enqueueSelect
     io.recoverCheckpoint.get.valid := DontCare
     io.recoverCheckpoint.get.bits := dequeueSelect
 
     val pending = RegInit(VecInit(Seq.fill(rsSize)(false.B)))
-    when(io.in.fire()){pending(enqueueSelect) := true.B}
-    when(io.out.fire()){pending(dequeueSelect) := false.B}
+    when(io.in.fire){pending(enqueueSelect) := true.B}
+    when(io.out.fire){pending(dequeueSelect) := false.B}
     when(io.flush){List.tabulate(rsSize)(i => pending(i) := false.B)}
     instRdy := VecInit(List.tabulate(rsSize)(i => src1Rdy(i) && src2Rdy(i) && valid(i) && pending(i)))
     when(io.freeCheckpoint.get.valid){valid(io.freeCheckpoint.get.bits) := false.B}
 
-    List.tabulate(rsSize)(i => 
-      when(needMispredictionRecovery(brMask(i))){ 
-        List.tabulate(rsSize)(j => 
-          priorityMask(j)(i):= false.B 
+    List.tabulate(rsSize)(i =>
+      when(needMispredictionRecovery(brMask(i))){
+        List.tabulate(rsSize)(j =>
+          priorityMask(j)(i):= false.B
         )
       }
     )
-    when(io.in.fire()){priorityMask(enqueueSelect) := (valid.asUInt & pending.asUInt).asBools}
-    when(io.out.fire()){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
+    when(io.in.fire){priorityMask(enqueueSelect) := (valid.asUInt & pending.asUInt).asBools}
+    when(io.out.fire){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
 
     BoringUtils.addSource(PopCount(valid) === 0.U, "perfCntCondMbrInROB_0")

@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -78,7 +78,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val bruRedirect = Wire(new RedirectIO)
   val mispredictRec = Wire(new MisPredictionRecIO)
   val flushBackend = if(enableCheckpoint){
-    io.flush 
+    io.flush
   } else {
     io.flush || rob.io.redirect.valid && rob.io.redirect.rtype === 1.U
   }
@@ -114,13 +114,13 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   // Choose inst to be dispatched
   // Check structural hazard
   //TODO: Use bit instead of counter
-  val mduCnt = Wire(UInt(2.W)) 
+  val mduCnt = Wire(UInt(2.W))
   mduCnt := List.tabulate(robWidth)(i => (io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.mdu)).foldRight(0.U)((sum, i) => sum +& i)
-  val lsuCnt = Wire(UInt(2.W)) 
+  val lsuCnt = Wire(UInt(2.W))
   lsuCnt := List.tabulate(robWidth)(i => (io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.lsu)).foldRight(0.U)((sum, i) => sum +& i)
-  val bruCnt = Wire(UInt(2.W)) 
+  val bruCnt = Wire(UInt(2.W))
   bruCnt := List.tabulate(robWidth)(i => (io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.bru && ALUOpType.isBru(io.in(i).bits.ctrl.fuOpType))).foldRight(0.U)((sum, i) => sum +& i)
-  val csrCnt = Wire(UInt(2.W)) 
+  val csrCnt = Wire(UInt(2.W))
   csrCnt := List.tabulate(robWidth)(i => (io.in(i).valid && (io.in(i).bits.ctrl.fuType === FuType.csr || io.in(i).bits.ctrl.fuType === FuType.mou))).foldRight(0.U)((sum, i) => sum +& i)
 
   val rfSrc = List(
@@ -135,7 +135,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   )
 
   val inst = Wire(Vec(DispatchWidth + 1, new RenamedDecodeIO))
-  
+
   List.tabulate(DispatchWidth)(i => {
     inst(i).decode := io.in(i).bits
     inst(i).prfDest := Cat(rob.io.index, i.U(1.W))
@@ -145,9 +145,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
     inst(i).src2Rdy := !rob.io.rvalid(2*i+1) || rob.io.rcommited(2*i+1)
     inst(i).brMask := DontCare
     // read rf, update src
-    inst(i).decode.data.src1 := rf.read(rfSrc(2*i)) 
+    inst(i).decode.data.src1 := rf.read(rfSrc(2*i))
     when(rob.io.rvalid(2*i) && rob.io.rcommited(2*i)){inst(i).decode.data.src1 := rob.io.rprf(2*i)}
-    inst(i).decode.data.src2 := rf.read(rfSrc(2*i + 1)) 
+    inst(i).decode.data.src2 := rf.read(rfSrc(2*i + 1))
     when(rob.io.rvalid(2*i+1) && rob.io.rcommited(2*i+1)){inst(i).decode.data.src2 := rob.io.rprf(2*i+1)}
   })
   inst(DispatchWidth) := DontCare
@@ -188,7 +188,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
     when(io.in(i).bits.ctrl.src2Type =/= SrcType.reg){
       inst(i).src2Rdy := true.B
       inst(i).decode.data.src2 := io.in(i).bits.data.imm
-    } 
+    }
   })
 
   //TODO: refactor src gen with Mux1H
@@ -207,7 +207,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val blockReg = RegInit(false.B)
   val haveUnfinishedStore = Wire(Bool())
   when((rob.io.empty || flushBackend) && !haveUnfinishedStore){ blockReg := false.B }
-  when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire()){ blockReg := true.B }
+  when(io.in(0).bits.ctrl.isBlocked && io.in(0).fire){ blockReg := true.B }
   val mispredictionRecoveryReg = RegInit(false.B)
   when(io.redirect.valid && io.redirect.rtype === 1.U){ mispredictionRecoveryReg := true.B }
   when(rob.io.empty || flushBackend){ mispredictionRecoveryReg := false.B }
@@ -221,7 +221,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   Debug(io.redirect.valid && io.redirect.rtype === 1.U, "[REDIRECT] bpr start, redirect to %x\n", io.redirect.target)
   Debug(io.redirect.valid && io.redirect.rtype === 0.U, "[REDIRECT]special redirect to %x\n", io.redirect.target)
 
-  instCango(0) := 
+  instCango(0) :=
     io.in(0).valid &&
     rob.io.in(0).ready && // rob has empty slot
     !(hasBlockInst(0) && !pipeLineEmpty) &&
@@ -235,7 +235,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
       FuType.csr -> csrrs.io.in.ready,
       FuType.mou -> csrrs.io.in.ready
     ))
-  instCango(1) := 
+  instCango(1) :=
     instCango(0) &&
     io.in(1).valid &&
     rob.io.in(1).ready && // rob has empty slot
@@ -271,9 +271,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val brMask = Wire(Vec(robWidth+2, UInt(checkpointSize.W)))
   val isBranch = List.tabulate(robWidth)(i => io.in(i).valid && io.in(i).bits.ctrl.fuType === FuType.bru)
   brMask(0) := brMaskGen
-  brMask(1) := brMaskGen | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(0).fire() && isBranch(0)))
+  brMask(1) := brMaskGen | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(0).fire && isBranch(0)))
   brMask(2) := DontCare
-  brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire() && isBranch(1)))
+  brMask(3) := brMask(1) | (UIntToOH(brurs.io.updateCheckpoint.get.bits) & Fill(checkpointSize, io.in(1).fire && isBranch(1)))
   brMaskReg := Mux(flushBackend, 0.U, Mux(io.redirect.valid && io.redirect.rtype === 1.U, updateBrMask(bruDelayer.io.out.bits.brMask), brMask(3)))
 
   Debug("[brMask] %d: old %x -> new %x\n", GTimer(), brMaskReg, Mux(flushBackend, 0.U, brMask(2)))
@@ -282,7 +282,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val rsInstSel = List(bruInst, alu1Inst, alu2Inst, csrInst, lsuInst, mduInst)
   List.tabulate(rs.length)(i => {
     rs(i).io.in.valid := instCango(rsInstSel(i))
-    rs(i).io.in.bits := inst(rsInstSel(i)) 
+    rs(i).io.in.bits := inst(rsInstSel(i))
     rs(i).io.in.bits.brMask := brMask(rsInstSel(i))
     rs(i).io.cdb <> cdb
     rs(i).io.flush := flushBackend
@@ -313,9 +313,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val brucommit = Wire(new OOCommitIO)
   val brucommitdelayed = Wire(new OOCommitIO)
   val bruOut = bru.access(
-    valid = brurs.io.out.valid, 
-    src1 = brurs.io.out.bits.decode.data.src1, 
-    src2 = brurs.io.out.bits.decode.data.src2, 
+    valid = brurs.io.out.valid,
+    src1 = brurs.io.out.bits.decode.data.src1,
+    src2 = brurs.io.out.bits.decode.data.src2,
     func = brurs.io.out.bits.decode.ctrl.fuOpType
   )
   val bruWritebackReady = Wire(Bool())
@@ -342,8 +342,8 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
 
   // commit redirect
   bruRedirect := bruDelayer.io.out.bits.decode.cf.redirect
-  bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire()
-  mispredictRec.valid := bruDelayer.io.out.fire()
+  bruRedirect.valid := bruDelayer.io.out.bits.decode.cf.redirect.valid && bruDelayer.io.out.fire
+  mispredictRec.valid := bruDelayer.io.out.fire
   mispredictRec.checkpoint := bruDelayer.io.freeCheckpoint.get.bits
   mispredictRec.prfidx := bruDelayer.io.out.bits.prfidx
   mispredictRec.redirect := bruRedirect
@@ -361,19 +361,19 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val lsu = Module(new LSU)
   val lsucommit = Wire(new OOCommitIO)
   val lsuTlbPF = WireInit(false.B)
-  
+
   val lsuUop = lsurs.io.out.bits
 
   val lsuOut = lsu.access(
     valid = lsurs.io.out.valid,
-    src1 = lsuUop.decode.data.src1, 
-    src2 = lsuUop.decode.data.imm, 
-    func = lsuUop.decode.ctrl.fuOpType, 
+    src1 = lsuUop.decode.data.src1,
+    src2 = lsuUop.decode.data.imm,
+    func = lsuUop.decode.ctrl.fuOpType,
     dtlbPF = lsuTlbPF
   )
   lsu.io.uopIn := lsuUop
   lsu.io.stMaskIn := lsurs.io.stMaskOut.get
-  lsu.io.robAllocate.valid := io.in(0).fire()
+  lsu.io.robAllocate.valid := io.in(0).fire
   lsu.io.robAllocate.bits := rob.io.index
   lsu.io.mispredictRec := mispredictRec
   lsu.io.scommit := rob.io.scommit
@@ -397,7 +397,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   lsucommit.decode.cf.exceptionVec := lsu.io.exceptionVec
 
   // backend exceptions only come from LSU
-  raiseBackendException := lsucommit.exception && lsu.io.out.fire()
+  raiseBackendException := lsucommit.exception && lsu.io.out.fire
   // for backend exceptions, we reuse 'intrNO' field in ROB
   // when ROB.exception(x) === 1, intrNO(x) represents backend exception vec for this inst
   lsucommit.intrNO := lsucommit.decode.cf.exceptionVec.asUInt
@@ -408,9 +408,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val mducommit = Wire(new OOCommitIO)
   val mducommitdelayed = Wire(new OOCommitIO)
   val mduOut = mdu.access(
-    valid = mdurs.io.out.valid, 
-    src1 = mdurs.io.out.bits.decode.data.src1, 
-    src2 = mdurs.io.out.bits.decode.data.src2, 
+    valid = mdurs.io.out.valid,
+    src1 = mdurs.io.out.bits.decode.data.src1,
+    src2 = mdurs.io.out.bits.decode.data.src2,
     func = mdurs.io.out.bits.decode.ctrl.fuOpType
   )
   val mduWritebackReady = Wire(Bool())
@@ -444,9 +444,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   }
   val csrcommit = Wire(new OOCommitIO)
   val csrOut = csr.access(
-    valid = csrVaild, 
-    src1 = csrUop.decode.data.src1, 
-    src2 = csrUop.decode.data.src2, 
+    valid = csrVaild,
+    src1 = csrUop.decode.data.src1,
+    src2 = csrUop.decode.data.src2,
     func = csrUop.decode.ctrl.fuOpType
   )
   csr.io.cfIn := csrUop.decode.cf
@@ -474,9 +474,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   val moucommit = Wire(new OOCommitIO)
   // mou does not write register
   mou.access(
-    valid = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.mou, 
-    src1 = csrrs.io.out.bits.decode.data.src1, 
-    src2 = csrrs.io.out.bits.decode.data.src2, 
+    valid = csrrs.io.out.valid && csrrs.io.out.bits.decode.ctrl.fuType === FuType.mou,
+    src1 = csrrs.io.out.bits.decode.data.src1,
+    src2 = csrrs.io.out.bits.decode.data.src2,
     func = csrrs.io.out.bits.decode.ctrl.fuOpType
   )
   mou.io.cfIn := csrrs.io.out.bits.decode.cf
@@ -502,9 +502,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   // ------------------------------------------------
 
   // Common Data Bus
-  // 
+  //
   // Currently, FUs can commit to any CDB socket.
-  //  
+  //
   // Alternatively, FUs can be divided into different groups.
   // For each group, only one inst can be commited to ROB in a single cycle.
 
@@ -585,28 +585,28 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
 
   // Performance Counter
 
-  BoringUtils.addSource(alu1.io.out.fire(), "perfCntCondMaluInstr")
-  BoringUtils.addSource(bru.io.out.fire(), "perfCntCondMbruInstr")
-  BoringUtils.addSource(lsu.io.out.fire(), "perfCntCondMlsuInstr")
-  BoringUtils.addSource(mdu.io.out.fire(), "perfCntCondMmduInstr")
+  BoringUtils.addSource(alu1.io.out.fire, "perfCntCondMaluInstr")
+  BoringUtils.addSource(bru.io.out.fire, "perfCntCondMbruInstr")
+  BoringUtils.addSource(lsu.io.out.fire, "perfCntCondMlsuInstr")
+  BoringUtils.addSource(mdu.io.out.fire, "perfCntCondMmduInstr")
   BoringUtils.addSource(!rob.io.in(0).ready, "perfCntCondMrobFull")
   BoringUtils.addSource(!alu1rs.io.in.ready, "perfCntCondMalu1rsFull")
   BoringUtils.addSource(!alu2rs.io.in.ready, "perfCntCondMalu2rsFull")
   BoringUtils.addSource(!brurs.io.in.ready, "perfCntCondMbrursFull")
   BoringUtils.addSource(!lsurs.io.in.ready, "perfCntCondMlsursFull")
   BoringUtils.addSource(!mdurs.io.in.ready, "perfCntCondMmdursFull")
-  BoringUtils.addSource(lsurs.io.out.fire(), "perfCntCondMlsuIssue")
-  BoringUtils.addSource(mdurs.io.out.fire(), "perfCntCondMmduIssue")
+  BoringUtils.addSource(lsurs.io.out.fire, "perfCntCondMlsuIssue")
+  BoringUtils.addSource(mdurs.io.out.fire, "perfCntCondMmduIssue")
   BoringUtils.addSource(rob.io.empty, "perfCntCondMrobEmpty")
   BoringUtils.addSource(cmtStrHaz(0), "perfCntCondMcmtCnt0")
   BoringUtils.addSource(cmtStrHaz(1), "perfCntCondMcmtCnt1")
   BoringUtils.addSource(cmtStrHaz(2), "perfCntCondMcmtCnt2")
   BoringUtils.addSource(cmtStrHaz(3), "perfCntCondMcmtStrHaz1")
   BoringUtils.addSource(cmtStrHaz(4), "perfCntCondMcmtStrHaz2")
-  BoringUtils.addSource(alu2.io.out.fire(), "perfCntCondMaluInstr2")
-  BoringUtils.addSource(!(rob.io.in(0).fire() | rob.io.in(1).fire()), "perfCntCondMdispatch0")
-  BoringUtils.addSource(rob.io.in(0).fire() ^ rob.io.in(1).fire(), "perfCntCondMdispatch1")
-  BoringUtils.addSource(rob.io.in(0).fire() & rob.io.in(1).fire(), "perfCntCondMdispatch2")
+  BoringUtils.addSource(alu2.io.out.fire, "perfCntCondMaluInstr2")
+  BoringUtils.addSource(!(rob.io.in(0).fire | rob.io.in(1).fire), "perfCntCondMdispatch0")
+  BoringUtils.addSource(rob.io.in(0).fire ^ rob.io.in(1).fire, "perfCntCondMdispatch1")
+  BoringUtils.addSource(rob.io.in(0).fire & rob.io.in(1).fire, "perfCntCondMdispatch2")
 
   val inst1RSfull = !LookupTree(io.in(0).bits.ctrl.fuType, List(
     FuType.bru -> brurs.io.in.ready,
@@ -681,18 +681,18 @@ class Backend_inorder(implicit val p: NutCoreConfig) extends NutCoreModule {
   val exu  = Module(new EXU)
   val wbu  = Module(new WBU)
 
-  PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire(), io.flush(0))
+  PipelineConnect(isu.io.out, exu.io.in, exu.io.out.fire, io.flush(0))
   PipelineConnect(exu.io.out, wbu.io.in, true.B, io.flush(1))
 
   isu.io.in <> io.in
-  
+
   isu.io.flush := io.flush(0)
   exu.io.flush := io.flush(1)
 
   isu.io.wb <> wbu.io.wb
   io.redirect <> wbu.io.redirect
   // forward
-  isu.io.forward <> exu.io.forward  
+  isu.io.forward <> exu.io.forward
 
   io.memMMU.imem <> exu.io.memMMU.imem
   io.memMMU.dmem <> exu.io.memMMU.dmem

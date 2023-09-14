@@ -10,7 +10,8 @@ object ivys {
 trait CommonModule extends ScalaModule {
   override def scalaVersion = ivys.scala
 
-  override def scalacOptions = Seq("-Ymacro-annotations")
+  override def scalacOptions = Seq("-Ymacro-annotations") ++
+    Seq("-Xfatal-warnings", "-feature", "-deprecation", "-language:reflectiveCalls")
 }
 
 trait HasChisel3 extends ScalaModule {

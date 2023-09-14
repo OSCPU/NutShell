@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package top
@@ -64,10 +64,10 @@ class NutCoreSimTop extends Module {
   val initCnt = Counter(NRmemBlock)
   switch (state) {
     is (s_init_req) {
-      when (in.req.fire()) { state := s_init_resp }
+      when (in.req.fire) { state := s_init_resp }
     }
     is (s_init_resp) {
-      when (in.resp.fire()) {
+      when (in.resp.fire) {
         val wrap = initCnt.inc()
         state := Mux(wrap, s_test, s_init_req)
         when (wrap) {
@@ -107,23 +107,23 @@ class NutCoreSimTop extends Module {
   in.resp.ready := rand.readyChoose =/= 0.U
 
   val cohInflight = RegInit(false.B)
-  when (cohIn.resp.fire()) {
+  when (cohIn.resp.fire) {
     val resp = cohIn.resp.bits
     val isProbeEnd = resp.isProbeMiss() || (resp.cmd === SimpleBusCmd.readLast)
     when (isProbeEnd) { cohInflight := false.B }
   }
-  when (cohIn.req.fire()) { cohInflight := true.B }
+  when (cohIn.req.fire) { cohInflight := true.B }
 
   cohIn.req.bits.apply(addr = rand.cohAddr * 8.U + memBase.U, size = "b11".U,
     wdata = 0.U, wmask = 0.U, cmd = SimpleBusCmd.probe)
   cohIn.req.valid := (state === s_test) && rand.cohChoose === 0.U && !cohInflight
   cohIn.resp.ready := rand.cohReadyChoose =/= 0.U
 
-  when (Counter((state === s_test) && in.resp.fire(), printCnt)._2) { printf(".") }
-  when (Counter((state === s_test) && cohIn.req.fire(), printCnt)._2) { printf("@") }
+  when (Counter((state === s_test) && in.resp.fire, printCnt)._2) { printf(".") }
+  when (Counter((state === s_test) && cohIn.req.fire, printCnt)._2) { printf("@") }
 
   Debug(false) {
-    when (in.req.fire()) { printf(p"${GTimer()},[in.req] ${in.req.bits}\n") }
+    when (in.req.fire) { printf(p"${GTimer()},[in.req] ${in.req.bits}\n") }
   }
 
   def checkData(addr: UInt, data: UInt): Bool = data === Fill(2, addr)
@@ -150,7 +150,7 @@ class NutCoreSimTop extends Module {
   }
 
   // check rdata from cohIn
-  val cohAddr = RegEnable(cohIn.req.bits.addr(31,0), cohIn.req.fire())
+  val cohAddr = RegEnable(cohIn.req.bits.addr(31,0), cohIn.req.fire)
   when (cohIn.resp.valid) {
     val resp = cohIn.resp.bits
     val isRead = resp.cmd === SimpleBusCmd.readLast || resp.cmd === SimpleBusCmd.read

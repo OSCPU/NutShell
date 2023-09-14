@@ -62,7 +62,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   axi2sb.io.in <> io.frontend
   nutcore.io.frontend <> axi2sb.io.out
 
-  val memport = xbar.io.out.toMemPort()
+  val memport = xbar.io.out.toMemPort
   memport.resp.bits.data := DontCare
   memport.resp.valid := DontCare
   memport.req.ready := DontCare
@@ -111,14 +111,14 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   else { io.mmio <> extDev }
 
   val clint = Module(new AXI4CLINT(sim = !p.FPGAPlatform))
-  clint.io.in <> mmioXbar.io.out(0).toAXI4Lite()
+  clint.io.in <> mmioXbar.io.out(0).toAXI4Lite
   val mtipSync = clint.io.extra.get.mtip
   val msipSync = clint.io.extra.get.msip
   BoringUtils.addSource(mtipSync, "mtip")
   BoringUtils.addSource(msipSync, "msip")
 
   val plic = Module(new AXI4PLIC(nrIntr = Settings.getInt("NrExtIntr"), nrHart = 1))
-  plic.io.in <> mmioXbar.io.out(1).toAXI4Lite()
+  plic.io.in <> mmioXbar.io.out(1).toAXI4Lite
   plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
   val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
@@ -126,7 +126,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
 
   // ILA
   if (p.FPGAPlatform) {
-    def BoringUtilsConnect(sink: UInt, id: String) {
+    def BoringUtilsConnect(sink: UInt, id: String) = {
       val temp = WireInit(0.U(64.W))
       BoringUtils.addSink(temp, id)
       sink := temp

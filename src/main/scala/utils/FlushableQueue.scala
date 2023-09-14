@@ -28,8 +28,8 @@ class FlushableQueue[T <: Data](gen: T, val entries: Int,
   private val ptr_match = enq_ptr.value === deq_ptr.value
   private val empty = ptr_match && !maybe_full
   private val full = ptr_match && maybe_full
-  private val do_enq = WireInit(io.enq.fire())
-  private val do_deq = WireInit(io.deq.fire())
+  private val do_enq = WireInit(io.enq.fire)
+  private val do_deq = WireInit(io.deq.fire)
 
   when (do_enq) {
     ram(enq_ptr.value) := io.enq.bits
@@ -96,7 +96,7 @@ object FlushableQueue {
       q.io.enq.bits := enq.bits
       q.io.flush := flush
       enq.ready := q.io.enq.ready
-      TransitName(q.io.deq, q)
+      q.io.deq
     }
   }
 }
