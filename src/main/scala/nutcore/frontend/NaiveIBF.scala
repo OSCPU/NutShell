@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -35,7 +35,7 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
 
   //RVC support FSM
   //only ensure pnpc given by this FSM is right. May need flush after 6 offset 32 bit inst
-  val s_idle :: s_extra :: s_waitnext :: s_waitnext_thenj :: Nil = Enum(4) 
+  val s_idle :: s_extra :: s_waitnext :: s_waitnext_thenj :: Nil = Enum(4)
   val state = RegInit(UInt(2.W), s_idle)
   val pcOffsetR = RegInit(UInt(3.W), 0.U)
   val pcOffset = Mux(state === s_idle, io.in.bits.pc(2,0), pcOffsetR)
@@ -45,14 +45,14 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
   val canIn = WireInit(false.B)
   val brIdx = io.in.bits.brIdx
   // val brIdx = 0.U
-  val rvcFinish = pcOffset === 0.U && (!isRVC || brIdx(0)) || pcOffset === 4.U && (!isRVC || brIdx(0)) || pcOffset === 2.U && (isRVC || brIdx(1)) || pcOffset === 6.U && isRVC  
+  val rvcFinish = pcOffset === 0.U && (!isRVC || brIdx(0)) || pcOffset === 4.U && (!isRVC || brIdx(0)) || pcOffset === 2.U && (isRVC || brIdx(1)) || pcOffset === 6.U && isRVC
   // if brIdx(0) (branch taken at inst with offest 0), ignore the rest part of this instline
   // just get next pc and instline from IFU
   val rvcNext = pcOffset === 0.U && (isRVC && !brIdx(0)) || pcOffset === 4.U && (isRVC && !brIdx(0)) || pcOffset === 2.U && !isRVC && !brIdx(1)
   val rvcSpecial = pcOffset === 6.U && !isRVC && !brIdx(2)
   val rvcSpecialJump = pcOffset === 6.U && !isRVC && brIdx(2)
   val pnpcIsSeq = brIdx(3)
-  // val pnpcIsSeqRight = io.in.bits.pnpc === (Cat(io.in.bits.pc(VAddrBits-1,2), 0.U(2.W)) + 4.U) // TODO: add a new user bit bpRight to do this 
+  // val pnpcIsSeqRight = io.in.bits.pnpc === (Cat(io.in.bits.pc(VAddrBits-1,2), 0.U(2.W)) + 4.U) // TODO: add a new user bit bpRight to do this
   // assert(pnpcIsSeq === pnpcIsSeqRight)
   val flushIFU = (state === s_idle || state === s_extra) && rvcSpecial && io.in.valid && !pnpcIsSeq
   Debug(flushIFU, "flushIFU at pc %x offset %x\n", io.in.bits.pc, pcOffset)
@@ -65,15 +65,15 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
   val specialNPCR = Reg(UInt(VAddrBits.W)) // reg for pnc for full inst jump that cross 2 inst line
   val specialInstR = Reg(UInt(16.W))
   val specialIPFR = RegInit(Bool(), false.B)
-  val redirectPC = Cat(io.in.bits.pc(VAddrBits-1,3), 0.U(3.W))+"b1010".U // IDU can got get full inst from a single inst line  
+  val redirectPC = Cat(io.in.bits.pc(VAddrBits-1,3), 0.U(3.W))+"b1010".U // IDU can got get full inst from a single inst line
   val rvcForceLoadNext = (pcOffset === 2.U && !isRVC && io.in.bits.pnpc(2,0) === 4.U && !brIdx(1))
   //------------------------------------------------------
-  // rvcForceLoadNext is used to deal with: 
+  // rvcForceLoadNext is used to deal with:
   // case 1:
   // 8010004a:	406007b7          	lui	a5,0x40600
   // 8010004e:	470d                	li	a4,3
   // 80100050:	00e78623          	sb	a4,12(a5) # 4060000c <_start-0x3faffff4>
-  // For icache req inst in seq, if there is no rvcForceLoadNext, 
+  // For icache req inst in seq, if there is no rvcForceLoadNext,
   // after 8010004e there will be 8010004c instead of 80100050
   //------------------------------------------------------
   // case 2:
@@ -82,7 +82,7 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
   // force load next instline into ID stage, if bp wrong, it will be flushed by flushIFU
   //------------------------------------------------------
   // if there is a j inst in current inst line, a redirect req will be sent by ALU before invalid inst exception being committed
-  // when brIdx(1), next instline will just be branch target, eatline is no longer needed 
+  // when brIdx(1), next instline will just be branch target, eatline is no longer needed
 
   // only for test, add this to pipeline when do real implementation
   // val predictBranch = io.in.valid && Mux(io.in.bits.pc(1), io.in.bits.pc + 2.U === io.in.bits.pnpc, io.in.bits.pc + 4.U === io.in.bits.pnpc)
@@ -101,46 +101,46 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
         canIn := rvcFinish || rvcForceLoadNext
         pcOut := io.in.bits.pc
         pnpcOut := Mux(rvcFinish, io.in.bits.pnpc, Mux(isRVC, io.in.bits.pc+2.U, io.in.bits.pc+4.U))
-        when(io.out.fire() && rvcFinish){state := s_idle}
-        when(io.out.fire() && rvcNext){
+        when(io.out.fire && rvcFinish){state := s_idle}
+        when(io.out.fire && rvcNext){
           state := s_extra
           pcOffsetR := pcOffset + Mux(isRVC, 2.U, 4.U)
         }
         when(rvcSpecial && io.in.valid){
           state := s_waitnext
           specialPCR := pcOut
-          specialInstR := io.in.bits.instr(63,63-16+1) 
+          specialInstR := io.in.bits.instr(63,63-16+1)
           specialIPFR := io.in.bits.exceptionVec(instrPageFault)
         }
         when(rvcSpecialJump && io.in.valid){
           state := s_waitnext_thenj
           specialPCR := pcOut
           specialNPCR := io.in.bits.pnpc
-          specialInstR := io.in.bits.instr(63,63-16+1) 
+          specialInstR := io.in.bits.instr(63,63-16+1)
           specialIPFR := io.in.bits.exceptionVec(instrPageFault)
         }
       }
       is(s_extra){//get 16 aligned inst, pc controled by this FSM
         canGo := rvcFinish || rvcNext
         canIn := rvcFinish || rvcForceLoadNext
-        pcOut := Cat(io.in.bits.pc(VAddrBits-1,3), pcOffsetR(2,0)) 
+        pcOut := Cat(io.in.bits.pc(VAddrBits-1,3), pcOffsetR(2,0))
         pnpcOut := Mux(rvcFinish, io.in.bits.pnpc, Mux(isRVC, pcOut+2.U, pcOut+4.U))
-        when(io.out.fire() && rvcFinish){state := s_idle}
-        when(io.out.fire() && rvcNext){
+        when(io.out.fire && rvcFinish){state := s_idle}
+        when(io.out.fire && rvcNext){
           state := s_extra
           pcOffsetR := pcOffset + Mux(isRVC, 2.U, 4.U)
         }
         when(rvcSpecial && io.in.valid){
           state := s_waitnext
           specialPCR := pcOut
-          specialInstR := io.in.bits.instr(63,63-16+1) 
+          specialInstR := io.in.bits.instr(63,63-16+1)
           specialIPFR := io.in.bits.exceptionVec(instrPageFault)
         }
         when(rvcSpecialJump && io.in.valid){
           state := s_waitnext_thenj
           specialPCR := pcOut
           specialNPCR := io.in.bits.pnpc
-          specialInstR := io.in.bits.instr(63,63-16+1) 
+          specialInstR := io.in.bits.instr(63,63-16+1)
           specialIPFR := io.in.bits.exceptionVec(instrPageFault)
         }
       }
@@ -151,7 +151,7 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
         // pnpcOut := Mux(rvcFinish, io.in.bits.pnpc, Mux(isRVC, pcOut+2.U, pcOut+4.U))
         canGo := io.in.valid
         canIn := false.B
-        when(io.out.fire()){
+        when(io.out.fire){
           state := s_extra
           pcOffsetR := "b010".U
         }
@@ -163,7 +163,7 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
         // pnpcOut := Mux(rvcFinish, io.in.bits.pnpc, Mux(isRVC, pcOut+2.U, pcOut+4.U))
         canGo := io.in.valid
         canIn := true.B
-        when(io.out.fire()){
+        when(io.out.fire){
           state := s_idle
         }
       }
@@ -185,7 +185,7 @@ class NaiveRVCAlignBuffer extends NutCoreModule with HasInstrType with HasExcept
   io.out.bits.brIdx := Mux((pnpcOut === pcOut+4.U && !isRVC) || (pnpcOut === pcOut+2.U && isRVC), false.B, true.B)
 
   io.out.valid := io.in.valid && canGo
-  io.in.ready := (!io.in.valid || (io.out.fire() && canIn) || loadNextInstline)
+  io.in.ready := (!io.in.valid || (io.out.fire && canIn) || loadNextInstline)
 
   io.out.bits.exceptionVec := io.in.bits.exceptionVec
   io.out.bits.exceptionVec(instrPageFault) := io.in.bits.exceptionVec(instrPageFault) || specialIPFR && (state === s_waitnext_thenj || state === s_waitnext)

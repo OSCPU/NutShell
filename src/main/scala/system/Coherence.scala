@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package system
@@ -73,27 +73,27 @@ class CoherenceManager extends Module with HasCoherenceParameter {
 
   switch (state) {
     is (s_idle) {
-      when (thisReq.fire()) {
+      when (thisReq.fire) {
         when (thisReq.bits.isRead()) { state := Mux(supportCoh.B, s_probeResp, s_memReadResp) }
         .elsewhen (thisReq.bits.isWriteLast()) { state := s_memWriteResp }
       }
     }
     is (s_probeResp) {
-      when (io.out.coh.resp.fire()) {
-        state := Mux(io.out.coh.resp.bits.isProbeHit(), s_probeForward, s_memReadReq)
+      when (io.out.coh.resp.fire) {
+        state := Mux(io.out.coh.resp.bits.isProbeHit, s_probeForward, s_memReadReq)
       }
     }
     is (s_probeForward) {
       val thisResp = io.in.resp
       thisResp <> io.out.coh.resp
-      when (thisResp.fire() && thisResp.bits.isReadLast()) { state := s_idle }
+      when (thisResp.fire && thisResp.bits.isReadLast) { state := s_idle }
     }
     is (s_memReadReq) {
       io.out.mem.req.bits := reqLatch
       io.out.mem.req.valid := true.B
-      when (io.out.mem.req.fire()) { state := s_memReadResp }
+      when (io.out.mem.req.fire) { state := s_memReadResp }
     }
-    is (s_memReadResp) { when (io.out.mem.resp.fire() && io.out.mem.resp.bits.isReadLast()) { state := s_idle } }
-    is (s_memWriteResp) { when (io.out.mem.resp.fire()) { state := s_idle } }
+    is (s_memReadResp) { when (io.out.mem.resp.fire && io.out.mem.resp.bits.isReadLast) { state := s_idle } }
+    is (s_memWriteResp) { when (io.out.mem.resp.fire) { state := s_idle } }
   }
 }

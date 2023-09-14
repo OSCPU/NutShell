@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -86,7 +86,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val intrNO = Reg(Vec(robSize, Vec(robWidth, UInt(XLEN.W))))
   val prf = Mem(robSize * robWidth, UInt(XLEN.W))
 
-  // lsroq 
+  // lsroq
   // Currently, ROB is also used as lsroq when out of order store is enabled
   val load = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
   val store = RegInit(VecInit(List.fill(robSize)(VecInit(List.fill(robWidth)(false.B)))))
@@ -100,13 +100,13 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val ringBufferTail = RegInit(0.U(log2Up(robSize).W))
   val ringBufferEmpty = ringBufferHead === ringBufferTail && !valid(ringBufferHead)(0) && !valid(ringBufferHead)(1)
   val ringBufferFull = ringBufferTail === ringBufferHead && (valid(ringBufferHead)(0) || valid(ringBufferHead)(1))
-  val ringBufferAllowin = !ringBufferFull 
+  val ringBufferAllowin = !ringBufferFull
 
 
   io.index := ringBufferHead
   io.empty := ringBufferEmpty
 
-  // Register Map  
+  // Register Map
   val rmtMap = Reg(Vec(NRReg, UInt(prfAddrWidth.W)))
   val rmtValid = RegInit(VecInit(Seq.fill(NRReg)(false.B)))
 
@@ -212,15 +212,15 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       valid(ringBufferTail)(i) := false.B
       // free prf (update RMT)
       when(
-        decode(ringBufferTail)(i).ctrl.rfWen && 
-        rmtMap(decode(ringBufferTail)(i).ctrl.rfDest) === Cat(ringBufferTail, i.U(1.W)) && // no other in flight inst will write this reg 
+        decode(ringBufferTail)(i).ctrl.rfWen &&
+        rmtMap(decode(ringBufferTail)(i).ctrl.rfDest) === Cat(ringBufferTail, i.U(1.W)) && // no other in flight inst will write this reg
         valid(ringBufferTail)(i)
       ){
         rmtValid(decode(ringBufferTail)(i).ctrl.rfDest) := false.B
       }
       // update checkpoint
       when(
-        decode(ringBufferTail)(i).ctrl.rfWen && 
+        decode(ringBufferTail)(i).ctrl.rfWen &&
         valid(ringBufferTail)(i)
       ){
         (0 until checkpointSize).map(k => {
@@ -258,7 +258,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     (0 until RetireWidth).map(_.U)
   )
   io.redirect := redirect(ringBufferTail)(redirectBank)
-  io.redirect.valid := retireATerm && List.tabulate(robWidth)(i => 
+  io.redirect.valid := retireATerm && List.tabulate(robWidth)(i =>
     redirect(ringBufferTail)(i).valid && valid(ringBufferTail)(i)
   ).reduce(_ || _)
   // io.redirect.rtype := 0.U
@@ -276,7 +276,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // By doing this, we can treat CSR module as a single cycle FU.
 
   // TODO: delay 1 cycle for better timing performance
-  io.exception := 
+  io.exception :=
     valid(ringBufferTail)(0) && exception(ringBufferTail)(0) ||
     valid(ringBufferTail)(1) && exception(ringBufferTail)(1) && (!valid(ringBufferTail)(0) || commited(ringBufferTail)(0) && !redirect(ringBufferTail)(0).valid)
 
@@ -311,17 +311,17 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   when(io.exception){ cancelScommit := true.B }
   when(io.flush){ cancelScommit := false.B }
 
-  io.scommit := List.tabulate(robWidth)(i => 
-    valid(ringBufferTail)(i) && 
-    store(ringBufferTail)(i) && 
-    List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) && 
+  io.scommit := List.tabulate(robWidth)(i =>
+    valid(ringBufferTail)(i) &&
+    store(ringBufferTail)(i) &&
+    List.tabulate(i)(j => (!redirect(ringBufferTail)(j).valid)).foldRight(true.B)((sum, k) => sum && k) &&
     List.tabulate(i+1)(j => (!exception(ringBufferTail)(j))).foldRight(true.B)((sum, k) => sum && k) &&
     !cancelScommit
   ).reduce(_ || _) && retireATerm
   // In current version, only one l/s inst can be sent to agu in a cycle
   // therefore, in all banks, there is no more than 1 store insts
 
-  Debug(io.scommit, "[SCommit] %x %x %x %x\n", 
+  Debug(io.scommit, "[SCommit] %x %x %x %x\n",
         redirect(ringBufferTail)(0).valid,
         redirect(ringBufferTail)(1).valid,
         exception(ringBufferTail)(0),
@@ -350,9 +350,9 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       Q1.io.deq.bits =/= lsupc &&
       Q2.io.deq.bits =/= lsupc ||
       !Q1.io.deq.valid
-    ) 
+    )
   ){
-    Debug("[ERROR] robpc1 %x robpc2 %x v %x lsupc %x\n", 
+    Debug("[ERROR] robpc1 %x robpc2 %x v %x lsupc %x\n",
       Q1.io.deq.bits,
       Q2.io.deq.bits,
       Q1.io.deq.valid,
@@ -415,10 +415,10 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // Send robInstValid signal to LSU for "backward"
   val robLoadInstVec = WireInit(VecInit((0 until robSize).map(i => {
     (0 until robWidth).map(j => valid(i)(j) && load(i)(j)).reduce(_ || _)
-  })).asUInt) 
+  })).asUInt)
   val robStoreInstVec = WireInit(VecInit((0 until robSize).map(i => {
     (0 until robWidth).map(j => valid(i)(j) && store(i)(j)).reduce(_ || _)
-  })).asUInt) 
+  })).asUInt)
   // TODO: use a single bit in rob misc field to save "isload"
   BoringUtils.addSource(robLoadInstVec, "ROBLoadInstVec")
   BoringUtils.addSource(robStoreInstVec, "ROBStoreInstVec")
@@ -438,8 +438,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   // Generate Debug Info
-    Debug(io.in(0).fire(), "[DISPATCH1] pc = 0x%x inst %x wen %x wdst %x\n", io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)
-    Debug(io.in(1).fire(), "[DISPATCH2] pc = 0x%x inst %x wen %x wdst %x\n", io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)
+    Debug(io.in(0).fire, "[DISPATCH1] pc = 0x%x inst %x wen %x wdst %x\n", io.in(0).bits.cf.pc, io.in(0).bits.cf.instr, io.in(0).bits.ctrl.rfWen, io.in(0).bits.ctrl.rfDest)
+    Debug(io.in(1).fire, "[DISPATCH2] pc = 0x%x inst %x wen %x wdst %x\n", io.in(1).bits.cf.pc, io.in(1).bits.cf.instr, io.in(1).bits.ctrl.rfWen, io.in(1).bits.ctrl.rfDest)
     Debug(io.cdb(0).valid, "[COMMIT1] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(0).bits.decode.cf.pc, io.cdb(0).bits.decode.cf.instr, io.cdb(0).bits.decode.ctrl.rfWen, io.cdb(0).bits.decode.ctrl.rfDest, io.cdb(0).bits.commits)
     Debug(io.cdb(1).valid, "[COMMIT2] pc = 0x%x inst %x wen %x wdst %x wdata = 0x%x\n", io.cdb(1).bits.decode.cf.pc, io.cdb(1).bits.decode.cf.instr, io.cdb(1).bits.decode.ctrl.rfWen, io.cdb(1).bits.decode.ctrl.rfDest, io.cdb(1).bits.commits)
     Debug(retireATerm && valid(ringBufferTail)(0), "[RETIRE1] pc = 0x%x inst %x wen %x wdst %x wdata %x mmio %x intrNO %x\n", decode(ringBufferTail)(0).cf.pc, decode(ringBufferTail)(0).cf.instr, io.wb(0).rfWen, io.wb(0).rfDest, io.wb(0).rfData, isMMIO(ringBufferTail)(0), intrNO(ringBufferTail)(0))
@@ -463,7 +463,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     Debug("\n")
     Debug("[ROB] pc           v w c r e   pc           v w c r e\n")
     for(i <- 0 to (robSize - 1)){
-      Debug("[ROB] 0x%x %d %d %d %d %d   0x%x %d %d %d %d %d  " + i, 
+      Debug("[ROB] 0x%x %d %d %d %d %d   0x%x %d %d %d %d %d  " + i,
         decode(i)(0).cf.pc, valid(i)(0), commited(i)(0), canceled(i)(0), redirect(i)(0).valid && valid(i)(0), exception(i)(0),
         decode(i)(1).cf.pc, valid(i)(1), commited(i)(1), canceled(i)(1), redirect(i)(1).valid && valid(i)(1), exception(i)(1)
       )
@@ -472,7 +472,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       when(ringBufferTail === i.U){Debug("  tail")}
       Debug("\n")
     }
-    
+
     // for(i <- 0 to (robSize - 1)){
     //   Debug("[ROB] %b %b " + i + "\n", brMask(i)(0), brMask(i)(1))
     // }

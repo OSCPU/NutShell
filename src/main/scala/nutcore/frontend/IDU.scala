@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -39,7 +39,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   // val instrType :: fuType :: fuOpType :: Nil = ListLookup(instr, Instructions.DecodeDefault, Instructions.DecodeTable)
   val isRVC = if (HasCExtension) instr(1,0) =/= "b11".U else false.B
   val rvcImmType :: rvcSrc1Type :: rvcSrc2Type :: rvcDestType :: Nil =
-    ListLookup(instr, CInstructions.DecodeDefault, CInstructions.CExtraDecodeTable) 
+    ListLookup(instr, CInstructions.DecodeDefault, CInstructions.CExtraDecodeTable)
 
   io.out.bits := DontCare
 
@@ -65,7 +65,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   val rs2       = instr(6,2)
   val rs1p      = LookupTree(instr(9,7), RVCInstr.RVCRegNumTable.map(p => (p._1, p._2)))
   val rs2p      = LookupTree(instr(4,2), RVCInstr.RVCRegNumTable.map(p => (p._1, p._2)))
-  val rvc_shamt = Cat(instr(12),instr(6,2)) 
+  val rvc_shamt = Cat(instr(12),instr(6,2))
   // val rdp_rs1p = LookupTree(instr(9,7), RVCRegNumTable)
   // val rdp      = LookupTree(instr(4,2), RVCRegNumTable)
 
@@ -124,8 +124,8 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
     RVCInstr.ImmADDI16SP-> SignExt(Cat(instr(12), instr(4,3), instr(5), instr(2), instr(6), 0.U(4.W)), XLEN),
     RVCInstr.ImmADD4SPN-> ZeroExt(Cat(instr(10,7), instr(12,11), instr(5), instr(6), 0.U(2.W)), XLEN),
     RVCInstr.ImmCBREAK -> 1.U(XLEN.W)
-    // ImmFLWSP  -> 
-    // ImmFLDSP  -> 
+    // ImmFLWSP  ->
+    // ImmFLDSP  ->
   ))
   io.out.bits.data.imm  := Mux(isRVC, immrvc, imm)
 
@@ -159,12 +159,12 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
 
   //output signals
   io.out.valid := io.in.valid
-  io.in.ready := !io.in.valid || io.out.fire() && !hasIntr
+  io.in.ready := !io.in.valid || io.out.fire && !hasIntr
   io.out.bits.cf <> io.in.bits
   // fix c_break
 
 
-  Debug(io.out.fire(), "issue: pc %x npc %x instr %x\n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr)
+  Debug(io.out.fire, "issue: pc %x npc %x instr %x\n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr)
 
   val intrVec = WireInit(0.U(12.W))
   BoringUtils.addSink(intrVec, "intrVecIDU")
@@ -185,7 +185,8 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
 
   io.out.bits.ctrl.isNutCoreTrap := (instr === NutCoreTrap.TRAP) && io.in.valid
   io.isWFI := (instr === Priviledged.WFI) && io.in.valid
-  io.isBranch := VecInit(RV32I_BRUInstr.table.map(i => i._2.tail(1) === fuOpType)).asUInt.orR && fuType === FuType.bru
+  io.isBranch := VecInit(RV32I_BRUInstr.table.map(i => i._2.tail(1) === fuOpType).toIndexedSeq).asUInt.orR &&
+    fuType === FuType.bru
 
 }
 

@@ -51,13 +51,13 @@ class SimMMIO extends Module {
   val sd = Module(new AXI4DummySD)
   val meipGen = Module(new AXI4MeipGen)
   val dma = Module(new AXI4DMA)
-  uart.io.in <> xbar.io.out(0).toAXI4Lite()
-  vga.io.in.fb <> xbar.io.out(1).toAXI4Lite()
-  vga.io.in.ctrl <> xbar.io.out(2).toAXI4Lite()
-  flash.io.in <> xbar.io.out(3).toAXI4Lite()
-  sd.io.in <> xbar.io.out(4).toAXI4Lite()
-  meipGen.io.in <> xbar.io.out(5).toAXI4Lite()
-  dma.io.in <> xbar.io.out(6).toAXI4Lite()
+  uart.io.in <> xbar.io.out(0).toAXI4Lite
+  vga.io.in.fb <> xbar.io.out(1).toAXI4Lite
+  vga.io.in.ctrl <> xbar.io.out(2).toAXI4Lite
+  flash.io.in <> xbar.io.out(3).toAXI4Lite
+  sd.io.in <> xbar.io.out(4).toAXI4Lite
+  meipGen.io.in <> xbar.io.out(5).toAXI4Lite
+  dma.io.in <> xbar.io.out(6).toAXI4Lite
   io.dma <> dma.io.extra.get.dma
   io.meip := meipGen.io.extra.get.meip
   uart.io.extra.get <> io.uart
