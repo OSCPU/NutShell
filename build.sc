@@ -2,7 +2,7 @@ import mill._, scalalib._
 import coursier.maven.MavenRepository
 
 object ivys {
-  val scala = "2.12.13"
+  val scala = "2.13.10"
   val chisel3 = ivy"edu.berkeley.cs::chisel3:3.5.6"
   val chisel3Plugin = ivy"edu.berkeley.cs:::chisel3-plugin:3.5.6"
 }
@@ -10,7 +10,7 @@ object ivys {
 trait CommonModule extends ScalaModule {
   override def scalaVersion = ivys.scala
 
-  override def scalacOptions = Seq("-Xsource:2.11")
+  override def scalacOptions = Seq("-Ymacro-annotations")
 }
 
 trait HasChisel3 extends ScalaModule {
@@ -25,7 +25,7 @@ trait HasChisel3 extends ScalaModule {
 
 trait HasChiselTests extends SbtModule {
   object test extends SbtModuleTests with TestModule.ScalaTest {
-    override def ivyDeps = Agg(ivy"edu.berkeley.cs::chisel-iotesters:1.2+")
+    override def ivyDeps = Agg(ivy"edu.berkeley.cs::chiseltest:0.5.4")
   }
 }
 

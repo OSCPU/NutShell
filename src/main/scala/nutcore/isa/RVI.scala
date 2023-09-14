@@ -167,5 +167,5 @@ object RV64IInstr extends HasInstrType {
 
 object RVIInstr extends HasNutCoreParameter {
   val table = RV32I_ALUInstr.table ++ RV32I_BRUInstr.table ++ RV32I_LSUInstr.table ++
-    (if (XLEN == 64) RV64IInstr.table else Nil)
+    (if (XLEN == 64) RV64IInstr.table else Array.empty)
 }
