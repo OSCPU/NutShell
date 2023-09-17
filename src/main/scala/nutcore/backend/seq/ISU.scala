@@ -94,9 +94,9 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   Debug(io.out.fire, "issue: pc %x npc %x instr %x src1 %x src2 %x imm %x\n", io.out.bits.cf.pc, io.out.bits.cf.pnpc, io.out.bits.cf.instr, io.out.bits.data.src1, io.out.bits.data.src2, io.out.bits.data.imm)
 
   // read after write
-  BoringUtils.addSource(io.in(0).valid && !io.out.valid, "perfCntCondMrawStall")
-  BoringUtils.addSource(io.out.valid && !io.out.fire, "perfCntCondMexuBusy")
-  BoringUtils.addSource(io.out.fire, "perfCntCondISUIssue")
+  BoringUtils.addSource(WireInit(io.in(0).valid && !io.out.valid), "perfCntCondMrawStall")
+  BoringUtils.addSource(WireInit(io.out.valid && !io.out.fire), "perfCntCondMexuBusy")
+  BoringUtils.addSource(WireInit(io.out.fire), "perfCntCondISUIssue")
 
   if (!p.FPGAPlatform) {
     val difftest = DifftestModule(new DiffArchIntRegState)

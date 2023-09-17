@@ -253,7 +253,7 @@ class IFU_ooo extends NutCoreModule with HasResetVector {
   }
 
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire), "perfCntCondMimemStall")
-  BoringUtils.addSource(io.flushVec.orR, "perfCntCondMifuFlush")
+  BoringUtils.addSource(WireInit(io.flushVec.orR), "perfCntCondMifuFlush")
 }
 
 class IFU_embedded extends NutCoreModule with HasResetVector {
@@ -303,7 +303,7 @@ class IFU_embedded extends NutCoreModule with HasResetVector {
   Debug(io.out.fire, "[IFO] pc=%x user=%x inst=%x npc=%x ipf %x\n", io.out.bits.pc, io.imem.resp.bits.user.get, io.out.bits.instr, io.out.bits.pnpc, io.ipf)
 
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire), "perfCntCondMimemStall")
-  BoringUtils.addSource(io.flushVec.orR, "perfCntCondMifuFlush")
+  BoringUtils.addSource(WireInit(io.flushVec.orR), "perfCntCondMifuFlush")
 }
 
 class IFU_inorder extends NutCoreModule with HasResetVector {
@@ -391,5 +391,5 @@ class IFU_inorder extends NutCoreModule with HasResetVector {
   io.out.valid := io.imem.resp.valid && !io.flushVec(0)
 
   BoringUtils.addSource(BoolStopWatch(io.imem.req.valid, io.imem.resp.fire), "perfCntCondMimemStall")
-  BoringUtils.addSource(io.flushVec.orR, "perfCntCondMifuFlush")
+  BoringUtils.addSource(WireInit(io.flushVec.orR), "perfCntCondMifuFlush")
 }

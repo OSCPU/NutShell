@@ -216,6 +216,6 @@ class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // }
 
   if (!p.FPGAPlatform) {
-    BoringUtils.addSource(decoder1.io.isWFI | decoder2.io.isWFI, "isWFI")
+    BoringUtils.addSource(WireInit(decoder1.io.isWFI | decoder2.io.isWFI), "isWFI")
   }
 }

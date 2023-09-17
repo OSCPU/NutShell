@@ -604,7 +604,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val intrVecEnable = Wire(Vec(12, Bool()))
   intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
   val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
-  BoringUtils.addSource(intrVec, "intrVecIDU")
+  BoringUtils.addSource(WireInit(intrVec), "intrVecIDU")
   // val intrNO = PriorityEncoder(intrVec)
 
   val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
@@ -746,8 +746,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     "McsrInstr"   -> (0xb09, "perfCntCondMcsrInstr"  ),
     "MloadInstr"  -> (0xb0a, "perfCntCondMloadInstr" ),
     "MmmioInstr"  -> (0xb0b, "perfCntCondMmmioInstr" ),
-    "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit" ),
-    "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit" ),
+    // "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit" ),
+    // "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit" ),
     "MmulInstr"   -> (0xb0e, "perfCntCondMmulInstr"  ),
     "MifuFlush"   -> (0xb0f, "perfCntCondMifuFlush"  ),
     "MbpBRight"   -> (0xb10, "MbpBRight"             ),
@@ -758,7 +758,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     "MbpIWrong"   -> (0xb15, "MbpIWrong"             ),
     "MbpRRight"   -> (0xb16, "MbpRRight"             ),
     "MbpRWrong"   -> (0xb17, "MbpRWrong"             ),
-    "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"),
+    // "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"),
     "Custom1"     -> (0xb19, "Custom1"               ),
     "Custom2"     -> (0xb1a, "Custom2"               ),
     "Custom3"     -> (0xb1b, "Custom3"               ),
@@ -840,9 +840,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val pendingLS = WireInit(0.U(5.W))
   val pendingSCmt = WireInit(0.U(5.W))
   val pendingSReq = WireInit(0.U(5.W))
-  BoringUtils.addSink(pendingLS, "perfCntSrcMpendingLS")
-  BoringUtils.addSink(pendingSCmt, "perfCntSrcMpendingSCmt")
-  BoringUtils.addSink(pendingSReq, "perfCntSrcMpendingSReq")
+  if (EnableOutOfOrderExec) {
+    BoringUtils.addSink(pendingLS, "perfCntSrcMpendingLS")
+    BoringUtils.addSink(pendingSCmt, "perfCntSrcMpendingSCmt")
+    BoringUtils.addSink(pendingSReq, "perfCntSrcMpendingSReq")
+  }
   when(perfCntCond(0xb03 & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
   if (hasPerfCnt) {
     when(true.B) { perfCnts(0xb63 & 0x7f) := perfCnts(0xb63 & 0x7f) + pendingLS }
