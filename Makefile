@@ -64,4 +64,7 @@ clean:
 bsp:
 	mill -i mill.bsp.BSP/install
 
+mill:
+	mill -i mill.idea.GenIdea/idea
+
 .PHONY: verilog emu clean help $(REF_SO)
