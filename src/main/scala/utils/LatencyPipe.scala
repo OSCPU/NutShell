@@ -2,13 +2,14 @@
 
 package utils
 
-import Chisel._
+import chisel3._
+import chisel3.util._
 
 class LatencyPipe[T <: Data](typ: T, latency: Int) extends Module {
-  val io = new Bundle {
-    val in = Decoupled(typ).flip
-    val out = Decoupled(typ)
-  }
+  val io = IO(new Bundle {
+    val in = Flipped(DecoupledIO(typ))
+    val out = DecoupledIO(typ)
+  })
 
   def doN[T](n: Int, func: T => T, in: T): T =
     (0 until n).foldLeft(in)((last, _) => func(last))
@@ -18,7 +19,7 @@ class LatencyPipe[T <: Data](typ: T, latency: Int) extends Module {
 
 object LatencyPipe {
   def apply[T <: Data](in: DecoupledIO[T], latency: Int): DecoupledIO[T] = {
-    val pipe = Module(new LatencyPipe(in.bits, latency))
+    val pipe = Module(new LatencyPipe(in.bits.cloneType, latency))
     pipe.io.in <> in
     pipe.io.out
   }
