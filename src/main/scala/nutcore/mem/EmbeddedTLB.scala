@@ -46,7 +46,7 @@ class EmbeddedTLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   })
 
   //val tlbmd = Reg(Vec(Ways, UInt(tlbLen.W)))
-  val tlbmd = Mem(Sets, Vec(Ways, UInt(tlbLen.W)))
+  val tlbmd = Reg(Vec(Sets, Vec(Ways, UInt(tlbLen.W))))
   io.tlbmd := tlbmd(io.rindex)
 
   //val reset = WireInit(false.B)
@@ -65,7 +65,11 @@ class EmbeddedTLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   val dataword = Mux(resetState, 0.U, writeData)
   val wdata = VecInit(Seq.fill(Ways)(dataword))
 
-  when (wen) { tlbmd.write(setIdx, wdata, waymask.asBools) }
+  for (((d, m), i) <- wdata.zip(waymask.asBools).zipWithIndex) {
+    when (wen && m) {
+      tlbmd(setIdx)(i) := d
+    }
+  }
 
   io.ready := !resetState
   def rready() = !resetState
@@ -143,9 +147,9 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasT
     val alreadyOutFinish = RegEnable(true.B, false.B, tlbExec.io.out.valid && !tlbExec.io.out.ready)
     when(alreadyOutFinish && tlbExec.io.out.fire) { alreadyOutFinish := false.B}
     val tlbFinish = (tlbExec.io.out.valid && !alreadyOutFinish) || tlbExec.io.pf.isPF()
-    BoringUtils.addSource(tlbFinish, "DTLBFINISH")
-    BoringUtils.addSource(io.csrMMU.isPF(), "DTLBPF")
-    BoringUtils.addSource(vmEnable, "DTLBENABLE")
+    BoringUtils.addSource(WireInit(tlbFinish), "DTLBFINISH")
+    BoringUtils.addSource(WireInit(io.csrMMU.isPF()), "DTLBPF")
+    BoringUtils.addSource(WireInit(vmEnable), "DTLBENABLE")
   }
 
   // instruction page fault

@@ -123,16 +123,16 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   io.forward.fuType := io.in.bits.ctrl.fuType
 
   val isBru = ALUOpType.isBru(fuOpType)
-  BoringUtils.addSource(alu.io.out.fire && !isBru, "perfCntCondMaluInstr")
-  BoringUtils.addSource(alu.io.out.fire && isBru, "perfCntCondMbruInstr")
-  BoringUtils.addSource(lsu.io.out.fire, "perfCntCondMlsuInstr")
-  BoringUtils.addSource(mdu.io.out.fire, "perfCntCondMmduInstr")
-  BoringUtils.addSource(csr.io.out.fire, "perfCntCondMcsrInstr")
+  BoringUtils.addSource(WireInit(alu.io.out.fire && !isBru), "perfCntCondMaluInstr")
+  BoringUtils.addSource(WireInit(alu.io.out.fire && isBru), "perfCntCondMbruInstr")
+  BoringUtils.addSource(WireInit(lsu.io.out.fire), "perfCntCondMlsuInstr")
+  BoringUtils.addSource(WireInit(mdu.io.out.fire), "perfCntCondMmduInstr")
+  BoringUtils.addSource(WireInit(csr.io.out.fire), "perfCntCondMcsrInstr")
 
   if (!p.FPGAPlatform) {
     val cycleCnt = WireInit(0.U(64.W))
     val instrCnt = WireInit(0.U(64.W))
-    val nutcoretrap = io.in.bits.ctrl.isNutCoreTrap && io.in.valid
+    val nutcoretrap = WireInit(io.in.bits.ctrl.isNutCoreTrap && io.in.valid)
 
     BoringUtils.addSink(cycleCnt, "simCycleCnt")
     BoringUtils.addSink(instrCnt, "simInstrCnt")

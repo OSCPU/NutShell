@@ -55,9 +55,9 @@ class UnpipelinedLSU extends NutCoreModule with HasLSUConst {
     val lrReq   = valid & LSUOpType.isLR(func)
     val scReq   = valid & LSUOpType.isSC(func)
     if (Settings.get("HasDTLB")) {
-      BoringUtils.addSource(amoReq, "ISAMO")
+      BoringUtils.addSource(WireInit(amoReq), "ISAMO")
     }
-    BoringUtils.addSource(amoReq, "ISAMO2")
+    BoringUtils.addSource(WireInit(amoReq), "ISAMO2")
 
     val aq = io.instr(26)
     val rl = io.instr(25)
@@ -431,7 +431,7 @@ class LSExecUnit extends NutCoreModule {
 
   Debug(io.loadAddrMisaligned || io.storeAddrMisaligned, "misaligned addr detected\n")
 
-  BoringUtils.addSource(dmem.isRead && dmem.req.fire, "perfCntCondMloadInstr")
+  BoringUtils.addSource(WireInit(dmem.isRead && dmem.req.fire), "perfCntCondMloadInstr")
   BoringUtils.addSource(BoolStopWatch(dmem.isRead, dmem.resp.fire), "perfCntCondMloadStall")
   BoringUtils.addSource(BoolStopWatch(dmem.isWrite, dmem.resp.fire), "perfCntCondMstoreStall")
   BoringUtils.addSource(io.isMMIO, "perfCntCondMmmioInstr")

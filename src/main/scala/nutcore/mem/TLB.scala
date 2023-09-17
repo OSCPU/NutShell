@@ -334,9 +334,9 @@ class TLB(implicit val tlbConfig: TLBConfig) extends TlbModule{
     // when(alreadyOutFinish && tlbExec.io.out.fire) { alreadyOutFinish := false.B}
     when(alreadyOutFinish && tlbExec.io.out.valid) { alreadyOutFinish := false.B}//???
     val tlbFinish = (tlbExec.io.out.valid && !alreadyOutFinish) || tlbExec.io.pf.isPF()
-    BoringUtils.addSource(tlbFinish, "DTLBFINISH")
-    BoringUtils.addSource(io.csrMMU.isPF(), "DTLBPF")
-    BoringUtils.addSource(vmEnable, "DTLBENABLE")
+    BoringUtils.addSource(WireInit(tlbFinish), "DTLBFINISH")
+    BoringUtils.addSource(WireInit(io.csrMMU.isPF()), "DTLBPF")
+    BoringUtils.addSource(WireInit(vmEnable), "DTLBENABLE")
   }
 
   // instruction page fault

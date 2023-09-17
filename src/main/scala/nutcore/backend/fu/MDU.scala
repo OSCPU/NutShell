@@ -184,5 +184,5 @@ class MDU extends NutCoreModule {
 
   Debug("[FU-MDU] irv-orv %d %d - %d %d\n", io.in.ready, io.in.valid, io.out.ready, io.out.valid)
 
-  BoringUtils.addSource(mul.io.out.fire, "perfCntCondMmulInstr")
+  BoringUtils.addSource(WireInit(mul.io.out.fire), "perfCntCondMmulInstr")
 }

@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -157,24 +157,24 @@ class ALU(hasBru: Boolean = false) extends NutCoreModule {
 
   if(hasBru){
     BoringUtils.addSource(RegNext(bpuUpdateReq), "bpuUpdateReq")
-  
+
     val right = valid && isBru && !predictWrong
     val wrong = valid && isBru && predictWrong
-    BoringUtils.addSource(right && isBranch, "MbpBRight")
-    BoringUtils.addSource(wrong && isBranch, "MbpBWrong")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && isRVC, "Custom1")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && !isRVC, "Custom2")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && isRVC, "Custom3")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && !isRVC, "Custom4")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && isRVC, "Custom5")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && !isRVC, "Custom6")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && isRVC, "Custom7")
-    BoringUtils.addSource(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && !isRVC, "Custom8")
-    BoringUtils.addSource(right && (func === ALUOpType.jal || func === ALUOpType.call), "MbpJRight")
-    BoringUtils.addSource(wrong && (func === ALUOpType.jal || func === ALUOpType.call), "MbpJWrong")
-    BoringUtils.addSource(right && func === ALUOpType.jalr, "MbpIRight")
-    BoringUtils.addSource(wrong && func === ALUOpType.jalr, "MbpIWrong")
-    BoringUtils.addSource(right && func === ALUOpType.ret, "MbpRRight")
-    BoringUtils.addSource(wrong && func === ALUOpType.ret, "MbpRWrong")
+    BoringUtils.addSource(WireInit(right && isBranch), "MbpBRight")
+    BoringUtils.addSource(WireInit(wrong && isBranch), "MbpBWrong")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && isRVC), "Custom1")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h0".U && !isRVC), "Custom2")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && isRVC), "Custom3")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h2".U && !isRVC), "Custom4")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && isRVC), "Custom5")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h4".U && !isRVC), "Custom6")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && isRVC), "Custom7")
+    BoringUtils.addSource(WireInit(wrong && isBranch && io.cfIn.pc(2,0)==="h6".U && !isRVC), "Custom8")
+    BoringUtils.addSource(WireInit(right && (func === ALUOpType.jal || func === ALUOpType.call)), "MbpJRight")
+    BoringUtils.addSource(WireInit(wrong && (func === ALUOpType.jal || func === ALUOpType.call)), "MbpJWrong")
+    BoringUtils.addSource(WireInit(right && func === ALUOpType.jalr), "MbpIRight")
+    BoringUtils.addSource(WireInit(wrong && func === ALUOpType.jalr), "MbpIWrong")
+    BoringUtils.addSource(WireInit(right && func === ALUOpType.ret), "MbpRRight")
+    BoringUtils.addSource(WireInit(wrong && func === ALUOpType.ret), "MbpRWrong")
   }
 }

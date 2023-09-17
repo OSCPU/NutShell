@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -50,11 +50,11 @@ class MOU extends NutCoreModule {
   io.redirect.valid := valid
   io.redirect.rtype := 0.U
   val flushICache = valid && (func === MOUOpType.fencei)
-  BoringUtils.addSource(flushICache, "MOUFlushICache")
+  BoringUtils.addSource(WireInit(flushICache), "MOUFlushICache")
   Debug(flushICache, "Flush I$ at %x\n", io.cfIn.pc)
 
   val flushTLB = valid && (func === MOUOpType.sfence_vma)
-  BoringUtils.addSource(flushTLB, "MOUFlushTLB")
+  BoringUtils.addSource(WireInit(flushTLB), "MOUFlushTLB")
   Debug(flushTLB, "Sfence.vma at %x\n", io.cfIn.pc)
 
   io.out.bits := 0.U

@@ -267,7 +267,7 @@ sealed class CacheStage3(implicit val cacheConfig: CacheConfig) extends CacheMod
 
   // this is ugly
   if (cacheName == "dcache") {
-    BoringUtils.addSource(mmio, "lsuMMIO")
+    BoringUtils.addSource(WireInit(mmio), "lsuMMIO")
   }
 
   val useForwardData = io.in.bits.isForwardData && io.in.bits.waymask === io.in.bits.forwardData.waymask.getOrElse("b1".U)
@@ -558,7 +558,7 @@ class Cache_fake(implicit val cacheConfig: CacheConfig) extends CacheModule with
   val ismmio = AddressSpace.isMMIO(io.in.req.bits.addr)
   val ismmioRec = RegEnable(ismmio, io.in.req.fire)
   if (cacheConfig.name == "dcache") {
-    BoringUtils.addSource(ismmio, "lsuMMIO")
+    BoringUtils.addSource(WireInit(ismmio), "lsuMMIO")
   }
 
   val needFlush = RegInit(false.B)
