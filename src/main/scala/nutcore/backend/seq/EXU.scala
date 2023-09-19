@@ -139,7 +139,6 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
     BoringUtils.addSource(nutcoretrap, "nutcoretrap")
 
     val difftest = DifftestModule(new DiffTrapEvent)
-    difftest.clock    := clock
     difftest.coreid   := 0.U // TODO: nutshell does not support coreid auto config
     difftest.hasTrap  := nutcoretrap
     difftest.code     := io.in.bits.data.src1
