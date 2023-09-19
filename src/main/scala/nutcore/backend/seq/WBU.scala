@@ -46,7 +46,6 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
 
   if (!p.FPGAPlatform) {
     val difftest_commit = DifftestModule(new DiffInstrCommit, delay = 1, dontCare = true)
-    difftest_commit.clock  := clock
     difftest_commit.coreid := 0.U
     difftest_commit.index  := 0.U
     difftest_commit.valid  := io.in.valid
@@ -60,7 +59,6 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
     difftest_commit.wpdest := io.wb.rfDest
 
     val difftest_wb = DifftestModule(new DiffIntWriteback, delay = 1)
-    difftest_wb.clock   := clock
     difftest_wb.coreid  := 0.U
     difftest_wb.valid   := io.wb.rfWen && io.wb.rfDest =/= 0.U
     difftest_wb.address := io.wb.rfDest

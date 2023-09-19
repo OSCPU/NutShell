@@ -641,7 +641,6 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
 
   if (!p.FPGAPlatform) {
     val difftest = DifftestModule(new DiffArchIntRegState)
-    difftest.clock  := clock
     difftest.coreid := 0.U // TODO
     difftest.value  := VecInit((0 to NRReg-1).map(i => rf.read(i.U)))
   }
@@ -656,7 +655,6 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
     BoringUtils.addSource(nutcoretrap, "nutcoretrap")
 
     val difftest = DifftestModule(new DiffTrapEvent)
-    difftest.clock    := clock
     difftest.coreid   := 0.U // TODO: nutshell does not support coreid auto config
     difftest.hasTrap  := nutcoretrap
     difftest.code     := csrrs.io.out.bits.decode.data.src1

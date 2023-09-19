@@ -900,12 +900,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
       val difftest = DifftestModule(new DiffCSRState)
       difftest := RegNext(io.csrState)
-      difftest.clock := clock
       difftest.coreid := 0.U // TODO
 
       val difftestArchEvent = DifftestModule(new DiffArchEvent)
       difftestArchEvent := RegNext(RegNext(io.archEvent))
-      difftestArchEvent.clock := clock
       difftestArchEvent.coreid := 0.U // TODO
     }
 
