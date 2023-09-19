@@ -66,4 +66,6 @@ class SimTop extends Module {
   BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
 
   io.uart <> mmio.io.uart
+
+  DifftestModule.finish("nutshell")
 }

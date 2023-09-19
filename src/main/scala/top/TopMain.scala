@@ -72,5 +72,4 @@ object TopMain extends App {
       ChiselGeneratorAnnotation(() => new Top))
     )
   }
-  DifftestModule.finish("nutshell")
 }
