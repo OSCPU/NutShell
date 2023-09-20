@@ -46,6 +46,7 @@ SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill -i chiselModule.test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
+	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
 
 sim-verilog: $(SIM_TOP_V)
 
