@@ -56,6 +56,9 @@ emu: sim-verilog
 emu-run: sim-verilog
 	$(MAKE) -C ./difftest emu-run
 
+simv: sim-verilog
+	$(MAKE) -C ./difftest simv WITH_CHISELDB=0 WITH_CONSTANTIN=0
+
 init:
 	git submodule update --init
 
