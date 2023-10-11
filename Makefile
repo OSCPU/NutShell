@@ -1,3 +1,5 @@
+CHISEL_VERSION = 3.6.0
+
 TOP = TopMain
 SIM_TOP = SimTop
 FPGATOP = NutShellFPGATop
@@ -20,11 +22,11 @@ CORE  ?= inorder  # inorder  ooo  embedded
 .DEFAULT_GOAL = verilog
 
 help:
-	mill -i chiselModule.runMain top.$(TOP) --help BOARD=$(BOARD) CORE=$(CORE)
+	mill -i chiselModule[$(CHISEL_VERSION)].runMain top.$(TOP) --help BOARD=$(BOARD) CORE=$(CORE)
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-	mill -i chiselModule.runMain top.$(TOP) -td $(@D) --split-verilog BOARD=$(BOARD) CORE=$(CORE)
+	mill -i chiselModule[$(CHISEL_VERSION)].runMain top.$(TOP) -td $(@D) --split-verilog BOARD=$(BOARD) CORE=$(CORE)
 	@mv $(SIM_TOP_V) $(TOP_V)
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
@@ -47,7 +49,7 @@ verilog: $(TOP_V)
 
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill -i chiselModule.test.runMain $(SIMTOP) -td $(@D) --split-verilog BOARD=sim CORE=$(CORE)
+	mill -i chiselModule[$(CHISEL_VERSION)].test.runMain $(SIMTOP) -td $(@D) --split-verilog BOARD=sim CORE=$(CORE)
 	@find . -type f -name "*.sv" -print0 | xargs -0 sed -i 's/$$fatal/xs_assert(`__LINE__)/g'
 	@find . -type f -name "*.sv" -print0 | xargs -0 sed -i 's/$$error(/$$fwrite(32'\''h80000002, /g'
 
