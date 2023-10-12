@@ -39,10 +39,21 @@ object difftest extends Cross[CommonNS](ivys.chiselCrossVersions.keys.toSeq){
 
 object chiselModule extends Cross[ChiselModule](ivys.chiselCrossVersions.keys.toSeq)
 
-trait ChiselModule extends CommonNS with HasChiselTests with Cross.Module[String] {
+trait ChiselModule extends CommonNS with Cross.Module[String] {
   override def millSourcePath = os.pwd
 
   override def moduleDeps = super.moduleDeps ++ Seq(
     difftest(crossValue)
+  )
+}
+
+object generator extends Cross[Generator](ivys.chiselCrossVersions.keys.toSeq)
+
+trait Generator extends CommonNS with HasChiselTests with Cross.Module[String] {
+  private val directory = if (crossValue.startsWith("3")) "chisel3" else "chisel"
+  override def millSourcePath = os.pwd / "generator" / directory
+
+  override def moduleDeps = super.moduleDeps ++ Seq(
+    chiselModule(crossValue)
   )
 }

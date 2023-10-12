@@ -17,8 +17,7 @@
 package top
 
 import chisel3._
-import chisel3.stage.ChiselGeneratorAnnotation
-import circt.stage._
+import chisel3.stage._
 import device.AXI4VGA
 import difftest.DifftestModule
 import nutcore.NutCoreConfig
@@ -45,7 +44,7 @@ object TopMain extends App {
   }
   val board = parseArgs("BOARD", args)
   val core = parseArgs("CORE", args)
-
+  
   val s = (board match {
     case "sim"    => Nil
     case "pynq"   => PynqSettings()
@@ -64,14 +63,13 @@ object TopMain extends App {
     case (f, v) =>
       println(f + " = " + v)
   }
-
-  val generator = if (board == "sim") {
-    ChiselGeneratorAnnotation(() => new SimTop)
+  if (board == "sim") {
+    (new ChiselStage).execute(args, Seq(
+      ChiselGeneratorAnnotation(() => new SimTop))
+    )
+  } else {
+    (new ChiselStage).execute(args, Seq(
+      ChiselGeneratorAnnotation(() => new Top))
+    )
   }
-  else {
-    ChiselGeneratorAnnotation(() => new Top)
-  }
-  (new ChiselStage).execute(args, Seq(generator)
-    :+ CIRCTTargetAnnotation(CIRCTTarget.SystemVerilog)
-  )
 }
