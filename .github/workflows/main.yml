@@ -57,18 +57,18 @@ jobs:
             make emu
             ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
 
-        - name: Linux - Nutshell(MFC=1)
-        run: |
-            cd $GITHUB_WORKSPACE/../xs-env
-            source ./env.sh
-            wget https://github.com/llvm/circt/releases/download/firtool-1.56.1/firrtl-bin-linux-x64.tar.gz
-            tar -xzf firrtl-bin-linux-x64.tar.gz
-            export FIRTOOL_BIN=$(pwd)/firtool-1.56.1/bin/firtool
-            cd $GITHUB_WORKSPACE/../xs-env/NutShell
-            source ./env.sh
-            make clean
-            make emu MFC=1 FIRTOOL=${FIRTOOL_BIN}
-            ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
+      - name: Linux - Nutshell(MFC=1)
+      run: |
+          cd $GITHUB_WORKSPACE/../xs-env
+          source ./env.sh
+          wget https://github.com/llvm/circt/releases/download/firtool-1.56.1/firrtl-bin-linux-x64.tar.gz
+          tar -xzf firrtl-bin-linux-x64.tar.gz
+          export FIRTOOL_BIN=$(pwd)/firtool-1.56.1/bin/firtool
+          cd $GITHUB_WORKSPACE/../xs-env/NutShell
+          source ./env.sh
+          make clean
+          make emu MFC=1 FIRTOOL=${FIRTOOL_BIN}
+          ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
 
       # - name: Microbench - Argo
       #   run: |
