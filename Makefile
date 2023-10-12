@@ -24,6 +24,8 @@ FPGA_ARGS =
 
 ifeq ($(MFC), 1)
 CHISEL_VERSION = 6.0.0-M3
+FIRTOOL ?= $(FIRTOOL_BIN)
+MILL_ARGS += --firtool-binary-path $(FIRTOOL)
 else
 CHISEL_VERSION = 3.6.0
 MILL_ARGS += --output-file $(@F)
@@ -33,7 +35,7 @@ endif
 .DEFAULT_GOAL = verilog
 
 help:
-	mill -i chiselModule[$(CHISEL_VERSION)].runMain top.$(TOP) --help
+	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) --help $(MILL_ARGS)
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
