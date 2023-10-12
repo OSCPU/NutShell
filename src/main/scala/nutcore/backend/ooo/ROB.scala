@@ -498,7 +498,6 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   if (!p.FPGAPlatform) {
     for (i <- 0 until RetireWidth) {
       val difftest_commit = DifftestModule(new DiffInstrCommit(robSize * robWidth), delay = 1)
-      difftest_commit.clock    := clock
       difftest_commit.coreid   := 0.U
       difftest_commit.index    := i.U
 
@@ -513,7 +512,6 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       difftest_commit.wpdest   := io.wb(i).rfDest
 
       val difftest_wb = DifftestModule(new DiffIntWriteback, delay = 1)
-      difftest_wb.clock := clock
       difftest_wb.coreid := 0.U
       difftest_wb.valid := io.wb(i).rfWen && io.wb(i).rfDest =/= 0.U
       difftest_wb.address := io.wb(i).rfDest

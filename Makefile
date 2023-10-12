@@ -30,7 +30,6 @@ ifeq ($(CHISEL_VERSION), 3.6.0)
 	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE)
 else
 	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) -td $(@D) BOARD=$(BOARD) CORE=$(CORE)
-	@mv $(SIM_TOP_V) $(TOP_V)
 endif
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
@@ -57,8 +56,7 @@ ifeq ($(CHISEL_VERSION), 3.6.0)
 	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
 else
 	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) -td $(@D) BOARD=sim CORE=$(CORE)
-	@find . -type f -name "*.v" -print0 | xargs -0 sed -i 's/$$fatal/xs_assert(`__LINE__)/g'
-	@find . -type f -name "*.v" -print0 | xargs -0 sed -i 's/$$error(/$$fwrite(32'\''h80000002, /g'
+	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
 endif
 
 sim-verilog: $(SIM_TOP_V)
@@ -70,6 +68,9 @@ emu: sim-verilog
 emu-run: sim-verilog
 	$(MAKE) -C ./difftest emu-run
 
+simv: sim-verilog
+	$(MAKE) -C ./difftest simv WITH_CHISELDB=0 WITH_CONSTANTIN=0
+
 init:
 	git submodule update --init
 
@@ -79,7 +80,7 @@ clean:
 bsp:
 	mill -i mill.bsp.BSP/install
 
-mill:
+idea:
 	mill -i mill.idea.GenIdea/idea
 
 .PHONY: verilog emu clean help $(REF_SO)
