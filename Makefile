@@ -19,6 +19,14 @@ DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu3cg
 CORE  ?= inorder  # inorder  ooo  embedded
 
+ifeq ($(CHISEL_VERSION), 3.6.0)
+	FPGA_ARGS = --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf
+	SIM_ARGS = --output-file $(@F)
+else
+	FPGA_ARGS = 
+	SIM_ARGS = 
+endif
+
 .DEFAULT_GOAL = verilog
 
 help:
@@ -26,11 +34,7 @@ help:
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-ifeq ($(CHISEL_VERSION), 3.6.0)
-	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) -td $(@D) --output-file $(@F) --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf BOARD=$(BOARD) CORE=$(CORE)
-else
-	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) -td $(@D) BOARD=$(BOARD) CORE=$(CORE)
-endif
+	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) -td $(@D) $(FPGA_ARGS) BOARD=$(BOARD) CORE=$(CORE)
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
@@ -52,15 +56,13 @@ verilog: $(TOP_V)
 
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-ifeq ($(CHISEL_VERSION), 3.6.0)
-	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) -td $(@D) --output-file $(@F) BOARD=sim CORE=$(CORE)
-else
-	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) -td $(@D) BOARD=sim CORE=$(CORE)
+	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) -td $(@D) $(SIM_ARGS) BOARD=sim CORE=$(CORE)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
-endif
 
 sim-verilog: $(SIM_TOP_V)
+ifneq ($(CHISEL_VERSION), 3.6.0)
 	cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(SIM_TOP_V)
+endif
 
 emu: sim-verilog
 	$(MAKE) -C ./difftest emu WITH_CHISELDB=0 WITH_CONSTANTIN=0
