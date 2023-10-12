@@ -56,6 +56,16 @@ jobs:
             make clean
             make emu
             ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
+        
+        - name: Linux - Nutshell(MFC=1)
+        run: |
+            cd $GITHUB_WORKSPACE/../xs-env
+            source ./env.sh
+            cd $GITHUB_WORKSPACE/../xs-env/NutShell
+            source ./env.sh
+            make clean
+            make emu MFC=1
+            ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
 
       # - name: Microbench - Argo
       #   run: |
