@@ -1,4 +1,4 @@
-MFC ?= 0
+CHISEL_VERSION ?= 3.6.0
 
 TOP = TopMain
 SIM_TOP = SimTop
@@ -24,12 +24,13 @@ FPGA_ARGS =
 
 ifeq ($(MFC), 1)
 CHISEL_VERSION = 6.0.0-M3
-FIRTOOL ?= $(FIRTOOL_BIN)
-MILL_ARGS += --firtool-binary-path $(FIRTOOL)
-else
-CHISEL_VERSION = 3.6.0
+endif
+
+ifneq (,$(filter 3%,$(CHISEL_VERSION)))
 MILL_ARGS += --output-file $(@F)
 FPGA_ARGS += --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf
+else ifneq ($(FIRTOOL),)
+MILL_ARGS += --firtool-binary-path $(FIRTOOL)
 endif
 
 .DEFAULT_GOAL = verilog
