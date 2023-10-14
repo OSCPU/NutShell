@@ -26,10 +26,16 @@ ifeq ($(MFC), 1)
 CHISEL_VERSION = 6.0.0-M3
 endif
 
+SPLIT_VERILOG = 0
+
 ifneq (,$(filter 3%,$(CHISEL_VERSION)))
 MILL_ARGS += --output-file $(@F)
-FPGA_ARGS += --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf
-else ifneq ($(FIRTOOL),)
+FPGA_ARGS += --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf 
+else 
+SPLIT_VERILOG = 1
+endif
+
+ifneq ($(FIRTOOL),)
 MILL_ARGS += --firtool-binary-path $(FIRTOOL)
 endif
 
@@ -41,6 +47,10 @@ help:
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
 	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) $(MILL_ARGS) $(FPGA_ARGS)
+ifeq ($(SPLIT_VERILOG), 1)
+	@mv $(SIM_TOP_V) $(TOP_V)
+	@cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(TOP_V)
+endif
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
@@ -64,11 +74,11 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) $(MILL_ARGS)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
+ifeq ($(SPLIT_VERILOG), 1)
+	@cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(SIM_TOP_V)
+endif
 
 sim-verilog: $(SIM_TOP_V)
-ifneq ($(CHISEL_VERSION), 3.6.0)
-	cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(SIM_TOP_V)
-endif
 
 emu: sim-verilog
 	$(MAKE) -C ./difftest emu WITH_CHISELDB=0 WITH_CONSTANTIN=0

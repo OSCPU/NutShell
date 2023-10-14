@@ -33,9 +33,30 @@ jobs:
             cp -r $GITHUB_WORKSPACE $GITHUB_WORKSPACE/../xs-env
             cd $GITHUB_WORKSPACE/../xs-env
             source ./env.sh
+            wget https://github.com/llvm/circt/releases/download/firtool-1.56.1/firrtl-bin-linux-x64.tar.gz
+            tar -xzf firrtl-bin-linux-x64.tar.gz
+            echo "FIRTOOL_BIN=$(pwd)/firtool-1.56.1/bin/firtool" >> $GITHUB_ENV
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make init
+
+      - name: Generate Verilog
+        run: |
+            cd $GITHUB_WORKSPACE/../xs-env
+            source ./env.sh
+            cd $GITHUB_WORKSPACE/../xs-env/NutShell
+            source ./env.sh
+            make clean
+            make verilog
+
+      - name: Generate Verilog(MFC=1)
+        run: |
+            cd $GITHUB_WORKSPACE/../xs-env
+            source ./env.sh
+            cd $GITHUB_WORKSPACE/../xs-env/NutShell
+            source ./env.sh
+            make clean
+            make verilog MFC=1 FIRTOOL=${FIRTOOL_BIN}
 
       - name: Microbench - Nutshell
         run: |
@@ -61,9 +82,6 @@ jobs:
         run: |
             cd $GITHUB_WORKSPACE/../xs-env
             source ./env.sh
-            wget https://github.com/llvm/circt/releases/download/firtool-1.56.1/firrtl-bin-linux-x64.tar.gz
-            tar -xzf firrtl-bin-linux-x64.tar.gz
-            export FIRTOOL_BIN=$(pwd)/firtool-1.56.1/bin/firtool
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make clean
