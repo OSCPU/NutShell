@@ -35,7 +35,7 @@ jobs:
             source ./env.sh
             wget https://github.com/llvm/circt/releases/download/firtool-1.56.1/firrtl-bin-linux-x64.tar.gz
             tar -xzf firrtl-bin-linux-x64.tar.gz
-            export FIRTOOL_BIN=$(pwd)/firtool-1.56.1/bin/firtool
+            echo "FIRTOOL_BIN=$(pwd)/firtool-1.56.1/bin/firtool" >> $GITHUB_ENV
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make init
