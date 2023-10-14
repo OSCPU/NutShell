@@ -49,7 +49,7 @@ $(TOP_V): $(SCALA_FILE)
 	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) $(MILL_ARGS) $(FPGA_ARGS)
 ifeq ($(SPLIT_VERILOG), 1)
 	@mv $(SIM_TOP_V) $(TOP_V)
-	cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(TOP_V)
+	@cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(TOP_V)
 endif
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
@@ -75,7 +75,7 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) $(MILL_ARGS)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
 ifeq ($(SPLIT_VERILOG), 1)
-	cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(SIM_TOP_V)
+	@cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(SIM_TOP_V)
 endif
 
 sim-verilog: $(SIM_TOP_V)
