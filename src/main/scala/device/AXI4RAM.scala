@@ -38,7 +38,7 @@ class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Int,
   val wen = in.w.fire && inRange(wIdx)
 
   val rdata = if (useBlackBox) {
-    val mem = DifftestMem(memByte, 8)
+    val mem = DifftestMem(memByte, 8, EnableSynthesizableMemory)
     when (wen) {
       mem.write(
         addr = wIdx,

@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -43,6 +43,7 @@ trait HasNutCoreParameter {
   val DataBytes = DataBits / 8
   val EnableVirtualMemory = if (Settings.get("HasDTLB") && Settings.get("HasITLB")) true else false
   val EnablePerfCnt = true
+  val EnableSynthesizableMemory = false
   // Parameter for Argo's OoO backend
   val EnableMultiIssue = Settings.get("EnableMultiIssue")
   val EnableOutOfOrderExec = Settings.get("EnableOutOfOrderExec")
@@ -67,9 +68,9 @@ abstract class NutCoreBundle extends Bundle with HasNutCoreParameter with HasNut
 case class NutCoreConfig (
   FPGAPlatform: Boolean = true,
   EnableDebug: Boolean = Settings.get("EnableDebug"),
-  EnhancedLog: Boolean = true 
+  EnhancedLog: Boolean = true
 )
-// Enable EnhancedLog will slow down simulation, 
+// Enable EnhancedLog will slow down simulation,
 // but make it possible to control debug log using emu parameter
 
 object AddressSpace extends HasNutCoreParameter {
@@ -102,7 +103,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     case (false, true)  => Module(new Frontend_ooo)
     case (false, false) => Module(new Frontend_inorder)
   }
-  
+
   // Backend
   if (EnableOutOfOrderExec) {
     val mmioXbar = Module(new SimpleBusCrossbarNto1(if (HasDcache) 2 else 3))
@@ -118,7 +119,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, frontend.io.flushVec(0) | frontend.io.bpFlush), empty = itlb.io.cacheEmpty)(
       CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth)
     )
-    
+
     val dtlb = TLB(in = backend.io.dtlb, mem = dmemXbar.io.in(1), flush = frontend.io.flushVec(3), csrMMU = backend.io.memMMU.dmem)(TLBConfig(name = "dtlb", userBits = DCacheUserBundleWidth, totalEntry = 64))
     dtlb.io.out := DontCare //FIXIT
     dtlb.io.out.req.ready := true.B //FIXIT
@@ -153,7 +154,7 @@ class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule {
     val itlb = EmbeddedTLB(in = frontend.io.imem, mem = dmemXbar.io.in(1), flush = frontend.io.flushVec(0) | frontend.io.bpFlush, csrMMU = backend.io.memMMU.imem, enable = HasITLB)(TLBConfig(name = "itlb", userBits = ICacheUserBundleWidth, totalEntry = 4))
     frontend.io.ipf := itlb.io.ipf
     io.imem <> Cache(in = itlb.io.out, mmio = mmioXbar.io.in.take(1), flush = Fill(2, frontend.io.flushVec(0) | frontend.io.bpFlush), empty = itlb.io.cacheEmpty, enable = HasIcache)(CacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
-    
+
     // dtlb
     val dtlb = EmbeddedTLB(in = backend.io.dmem, mem = dmemXbar.io.in(2), flush = false.B, csrMMU = backend.io.memMMU.dmem, enable = HasDTLB)(TLBConfig(name = "dtlb", totalEntry = 64))
     dmemXbar.io.in(0) <> dtlb.io.out
