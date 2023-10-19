@@ -135,6 +135,12 @@ class AXI4VGA(sim: Boolean = false) extends Module with HasVGAParameter {
   io.in.fb.r.bits.resp := AXI4Parameters.RESP_OKAY
   io.in.fb.r.valid := BoolStopWatch(io.in.fb.ar.fire, io.in.fb.r.fire, startHighPriority = true)
 
+  val vga_fb_used = RegInit(false.B)
+  val fb_req = io.in.fb
+  when (fb_req.aw.valid || fb_req.w.valid || fb_req.ar.valid) {
+    vga_fb_used := true.B
+  }
+
   def inRange(x: UInt, start: Int, end: Int) = (x >= start.U) && (x < end.U)
 
   val (hCounter, hFinish) = Counter(true.B, HTotal)
@@ -170,7 +176,7 @@ class AXI4VGA(sim: Boolean = false) extends Module with HasVGAParameter {
   if (sim) {
     val fbHelper = Module(new FBHelper)
     fbHelper.io.clk := clock
-    fbHelper.io.valid := io.vga.valid
+    fbHelper.io.valid := io.vga.valid && vga_fb_used
     fbHelper.io.pixel := color
     fbHelper.io.sync := ctrl.io.extra.get.sync
   }
