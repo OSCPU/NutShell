@@ -661,7 +661,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   ret := isMret || isSret || isUret
   trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
-  
   retTarget := DontCare
   // TODO redirect target
   // val illegalEret = TODO
