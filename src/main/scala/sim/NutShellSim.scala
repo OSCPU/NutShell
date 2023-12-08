@@ -30,12 +30,6 @@ import utils.GTimer
 import difftest._
 
 class SimTop extends Module {
-  val io = IO(new Bundle{
-    val logCtrl = new LogCtrlIO
-    val perfInfo = new PerfInfoIO
-    val uart = new UARTIO
-  })
-
   lazy val config = NutCoreConfig(FPGAPlatform = false)
   val soc = Module(new NutShell()(config))
   val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
@@ -53,10 +47,12 @@ class SimTop extends Module {
 
   soc.io.meip := mmio.io.meip
 
+  val difftest = DifftestModule.finish("nutshell")
+
   val log_begin, log_end, log_level = WireInit(0.U(64.W))
-  log_begin := io.logCtrl.log_begin
-  log_end := io.logCtrl.log_end
-  log_level := io.logCtrl.log_level
+  log_begin := difftest.logCtrl.begin
+  log_end := difftest.logCtrl.end
+  log_level := difftest.logCtrl.level
 
   assert(log_begin <= log_end)
   BoringUtils.addSource(WireInit((GTimer() >= log_begin) && (GTimer() < log_end)), "DISPLAY_ENABLE")
@@ -65,7 +61,5 @@ class SimTop extends Module {
   val dummyWire = WireInit(false.B)
   BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
 
-  io.uart <> mmio.io.uart
-
-  DifftestModule.finish("nutshell")
+  difftest.uart <> mmio.io.uart
 }
