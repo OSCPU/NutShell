@@ -30,8 +30,8 @@ SPLIT_VERILOG = 0
 
 ifneq (,$(filter 3%,$(CHISEL_VERSION)))
 MILL_ARGS += --output-file $(@F)
-FPGA_ARGS += --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf 
-else 
+FPGA_ARGS += --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf
+else
 SPLIT_VERILOG = 1
 endif
 
@@ -74,6 +74,9 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) $(MILL_ARGS)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
+ifeq ($(MFC), 1)
+	@sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" $(SIM_TOP_V)
+endif
 ifeq ($(SPLIT_VERILOG), 1)
 	@cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(SIM_TOP_V)
 endif
