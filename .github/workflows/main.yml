@@ -47,16 +47,7 @@ jobs:
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make clean
-            make verilog
-
-      - name: Generate Verilog(MFC=1)
-        run: |
-            cd $GITHUB_WORKSPACE/../xs-env
-            source ./env.sh
-            cd $GITHUB_WORKSPACE/../xs-env/NutShell
-            source ./env.sh
-            make clean
-            make verilog MFC=1 FIRTOOL=${FIRTOOL_BIN}
+            make verilog FIRTOOL=${FIRTOOL_BIN}
 
       - name: Microbench - Nutshell
         run: |
@@ -65,7 +56,7 @@ jobs:
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make clean
-            make emu
+            make emu FIRTOOL=${FIRTOOL_BIN}
             ./build/emu -b 0 -e 0 -i ./ready-to-run/microbench.bin --diff ./ready-to-run/riscv64-nemu-interpreter-so
 
       - name: Linux - Nutshell
@@ -75,17 +66,7 @@ jobs:
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make clean
-            make emu
-            ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
-
-      - name: Linux - Nutshell(MFC=1)
-        run: |
-            cd $GITHUB_WORKSPACE/../xs-env
-            source ./env.sh
-            cd $GITHUB_WORKSPACE/../xs-env/NutShell
-            source ./env.sh
-            make clean
-            make emu MFC=1 FIRTOOL=${FIRTOOL_BIN}
+            make emu FIRTOOL=${FIRTOOL_BIN}
             ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
 
       # - name: Microbench - Argo
