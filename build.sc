@@ -2,11 +2,9 @@ import mill._, scalalib._
 import coursier.maven.MavenRepository
 
 object ivys {
-  val scala = "2.13.10"
-  val chiselCrossVersions = Map(
-    "3.6.0" -> (ivy"edu.berkeley.cs::chisel3:3.6.0", ivy"edu.berkeley.cs:::chisel3-plugin:3.6.0"),
-    "6.0.0-M3" -> (ivy"org.chipsalliance::chisel:6.0.0-M3", ivy"org.chipsalliance:::chisel-plugin:6.0.0-M3"),
-  )
+  val scala = "2.13.12"
+  val chisel = ivy"org.chipsalliance::chisel:6.0.0-RC1"
+  val chiselPlugin = ivy"org.chipsalliance:::chisel-plugin:6.0.0-RC1"
 }
 
 trait CommonModule extends ScalaModule {
@@ -15,45 +13,25 @@ trait CommonModule extends ScalaModule {
   override def scalacOptions = Seq("-Ymacro-annotations")
 }
 
-trait HasChiselCross extends ScalaModule with Cross.Module[String]{
-  override def repositoriesTask = T.task {
-    super.repositoriesTask() ++ Seq(
-      MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
-    )
-  }
-  override def ivyDeps = Agg(ivys.chiselCrossVersions(crossValue)._1)
-  override def scalacPluginIvyDeps = Agg(ivys.chiselCrossVersions(crossValue)._2)
+trait HasChisel extends ScalaModule {
+  override def ivyDeps = Agg(ivys.chisel)
+  override def scalacPluginIvyDeps = Agg(ivys.chiselPlugin)
 }
 
-trait HasChiselTests extends SbtModule {
-  object test extends SbtModuleTests with TestModule.ScalaTest {
-    override def ivyDeps = Agg(ivy"edu.berkeley.cs::chiseltest:0.5.4")
-  }
-}
+trait CommonNS extends SbtModule with CommonModule with HasChisel
 
-trait CommonNS extends SbtModule with CommonModule with HasChiselCross
-
-object difftest extends Cross[CommonNS](ivys.chiselCrossVersions.keys.toSeq){
+object difftest extends CommonNS {
   override def millSourcePath = os.pwd / "difftest"
 }
 
-object chiselModule extends Cross[ChiselModule](ivys.chiselCrossVersions.keys.toSeq)
+object generator extends CommonNS {
 
-trait ChiselModule extends CommonNS with Cross.Module[String] {
   override def millSourcePath = os.pwd
 
   override def moduleDeps = super.moduleDeps ++ Seq(
-    difftest(crossValue)
+    difftest
   )
-}
 
-object generator extends Cross[Generator](ivys.chiselCrossVersions.keys.toSeq)
+  object test extends SbtModuleTests with TestModule.ScalaTest
 
-trait Generator extends CommonNS with HasChiselTests with Cross.Module[String] {
-  private val directory = if (crossValue.startsWith("3")) "chisel3" else "chisel"
-  override def millSourcePath = os.pwd / "generator" / directory
-
-  override def moduleDeps = super.moduleDeps ++ Seq(
-    chiselModule(crossValue)
-  )
 }
