@@ -23,7 +23,7 @@ MILL_ARGS = -td $(@D) BOARD=$(BOARD) CORE=$(CORE)
 FPGA_ARGS =
 
 ifeq ($(MFC), 1)
-CHISEL_VERSION = 6.0.0-M3
+CHISEL_VERSION = 6.0.0-RC1
 endif
 
 SPLIT_VERILOG = 0
@@ -72,7 +72,7 @@ verilog: $(TOP_V)
 
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) $(MILL_ARGS)
+	mill -i generator[$(CHISEL_VERSION)].runMain $(SIMTOP) $(MILL_ARGS)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
 ifeq ($(MFC), 1)
 	@sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" $(SIM_TOP_V)

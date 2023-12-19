@@ -5,7 +5,7 @@ object ivys {
   val scala = "2.13.10"
   val chiselCrossVersions = Map(
     "3.6.0" -> (ivy"edu.berkeley.cs::chisel3:3.6.0", ivy"edu.berkeley.cs:::chisel3-plugin:3.6.0"),
-    "6.0.0-M3" -> (ivy"org.chipsalliance::chisel:6.0.0-M3", ivy"org.chipsalliance:::chisel-plugin:6.0.0-M3"),
+    "6.0.0-RC1" -> (ivy"org.chipsalliance::chisel:6.0.0-RC1", ivy"org.chipsalliance:::chisel-plugin:6.0.0-RC1"),
   )
 }
 
@@ -23,12 +23,6 @@ trait HasChiselCross extends ScalaModule with Cross.Module[String]{
   }
   override def ivyDeps = Agg(ivys.chiselCrossVersions(crossValue)._1)
   override def scalacPluginIvyDeps = Agg(ivys.chiselCrossVersions(crossValue)._2)
-}
-
-trait HasChiselTests extends SbtModule {
-  object test extends SbtModuleTests with TestModule.ScalaTest {
-    override def ivyDeps = Agg(ivy"edu.berkeley.cs::chiseltest:0.5.4")
-  }
 }
 
 trait CommonNS extends SbtModule with CommonModule with HasChiselCross
@@ -49,7 +43,7 @@ trait ChiselModule extends CommonNS with Cross.Module[String] {
 
 object generator extends Cross[Generator](ivys.chiselCrossVersions.keys.toSeq)
 
-trait Generator extends CommonNS with HasChiselTests with Cross.Module[String] {
+trait Generator extends CommonNS with Cross.Module[String] {
   private val directory = if (crossValue.startsWith("3")) "chisel3" else "chisel"
   override def millSourcePath = os.pwd / "generator" / directory
 
