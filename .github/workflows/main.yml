@@ -33,9 +33,6 @@ jobs:
             cp -r $GITHUB_WORKSPACE $GITHUB_WORKSPACE/../xs-env
             cd $GITHUB_WORKSPACE/../xs-env
             source ./env.sh
-            wget https://github.com/llvm/circt/releases/download/firtool-1.56.1/firrtl-bin-linux-x64.tar.gz
-            tar -xzf firrtl-bin-linux-x64.tar.gz
-            echo "FIRTOOL_BIN=$(pwd)/firtool-1.56.1/bin/firtool" >> $GITHUB_ENV
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make init
@@ -47,7 +44,7 @@ jobs:
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make clean
-            make verilog FIRTOOL=${FIRTOOL_BIN}
+            make verilog
 
       - name: Microbench - Nutshell
         run: |
@@ -56,7 +53,7 @@ jobs:
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make clean
-            make emu FIRTOOL=${FIRTOOL_BIN}
+            make emu
             ./build/emu -b 0 -e 0 -i ./ready-to-run/microbench.bin --diff ./ready-to-run/riscv64-nemu-interpreter-so
 
       - name: Linux - Nutshell
@@ -66,7 +63,7 @@ jobs:
             cd $GITHUB_WORKSPACE/../xs-env/NutShell
             source ./env.sh
             make clean
-            make emu FIRTOOL=${FIRTOOL_BIN}
+            make emu
             ./build/emu -b 0 -e 0 -i ./ready-to-run/linux.bin -C 200000000 --diff ./ready-to-run/riscv64-nemu-interpreter-so
 
       # - name: Microbench - Argo
