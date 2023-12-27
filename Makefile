@@ -5,8 +5,9 @@ FPGATOP = NutShellFPGATop
 BUILD_DIR = $(abspath ./build)
 
 RTL_DIR = $(BUILD_DIR)/rtl
-SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).v
-TOP_V = $(RTL_DIR)/$(TOP).v
+RTL_SUFFIX ?= sv
+SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).$(RTL_SUFFIX)
+TOP_V = $(RTL_DIR)/$(TOP).$(RTL_SUFFIX)
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
@@ -43,7 +44,7 @@ ifneq ($(FIRTOOL),)
 MILL_ARGS += --firtool-binary-path $(FIRTOOL)
 endif
 
-EXTRACTOR = $(abspath ./scripts/extract_files.sh)
+MILL_ARGS += --split-verilog
 
 .DEFAULT_GOAL = verilog
 
@@ -54,7 +55,6 @@ $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
 	mill -i generator.test.runMain top.$(TOP) $(MILL_ARGS) $(FPGA_ARGS)
 	@mv $(SIM_TOP_V) $(TOP_V)
-	@cd $(RTL_DIR) && bash $(EXTRACTOR) $(TOP_V)
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
@@ -79,18 +79,17 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mill -i generator.test.runMain $(SIMTOP) $(MILL_ARGS)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
 	@sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" $(SIM_TOP_V)
-	@cd $(RTL_DIR) && bash $(EXTRACTOR) $(SIM_TOP_V)
 
 sim-verilog: $(SIM_TOP_V)
 
 emu: sim-verilog
-	$(MAKE) -C ./difftest emu WITH_CHISELDB=0 WITH_CONSTANTIN=0
+	$(MAKE) -C ./difftest emu WITH_CHISELDB=0 WITH_CONSTANTIN=0 RTL_SUFFIX=$(RTL_SUFFIX)
 
 emu-run: sim-verilog
-	$(MAKE) -C ./difftest emu-run
+	$(MAKE) -C ./difftest emu-run RTL_SUFFIX=$(RTL_SUFFIX)
 
 simv: sim-verilog
-	$(MAKE) -C ./difftest simv WITH_CHISELDB=0 WITH_CONSTANTIN=0
+	$(MAKE) -C ./difftest simv WITH_CHISELDB=0 WITH_CONSTANTIN=0 RTL_SUFFIX=$(RTL_SUFFIX)
 
 init:
 	git submodule update --init
