@@ -3,8 +3,11 @@ SIM_TOP = SimTop
 FPGATOP = NutShellFPGATop
 
 BUILD_DIR = $(abspath ./build)
-SIM_TOP_V = $(BUILD_DIR)/$(SIM_TOP).v
-TOP_V = $(BUILD_DIR)/$(TOP).v
+
+RTL_DIR = $(BUILD_DIR)/rtl
+SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).v
+TOP_V = $(RTL_DIR)/$(TOP).v
+
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 
@@ -17,7 +20,7 @@ DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu3cg
 CORE  ?= inorder  # inorder  ooo  embedded
 
-MILL_ARGS = -td $(@D) BOARD=$(BOARD) CORE=$(CORE)
+MILL_ARGS = -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
 FPGA_ARGS =
 
 # If firtool is not specified and not found in PATH, download and cache it.
@@ -40,6 +43,8 @@ ifneq ($(FIRTOOL),)
 MILL_ARGS += --firtool-binary-path $(FIRTOOL)
 endif
 
+EXTRACTOR = $(abspath ./scripts/extract_files.sh)
+
 .DEFAULT_GOAL = verilog
 
 help:
@@ -49,7 +54,7 @@ $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
 	mill -i generator.test.runMain top.$(TOP) $(MILL_ARGS) $(FPGA_ARGS)
 	@mv $(SIM_TOP_V) $(TOP_V)
-	@cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(TOP_V)
+	@cd $(RTL_DIR) && bash $(EXTRACTOR) $(TOP_V)
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
@@ -74,7 +79,7 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mill -i generator.test.runMain $(SIMTOP) $(MILL_ARGS)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
 	@sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" $(SIM_TOP_V)
-	@cd $(BUILD_DIR) && bash ../scripts/extract_files.sh $(SIM_TOP_V)
+	@cd $(RTL_DIR) && bash $(EXTRACTOR) $(SIM_TOP_V)
 
 sim-verilog: $(SIM_TOP_V)
 
