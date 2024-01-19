@@ -24,22 +24,6 @@ CORE  ?= inorder  # inorder  ooo  embedded
 MILL_ARGS = -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
 FPGA_ARGS =
 
-# If firtool is not specified and not found in PATH, download and cache it.
-ifeq ($(FIRTOOL),)
-ifeq ($(shell which firtool 2>/dev/null),)
-FIRTOOL_VERSION = 1.61.0
-FIRTOOL_DIR = $(HOME)/.cache/firtool
-FIRTOOL_BIN = $(FIRTOOL_DIR)/firtool-$(FIRTOOL_VERSION)/bin/firtool
-ifeq ($(wildcard $(HOME)/.cache/firtool/firtool-$(FIRTOOL_VERSION)/bin),)
-$(info [INFO] Firtool not found.)
-FIRTOOL_URL = https://github.com/llvm/circt/releases/download/firtool-$(FIRTOOL_VERSION)/firrtl-bin-linux-x64.tar.gz
-$(info [INFO] Downloading from $(FIRTOOL_URL) to $(FIRTOOL_BIN))
-$(shell mkdir -p $(FIRTOOL_DIR) && curl -L $(FIRTOOL_URL) | tar -xzC $(FIRTOOL_DIR))
-endif
-FIRTOOL = $(FIRTOOL_BIN)
-endif
-endif
-
 ifneq ($(FIRTOOL),)
 MILL_ARGS += --firtool-binary-path $(FIRTOOL)
 endif
