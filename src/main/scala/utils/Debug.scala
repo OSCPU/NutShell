@@ -17,11 +17,9 @@
 package utils
 
 import chisel3._
-import chisel3.util._
-import chisel3.util.experimental.BoringUtils
-import utils.LogLevel.LogLevel
-
+import difftest.common.LogPerfControl
 import nutcore.NutCoreConfig
+import utils.LogLevel.LogLevel
 
 object LogLevel extends Enumeration {
   type LogLevel = Value
@@ -36,23 +34,17 @@ object LogLevel extends Enumeration {
 
 object LogUtil {
 
-  def displayLog: Bool = {
-    val enableDisplay = WireInit(false.B)
-    BoringUtils.addSink(enableDisplay, "DISPLAY_ENABLE")
-    enableDisplay
+  def control(): (Bool, UInt) = {
+    val control = LogPerfControl()
+    (control.logEnable, control.timer)
   }
-
-  // def LogLevel: UInt = {
-  //   val log_level = WireInit(0.U(64.W))
-  //   BoringUtils.addSink(log_level, "DISPLAY_LOG_LEVEL")
-  //   log_level
-  // }
 
   def apply(debugLevel: LogLevel)
            (prefix: Boolean, cond: Bool, pable: Printable)
            (implicit name: String): Any = {
-    val commonInfo = p"[${GTimer()}] $name: "
-    when (cond && displayLog) {
+    val c = control()
+    val commonInfo = p"[${c._2}] $name: "
+    when (cond && c._1) {
       if(prefix) printf(commonInfo)
       printf(pable)
     }
@@ -77,7 +69,7 @@ sealed abstract class LogHelper(val logLevel: LogLevel) {
   // NOOP/NutShell style debug
   def apply(flag: Boolean = NutCoreConfig().EnableDebug, cond: Bool = true.B)(body: => Unit): Any = {
     if(NutCoreConfig().EnhancedLog){
-      if(flag) { when (cond && LogUtil.displayLog) { body } }
+      if(flag) { when (cond && LogUtil.control()._1) { body } }
     } else {
       if(flag) { when (cond) { body } }
     }
