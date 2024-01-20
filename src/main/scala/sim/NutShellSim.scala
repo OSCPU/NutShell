@@ -16,18 +16,12 @@
 
 package sim
 
-import system._
-import nutcore.NutCoreConfig
-
-import chisel3._
-import chisel3.util._
-import chisel3.util.experimental.BoringUtils
-
 import bus.axi4._
+import chisel3._
 import device.AXI4RAM
-import nutcore._
-import utils.GTimer
 import difftest._
+import nutcore.NutCoreConfig
+import system._
 
 class SimTop extends Module {
   lazy val config = NutCoreConfig(FPGAPlatform = false)
@@ -48,18 +42,5 @@ class SimTop extends Module {
   soc.io.meip := mmio.io.meip
 
   val difftest = DifftestModule.finish("nutshell")
-
-  val log_begin, log_end, log_level = WireInit(0.U(64.W))
-  log_begin := difftest.logCtrl.begin
-  log_end := difftest.logCtrl.end
-  log_level := difftest.logCtrl.level
-
-  assert(log_begin <= log_end)
-  BoringUtils.addSource(WireInit((GTimer() >= log_begin) && (GTimer() < log_end)), "DISPLAY_ENABLE")
-
-  // make BoringUtils not report boring exception when EnableDebug is set to false
-  val dummyWire = WireInit(false.B)
-  BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
-
   difftest.uart <> mmio.io.uart
 }
