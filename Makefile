@@ -21,14 +21,14 @@ DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu3cg
 CORE  ?= inorder  # inorder  ooo  embedded
 
-MILL_ARGS = -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
+override MILL_ARGS += -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
 FPGA_ARGS =
 
 ifneq ($(FIRTOOL),)
-MILL_ARGS += --firtool-binary-path $(FIRTOOL)
+override MILL_ARGS += --firtool-binary-path $(FIRTOOL)
 endif
 
-MILL_ARGS += --split-verilog
+override MILL_ARGS += --split-verilog
 
 .DEFAULT_GOAL = verilog
 

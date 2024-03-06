@@ -43,8 +43,9 @@ object TopMain extends App {
     require(target != "")
     target.substring(info.length()+1)
   }
-  val board = parseArgs("BOARD", args)
-  val core = parseArgs("CORE", args)
+  val newArgs = DifftestModule.parseArgs(args)
+  val board = parseArgs("BOARD", newArgs)
+  val core = parseArgs("CORE", newArgs)
 
   val s = (board match {
     case "sim"    => Nil
@@ -71,10 +72,10 @@ object TopMain extends App {
   else {
     ChiselGeneratorAnnotation(() => new Top)
   }
-  var exe_args = args.filter{
+  var exe_args = newArgs.filter{
     value => value.forall(char => char!='=')
   }
-  (new ChiselStage).execute(args, Seq(generator)
+  (new ChiselStage).execute(newArgs, Seq(generator)
     :+ CIRCTTargetAnnotation(CIRCTTarget.SystemVerilog)
     :+ FirtoolOption("--disable-annotation-unknown")
   )
