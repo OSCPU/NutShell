@@ -21,23 +21,24 @@ DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu3cg
 CORE  ?= inorder  # inorder  ooo  embedded
 
-MILL_ARGS = -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
+MILL_ARGS_ALL  = $(MILL_ARGS)
+MILL_ARGS_ALL += --target-dir $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
 FPGA_ARGS =
 
 ifneq ($(FIRTOOL),)
-MILL_ARGS += --firtool-binary-path $(FIRTOOL)
+MILL_ARGS_ALL += --firtool-binary-path $(FIRTOOL)
 endif
 
-MILL_ARGS += --split-verilog
+MILL_ARGS_ALL += --split-verilog
 
 .DEFAULT_GOAL = verilog
 
 help:
-	mill -i generator.test.runMain top.$(TOP) --help $(MILL_ARGS)
+	mill -i generator.test.runMain top.$(TOP) --help $(MILL_ARGS_ALL)
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-	mill -i generator.test.runMain top.$(TOP) $(MILL_ARGS) $(FPGA_ARGS)
+	mill -i generator.test.runMain top.$(TOP) $(MILL_ARGS_ALL) $(FPGA_ARGS)
 	@mv $(SIM_TOP_V) $(TOP_V)
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
@@ -60,7 +61,7 @@ verilog: $(TOP_V)
 
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill -i generator.test.runMain $(SIMTOP) $(MILL_ARGS)
+	mill -i generator.test.runMain $(SIMTOP) $(MILL_ARGS_ALL)
 	@for file in $(RTL_DIR)/*.$(RTL_SUFFIX); do                               \
 		sed -i -e 's/$$fatal/xs_assert(`__LINE__)/g' "$$file";           \
 		sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" "$$file";    \
