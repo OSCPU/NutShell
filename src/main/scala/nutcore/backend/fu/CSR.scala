@@ -381,7 +381,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // User Trap Setup
     // MaskedRegMap(Ustatus, ustatus),
     // MaskedRegMap(Uie, uie, 0.U, MaskedRegMap.Unwritable),
-    // MaskedRegMap(Utvec, utvec),
+    // When setting the value, clear bit 1. Subsequently, when reading BASE, clear bit 0.
+    // MaskedRegMap(Utvec, utvec, wfn = (value: UInt) => (value & ~2.U(64.W))),	
 
     // User Trap Handling
     // MaskedRegMap(Uscratch, uscratch),
@@ -406,7 +407,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // MaskedRegMap(Sedeleg, Sedeleg),
     // MaskedRegMap(Sideleg, Sideleg),
     MaskedRegMap(Sie, mie, sieMask, MaskedRegMap.NoSideEffect, sieMask),
-    MaskedRegMap(Stvec, stvec),
+    // When setting the value, clear bit 1. Subsequently, when reading BASE, clear bit 0.
+    MaskedRegMap(Stvec, stvec, wfn = (value: UInt) => (value & ~2.U(64.W))),
+
     MaskedRegMap(Scounteren, scounteren),
 
     // Supervisor Trap Handling
@@ -432,7 +435,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Medeleg, medeleg, "hbbff".U(64.W)),
     MaskedRegMap(Mideleg, mideleg, "h222".U(64.W)),
     MaskedRegMap(Mie, mie),
-    MaskedRegMap(Mtvec, mtvec),
+    // When setting the value, clear bit 1. Subsequently, when reading BASE, clear bit 0.
+    MaskedRegMap(Mtvec, mtvec, wfn = (value: UInt) => (value & ~2.U(64.W))),
+
     MaskedRegMap(Mcounteren, mcounteren),
 
     // Machine Trap Handling
