@@ -75,7 +75,7 @@ object Instructions extends HasInstrType with HasNutCoreParameter {
   def DecodeTable = RVIInstr.table ++ NutCoreTrap.table ++
     (if (HasMExtension) RVMInstr.table else Array.empty) ++
     (if (HasCExtension) RVCInstr.table else Array.empty) ++
-    Priviledged.table ++
+    Privileged.table ++
     RVAInstr.table ++
     RVZicsrInstr.table ++ RVZifenceiInstr.table
 }

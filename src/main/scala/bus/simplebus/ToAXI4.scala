@@ -156,7 +156,7 @@ class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean)
   val (ar, aw, w, r, b) = (axi.ar.bits, axi.aw.bits, axi.w.bits, axi.r.bits, axi.b.bits)
 
   ar.addr  := mem.req.bits.addr
-  ar.prot  := AXI4Parameters.PROT_PRIVILEDGED
+  ar.prot  := AXI4Parameters.PROT_PRIVILEGED
   w.data := mem.req.bits.wdata
   w.strb := mem.req.bits.wmask
 

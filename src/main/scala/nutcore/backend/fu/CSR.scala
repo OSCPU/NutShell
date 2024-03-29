@@ -365,8 +365,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     lrAddr := setLrAddr
   }
 
-  // Hart Priviledge Mode
-  val priviledgeMode = RegInit(UInt(2.W), ModeM)
+  // Hart Privilege Mode
+  val privilegeMode = RegInit(UInt(2.W), ModeM)
 
   // perfcnt
   val hasPerfCnt = EnablePerfCnt && !p.FPGAPlatform
@@ -471,7 +471,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   // General CSR wen check
   val wen = (valid && func =/= CSROpType.jmp) && (addr =/= Satp.U || satpLegalMode) && !io.isBackendException
-  val isIllegalMode  = priviledgeMode < addr(9, 8)
+  val isIllegalMode  = privilegeMode < addr(9, 8)
   val justRead = (func === CSROpType.set || func === CSROpType.seti) && src1 === 0.U  // csrrs and csrrsi are exceptions when their src1 is zero
   val isIllegalWrite = wen && (addr(11, 10) === "b11".U) && !justRead  // Write a read-only CSR register
   val isIllegalAccess = isIllegalMode || isIllegalWrite
@@ -498,12 +498,12 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val isUret = addr === privUret   && func === CSROpType.jmp && !io.isBackendException
 
   Debug(wen, "csr write: pc %x addr %x rdata %x wdata %x func %x\n", io.cfIn.pc, addr, rdata, wdata, func)
-  Debug(wen, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
+  Debug(wen, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, privilegeMode)
 
   // MMU Permission Check
 
-  // def MMUPermissionCheck(ptev: Bool, pteu: Bool): Bool = ptev && !(priviledgeMode === ModeU && !pteu) && !(priviledgeMode === ModeS && pteu && mstatusStruct.sum.asBool)
-  // def MMUPermissionCheckLoad(ptev: Bool, pteu: Bool): Bool = ptev && !(priviledgeMode === ModeU && !pteu) && !(priviledgeMode === ModeS && pteu && mstatusStruct.sum.asBool) && (pter || (mstatusStruct.mxr && ptex))
+  // def MMUPermissionCheck(ptev: Bool, pteu: Bool): Bool = ptev && !(privilegeMode === ModeU && !pteu) && !(privilegeMode === ModeS && pteu && mstatusStruct.sum.asBool)
+  // def MMUPermissionCheckLoad(ptev: Bool, pteu: Bool): Bool = ptev && !(privilegeMode === ModeU && !pteu) && !(privilegeMode === ModeS && pteu && mstatusStruct.sum.asBool) && (pter || (mstatusStruct.mxr && ptex))
   // imem
   // val imemPtev = true.B
   // val imemPteu = true.B
@@ -525,9 +525,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // assert(!hasLoadPageFault)
   // assert(!hasStorePageFault)
 
-  //TODO: Havn't test if io.dmemMMU.priviledgeMode is correct yet
-  io.imemMMU.priviledgeMode := priviledgeMode
-  io.dmemMMU.priviledgeMode := Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
+  //TODO: Havn't test if io.dmemMMU.privilegeMode is correct yet
+  io.imemMMU.privilegeMode := privilegeMode
+  io.dmemMMU.privilegeMode := Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, privilegeMode)
   io.imemMMU.status_sum := mstatusStruct.sum.asBool
   io.dmemMMU.status_sum := mstatusStruct.sum.asBool
   io.imemMMU.status_mxr := DontCare
@@ -563,18 +563,18 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
     val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(VAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(VAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
-    when(priviledgeMode === ModeM){
+    when(privilegeMode === ModeM){
       mtval := tval
     }.otherwise{
       stval := tval
     }
-    Debug("[PF] %d: ipf %b tval %x := addr %x pc %x priviledgeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    Debug("[PF] %d: ipf %b tval %x := addr %x pc %x privilegeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, privilegeMode)
   }
 
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
     mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
-    Debug("[ML] %d: addr %x pc %x priviledgeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, priviledgeMode)
+    Debug("[ML] %d: addr %x pc %x privilegeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, privilegeMode)
   }
 
   // Exception and Intr
@@ -598,11 +598,11 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   mipRaiseIntr.e.s := mip.e.s | seip
 
   val ideleg =  (mideleg & mipRaiseIntr.asUInt)
-  def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
-                                   ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
+  def privilegedEnableDetect(x: Bool): Bool = Mux(x, ((privilegeMode === ModeS) && mstatusStruct.ie.s) || (privilegeMode < ModeS),
+                                   ((privilegeMode === ModeM) && mstatusStruct.ie.m) || (privilegeMode < ModeM))
 
   val intrVecEnable = Wire(Vec(12, Bool()))
-  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := priviledgedEnableDetect(y)}
+  intrVecEnable.zip(ideleg.asBools).map{case(x,y) => x := privilegedEnableDetect(y)}
   val intrVec = mie(11,0) & mipRaiseIntr.asUInt & intrVecEnable.asUInt
   BoringUtils.addSource(WireInit(intrVec), "intrVecIDU")
   // val intrNO = PriorityEncoder(intrVec)
@@ -617,10 +617,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val csrExceptionVec = Wire(Vec(16, Bool()))
   csrExceptionVec.map(_ := false.B)
   csrExceptionVec(breakPoint) := io.in.valid && isEbreak
-  csrExceptionVec(ecallM) := priviledgeMode === ModeM && io.in.valid && isEcall
-  csrExceptionVec(ecallS) := priviledgeMode === ModeS && io.in.valid && isEcall
-  csrExceptionVec(ecallU) := priviledgeMode === ModeU && io.in.valid && isEcall
-  csrExceptionVec(illegalInstr) := (isIllegalAddr || isIllegalAccess) && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written or not having enough priviledge
+  csrExceptionVec(ecallM) := privilegeMode === ModeM && io.in.valid && isEcall
+  csrExceptionVec(ecallS) := privilegeMode === ModeS && io.in.valid && isEcall
+  csrExceptionVec(ecallU) := privilegeMode === ModeU && io.in.valid && isEcall
+  csrExceptionVec(illegalInstr) := (isIllegalAddr || isIllegalAccess) && wen && !io.isBackendException // Trigger an illegal instr exception when unimplemented csr is being read/written or not having enough privilege
   csrExceptionVec(loadPageFault) := hasLoadPageFault
   csrExceptionVec(storePageFault) := hasStorePageFault
   val iduExceptionVec = io.cfIn.exceptionVec
@@ -641,15 +641,15 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   Debug(raiseExceptionIntr, "excin %b excgen %b", csrExceptionVec.asUInt, iduExceptionVec.asUInt)
   Debug(raiseExceptionIntr, "int/exc: pc %x int (%d):%x exc: (%d):%x\n",io.cfIn.pc, intrNO, io.cfIn.intrVec.asUInt, exceptionNO, raiseExceptionVec.asUInt)
-  Debug(raiseExceptionIntr, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, priviledgeMode)
+  Debug(raiseExceptionIntr, "[MST] time %d pc %x mstatus %x mideleg %x medeleg %x mode %x\n", GTimer(), io.cfIn.pc, mstatus, mideleg , medeleg, privilegeMode)
   Debug(io.redirect.valid, "redirect to %x\n", io.redirect.target)
   Debug(resetSatp, "satp reset\n")
 
   // Branch control
 
   val deleg = Mux(raiseIntr, mideleg , medeleg)
-  // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (priviledgeMode < ModeM);
-  val delegS = (deleg(causeNO(3,0))) && (priviledgeMode < ModeM)
+  // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (privilegeMode < ModeM);
+  val delegS = (deleg(causeNO(3,0))) && (privilegeMode < ModeM)
   val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in nutcore-riscv64, no exception will come together with PF
 
   ret := isMret || isSret || isUret
@@ -663,7 +663,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     // mstatusNew.mpp.m := ModeU //TODO: add mode U
     mstatusNew.ie.m := mstatusOld.pie.m
-    priviledgeMode := mstatusOld.mpp
+    privilegeMode := mstatusOld.mpp
     mstatusNew.pie.m := true.B
     mstatusNew.mpp := ModeU
     mstatus := mstatusNew.asUInt
@@ -676,7 +676,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     // mstatusNew.mpp.m := ModeU //TODO: add mode U
     mstatusNew.ie.s := mstatusOld.pie.s
-    priviledgeMode := Cat(0.U(1.W), mstatusOld.spp)
+    privilegeMode := Cat(0.U(1.W), mstatusOld.spp)
     mstatusNew.pie.s := true.B
     mstatusNew.spp := ModeU
     mstatus := mstatusNew.asUInt
@@ -689,7 +689,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     val mstatusNew = WireInit(mstatus.asTypeOf(new MstatusStruct))
     // mstatusNew.mpp.m := ModeU //TODO: add mode U
     mstatusNew.ie.u := mstatusOld.pie.u
-    priviledgeMode := ModeU
+    privilegeMode := ModeU
     mstatusNew.pie.u := true.B
     mstatus := mstatusNew.asUInt
     retTarget := uepc(VAddrBits-1, 0)
@@ -702,24 +702,24 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     when (delegS) {
       scause := causeNO
       sepc := SignExt(io.cfIn.pc, XLEN)
-      mstatusNew.spp := priviledgeMode
+      mstatusNew.spp := privilegeMode
       mstatusNew.pie.s := mstatusOld.ie.s
       mstatusNew.ie.s := false.B
-      priviledgeMode := ModeS
+      privilegeMode := ModeS
       when(tvalWen){stval := 0.U} // TODO: should not use =/=
       // printf("[*] mstatusNew.spp %x\n", mstatusNew.spp)
       // trapTarget := stvec(VAddrBits-1. 0)
     }.otherwise {
       mcause := causeNO
       mepc := SignExt(io.cfIn.pc, XLEN)
-      mstatusNew.mpp := priviledgeMode
+      mstatusNew.mpp := privilegeMode
       mstatusNew.pie.m := mstatusOld.ie.m
       mstatusNew.ie.m := false.B
-      priviledgeMode := ModeM
+      privilegeMode := ModeM
       when(tvalWen){mtval := 0.U} // TODO: should not use =/=
       // trapTarget := mtvec(VAddrBits-1. 0)
     }
-    // mstatusNew.pie.m := LookupTree(priviledgeMode, List(
+    // mstatusNew.pie.m := LookupTree(privilegeMode, List(
     //   ModeM -> mstatusOld.ie.m,
     //   ModeH -> mstatusOld.ie.h, //ERROR
     //   ModeS -> mstatusOld.ie.s,
@@ -911,7 +911,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     diffWrapper := DontCare
 
     val difftest = diffWrapper.csrState
-    difftest.priviledgeMode := priviledgeMode
+    difftest.privilegeMode := privilegeMode
     difftest.mstatus := mstatus
     difftest.sstatus := mstatus & sstatusRmask
     difftest.mepc := mepc
