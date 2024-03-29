@@ -70,7 +70,7 @@ class AXI4DMA extends AXI4SlaveModule(new AXI4Lite, new DMABundle) {
     state := Mux(len <= step.U, s_idle, s_read_req)
   }
 
-  dma.ar.bits.prot := AXI4Parameters.PROT_PRIVILEDGED
+  dma.ar.bits.prot := AXI4Parameters.PROT_PRIVILEGED
   dma.ar.bits.id := 0.U
   dma.ar.bits.size := log2Ceil(step).U
   dma.ar.bits.burst := AXI4Parameters.BURST_INCR

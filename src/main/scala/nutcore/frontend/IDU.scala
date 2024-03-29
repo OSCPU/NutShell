@@ -184,7 +184,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
   }
 
   io.out.bits.ctrl.isNutCoreTrap := (instr === NutCoreTrap.TRAP) && io.in.valid
-  io.isWFI := (instr === Priviledged.WFI) && io.in.valid
+  io.isWFI := (instr === Privileged.WFI) && io.in.valid
   io.isBranch := VecInit(RV32I_BRUInstr.table.map(i => i._2.tail(1) === fuOpType).toIndexedSeq).asUInt.orR &&
     fuType === FuType.bru
 
