@@ -18,19 +18,15 @@ package device
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.loadMemoryFromFile
 
 import nutcore.HasNutCoreParameter
 import bus.axi4._
-import utils._
 import difftest.common.DifftestMem
 
-class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Int,
+class AXI4RAM[T <: AXI4Lite](_type: T = new AXI4, memByte: Long,
   useBlackBox: Boolean = false) extends AXI4SlaveModule(_type) with HasNutCoreParameter {
 
-  val offsetBits = log2Up(memByte)
-  val offsetMask = (1 << offsetBits) - 1
-  def index(addr: UInt) = (addr & offsetMask.U) >> log2Ceil(DataBytes)
+  def index(addr: UInt) = addr(log2Ceil(memByte) - 1, log2Ceil(DataBytes))
   def inRange(idx: UInt) = idx < (memByte / 8).U
 
   val wIdx = index(waddr) + writeBeatCnt
