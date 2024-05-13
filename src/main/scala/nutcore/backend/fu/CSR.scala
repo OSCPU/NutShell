@@ -296,6 +296,22 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // | spp  | 0 |
   // | pie  | 0000 |
   // | ie   | 0000 | uie hardlinked to 0, as N ext is not implemented
+  private def GenMask(i: Int): UInt = GenMask(i, i)
+  private def GenMask(i: Int, j: Int): UInt = ZeroExt(Fill(i - j + 1, true.B) << j, 64)
+  val mstatusWMask = (~ZeroExt((
+    GenMask(63)      | // SD is read-only
+    GenMask(62, 38)  | // WPRI
+    GenMask(37)      | // MBE is read-only
+    GenMask(36)      | // SBE is read-only
+    GenMask(35, 32)  | // SXL and UXL cannot be changed
+    GenMask(31, 23)  | // WPRI
+    GenMask(16, 15)  | // XS is read-only
+    GenMask(14, 13)  | // FS is read-only
+    GenMask(6)       | // UBE, always little-endian (0)
+    GenMask(4)       | // WPRI
+    GenMask(2)       | // WPRI
+    GenMask(0)         // WPRI
+  ), 64)).asUInt
   val mstatusStruct = mstatus.asTypeOf(new MstatusStruct)
   def mstatusUpdateSideEffect(mstatus: UInt): UInt = {
     val mstatusOld = WireInit(mstatus.asTypeOf(new MstatusStruct))
@@ -426,8 +442,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Mhartid, mhartid, 0.U, MaskedRegMap.Unwritable),
 
     // Machine Trap Setup
-    // MaskedRegMap(Mstatus, mstatus, "hffffffffffffffee".U, (x=>{printf("mstatus write: %x time: %d\n", x, GTimer()); x})),
-    MaskedRegMap(Mstatus, mstatus, "hffffffffffffffff".U(64.W), mstatusUpdateSideEffect),
+    MaskedRegMap(Mstatus, mstatus, mstatusWMask, mstatusUpdateSideEffect),
     MaskedRegMap(Misa, misa), // now MXL, EXT is not changeable
     MaskedRegMap(Medeleg, medeleg, "hbbff".U(64.W)),
     MaskedRegMap(Mideleg, mideleg, "h222".U(64.W)),
