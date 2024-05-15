@@ -306,7 +306,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     GenMask(35, 32)  | // SXL and UXL cannot be changed
     GenMask(31, 23)  | // WPRI
     GenMask(16, 15)  | // XS is read-only
-    GenMask(14, 13)  | // FS is read-only
     GenMask(6)       | // UBE, always little-endian (0)
     GenMask(4)       | // WPRI
     GenMask(2)       | // WPRI
@@ -338,7 +337,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // val sstatus = RegInit(UInt(XLEN.W), "h00000000".U)
   val sstatusWmask = (~ZeroExt((
     GenMask(63, 20)  | // SD, WPRI, UXL, WPRI
-    GenMask(17, 9)   | // WPRI, XS, FS, WPRI, VS
+    GenMask(17, 15)  | // WPRI, XS
+    GenMask(12, 9)   | // WPRI, VS
     GenMask(7, 6)    | // WPRI, UBE
     GenMask(4, 2)    | // WPRI
     GenMask(0)         // WPRI
