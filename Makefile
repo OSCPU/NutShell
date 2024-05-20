@@ -63,9 +63,9 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill -i generator.test.runMain $(SIMTOP) $(MILL_ARGS_ALL)
 	@for file in $(RTL_DIR)/*.$(RTL_SUFFIX); do                               \
-		sed -i -e 's/$$fatal/xs_assert(`__LINE__)/g' "$$file";           \
-		sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" "$$file";    \
-        done
+		sed -i -e 's/$$fatal/xs_assert_v2(`__FILE__, `__LINE__)/g' "$$file";  \
+		sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" "$$file";         \
+	done
 
 sim-verilog: $(SIM_TOP_V)
 
