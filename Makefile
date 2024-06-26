@@ -18,7 +18,7 @@ IMAGE ?= ready-to-run/linux.bin
 
 DATAWIDTH ?= 64
 # sim  pynq  axu3cg  asic
-BOARD ?= sim
+BOARD ?= asic
 CORE  ?= inorder  # inorder  ooo  embedded
 
 MILL_ARGS_ALL  = $(MILL_ARGS)
