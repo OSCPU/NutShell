@@ -17,24 +17,24 @@ SIMTOP = top.TopMain
 IMAGE ?= ready-to-run/linux.bin
 
 DATAWIDTH ?= 64
-BOARD ?= asic  # sim  pynq  axu3cg  asic
+# sim  pynq  axu3cg  asic
+BOARD ?= sim
 CORE  ?= inorder  # inorder  ooo  embedded
-
-ifeq ($(BOARD),sim)
-SIM_TOP = SimTop
-else
-SIM_TOP = Top
-endif
 
 MILL_ARGS_ALL  = $(MILL_ARGS)
 MILL_ARGS_ALL += --target-dir $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
 FPGA_ARGS =
 
+ifeq ($(BOARD),sim)
+SIM_TOP = SimTop
+MILL_ARGS_ALL += --split-verilog
+else
+SIM_TOP = Top
+endif
+
 ifneq ($(FIRTOOL),)
 MILL_ARGS_ALL += --firtool-binary-path $(FIRTOOL)
 endif
-
-MILL_ARGS_ALL += --split-verilog
 
 .DEFAULT_GOAL = verilog
 
