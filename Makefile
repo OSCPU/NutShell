@@ -72,8 +72,8 @@ sim-verilog: $(SIM_TOP_V)
 emu: sim-verilog
 	$(MAKE) -C ./difftest emu WITH_CHISELDB=0 WITH_CONSTANTIN=0 RTL_SUFFIX=$(RTL_SUFFIX)
 
-emu-run: sim-verilog
-	$(MAKE) -C ./difftest emu-run RTL_SUFFIX=$(RTL_SUFFIX)
+emu-run: emu
+	./build/emu --diff=ready-to-run/riscv64-nemu-interpreter-so --image=ready-to-run/linux.bin -e 0
 
 simv: sim-verilog
 	$(MAKE) -C ./difftest simv WITH_CHISELDB=0 WITH_CONSTANTIN=0 RTL_SUFFIX=$(RTL_SUFFIX)
