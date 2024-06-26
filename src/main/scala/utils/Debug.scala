@@ -20,6 +20,7 @@ import chisel3._
 import difftest.common.LogPerfControl
 import nutcore.NutCoreConfig
 import utils.LogLevel.LogLevel
+import top.Settings
 
 object LogLevel extends Enumeration {
   type LogLevel = Value
@@ -42,11 +43,13 @@ object LogUtil {
   def apply(debugLevel: LogLevel)
            (prefix: Boolean, cond: Bool, pable: Printable)
            (implicit name: String): Any = {
-    val c = control()
-    val commonInfo = p"[${c._2}] $name: "
-    when (cond && c._1) {
-      //if(prefix) printf(commonInfo)
-      //printf(pable)
+    if (!Settings.get("ASIC")) {
+      val c = control()
+      val commonInfo = p"[${c._2}] $name: "
+      when (cond && c._1) {
+        if(prefix) printf(commonInfo)
+        printf(pable)
+      }
     }
   }
 }
