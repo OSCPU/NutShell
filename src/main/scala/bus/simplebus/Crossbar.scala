@@ -22,10 +22,10 @@ import chisel3.util._
 import utils._
 
 // This module does not support burst transaction
-class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
+class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)], hasDefault: Boolean = false) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC)
-    val out = Vec(addressSpace.length, new SimpleBusUC)
+    val out = Vec(addressSpace.length + (if (hasDefault) 1 else 0), new SimpleBusUC)
   })
 
   val s_idle :: s_resp :: s_error :: Nil = Enum(3)
@@ -33,13 +33,14 @@ class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
 
   // select the output channel according to the address
   val addr = io.in.req.bits.addr
-  val outMatchVec = VecInit(addressSpace.map(
-    range => (addr >= range._1.U && addr < (range._1 + range._2).U)))
+  val outMatch = addressSpace.map(r => (addr >= r._1.U && addr < (r._1 + r._2).U))
+  val defaultMatch = !outMatch.reduce(_ || _)
+  val outMatchVec = VecInit(outMatch ++ (if (hasDefault) List(defaultMatch) else List()))
   val outSelVec = VecInit(PriorityEncoderOH(outMatchVec))
   val outSelRespVec = RegEnable(outSelVec,
                                 VecInit(Seq.fill(outSelVec.length)(false.B)),
                                 io.in.req.fire && state === s_idle)
-  val reqInvalidAddr = io.in.req.valid && !outSelVec.asUInt.orR
+  val reqInvalidAddr = if (hasDefault) false.B else (io.in.req.valid && !outSelVec.asUInt.orR)
 
   when (reqInvalidAddr) {
     Debug() {

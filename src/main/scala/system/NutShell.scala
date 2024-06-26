@@ -98,12 +98,11 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   nutcore.io.imem.coh.req.valid := false.B
   nutcore.io.imem.coh.req.bits := DontCare
 
-  val addrSpace = List(
+  val internalDev = List(
     (Settings.getLong("CLINTBase"), 0x00010000L), // CLINT
     (Settings.getLong("PLICBase"),  0x04000000L), // PLIC
-    (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices
   )
-  val mmioXbar = Module(new SimpleBusCrossbar1toN(addrSpace))
+  val mmioXbar = Module(new SimpleBusCrossbar1toN(internalDev, hasDefault = true))
   mmioXbar.io.in <> nutcore.io.mmio
 
   val extDev = mmioXbar.io.out(2)

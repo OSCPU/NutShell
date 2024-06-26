@@ -78,7 +78,7 @@ object AddressSpace extends HasNutCoreParameter {
   def mmio = if (Settings.get("ASIC")) {
     List(
     // internal devices, such as CLINT and PLIC
-    (0x00000000L, 0x10000000L),
+    (0x00000000L, 0x20000000L),
     // external devices
     (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize"))
   )} else {
