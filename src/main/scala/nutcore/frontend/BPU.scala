@@ -336,17 +336,24 @@ class BPU_inorder extends NutCoreModule {
   // Debug(btbHit, "[BTBHT5] btbReqValid:%d btbReqSetIdx:%x\n",btb.io.r.req.valid, btb.io.r.req.bits.setId)
 
   // PHT
+  val phtResetState = RegInit(true.B)
+  val (phtResetIdx, phtResetFinish) = Counter(phtResetState, NRbtb)
+  when (phtResetFinish) { phtResetState := false.B }
+
   val pht = Mem(NRbtb, UInt(2.W))
-  val phtTaken = RegEnable(pht.read(btbAddr.getIdx(io.in.pc.bits))(1), io.in.pc.valid)
+  def phtRead(idx: UInt) = Mux(phtResetState, 0.U, pht.read(idx))
+  val phtTaken = RegEnable(phtRead(btbAddr.getIdx(io.in.pc.bits))(1), io.in.pc.valid)
 
   // RAS
-
   val NRras = 16
+  val rasResetState = RegInit(true.B)
+  val (rasResetIdx, rasResetFinish) = Counter(rasResetState, NRras)
+  when (rasResetFinish) { rasResetState := false.B }
+
   val ras = Mem(NRras, UInt(VAddrBits.W))
-  // val raBrIdxs = Mem(NRras, UInt(2.W))
   val sp = Counter(NRras)
-  val rasTarget = RegEnable(ras.read(sp.value), io.in.pc.valid)
-  // val rasBrIdx = RegEnable(raBrIdxs.read(sp.value), io.in.pc.valid)
+  val rasRead = Mux(rasResetState, 0.U, ras.read(sp.value))
+  val rasTarget = RegEnable(rasRead, io.in.pc.valid)
 
   // update
   val req = WireInit(0.U.asTypeOf(new BPUUpdateReq))
@@ -389,31 +396,23 @@ class BPU_inorder extends NutCoreModule {
   //  Debug("[BTBWrite-ALL] %d setIdx:%x req.valid:%d pc:%x target:%x bridx:%x\n", GTimer(), btbAddr.getIdx(req.pc), req.valid, req.pc, req.actualTarget, btbWrite.brIdx)
   //}
 
-  val cnt = RegNext(pht.read(btbAddr.getIdx(req.pc)))
+  val cnt = RegNext(phtRead(btbAddr.getIdx(req.pc)))
   val reqLatch = RegNext(req)
-  when (reqLatch.valid && ALUOpType.isBranch(reqLatch.fuOpType)) {
-    val taken = reqLatch.actualTaken
-    val newCnt = Mux(taken, cnt + 1.U, cnt - 1.U)
-    val wen = (taken && (cnt =/= "b11".U)) || (!taken && (cnt =/= "b00".U))
-    when (wen) {
-      pht.write(btbAddr.getIdx(reqLatch.pc), newCnt)
-      //Debug(){
-        //Debug("BPUPDATE: pc %x cnt %x\n", reqLatch.pc, newCnt)
-      //}
-    }
-  }
+  val taken = reqLatch.actualTaken
+  val newCnt = Mux(taken, cnt + 1.U, cnt - 1.U)
+  val phtWen = (taken && (cnt =/= "b11".U)) || (!taken && (cnt =/= "b00".U))
+  val phtIdx = Mux(phtResetState, phtResetIdx, btbAddr.getIdx(reqLatch.pc))
+  val phtWdata = Mux(phtResetState, 0.U, newCnt)
+  val phtRealWen = phtResetState || (reqLatch.valid && ALUOpType.isBranch(reqLatch.fuOpType) && phtWen)
+  when (phtRealWen) { pht.write(phtIdx, phtWdata) }
+
+  val rasIdx = Mux(rasResetState, rasResetIdx, sp.value + 1.U)
+  val rasWdata = Mux(rasResetState, 0.U, req.pc + Mux(req.isRVC, 2.U, 4.U))
+  val rasWen = rasResetState || (req.valid && (req.fuOpType === ALUOpType.call))
+  when (rasWen) { ras.write(rasIdx, rasWdata) }
   when (req.valid) {
-    when (req.fuOpType === ALUOpType.call)  {
-      ras.write(sp.value + 1.U, Mux(req.isRVC, req.pc + 2.U, req.pc + 4.U))
-      // raBrIdxs.write(sp.value + 1.U, Mux(req.pc(1), 2.U, 1.U))
-      sp.value := sp.value + 1.U
-    }
-    .elsewhen (req.fuOpType === ALUOpType.ret) {
-      when(sp.value === 0.U) {
-        //Debug("ATTTTT: sp.value is 0.U\n") //TODO: sp.value may equal to 0.U
-      }
-      sp.value := Mux(sp.value===0.U, 0.U, sp.value - 1.U) //TODO: sp.value may less than 0.U
-    }
+    when      (req.fuOpType === ALUOpType.call) { sp.value := sp.value + 1.U }
+    .elsewhen (req.fuOpType === ALUOpType.ret)  { sp.value := sp.value - 1.U }
   }
 
   io.out.target := Mux(btbRead._type === BTBtype.R, rasTarget, btbRead.target)
