@@ -2,9 +2,9 @@ import mill._, scalalib._
 import coursier.maven.MavenRepository
 
 object ivys {
-  val scala = "2.13.12"
-  val chisel = ivy"org.chipsalliance::chisel:6.3.0"
-  val chiselPlugin = ivy"org.chipsalliance:::chisel-plugin:6.3.0"
+  val scala = "2.13.14"
+  val chisel = ivy"org.chipsalliance::chisel:6.4.0"
+  val chiselPlugin = ivy"org.chipsalliance:::chisel-plugin:6.4.0"
 }
 
 trait CommonModule extends ScalaModule {
