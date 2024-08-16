@@ -41,7 +41,9 @@ $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
 	mill -i generator.test.runMain top.$(TOP) $(MILL_ARGS_ALL) $(FPGA_ARGS)
 	@mv $(SIM_TOP_V) $(TOP_V)
-	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
+	@for file in $(RTL_DIR)/*.$(RTL_SUFFIX); do                               \
+		sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' "$$file";        \
+	done
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
 	@sed -i 's/^/\/\// ' .__head__

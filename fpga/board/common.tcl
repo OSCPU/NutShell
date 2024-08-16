@@ -30,6 +30,7 @@ set bd_dir      ${script_dir}/bd
 set constr_dir  ${script_dir}/constr
 set data_dir    ${script_dir}/data
 set ip_dir      ${script_dir}/ip
+set nutshell_build_dir ${fpga_dir}/../build/rtl
 
 create_project $project_name -force -dir $project_dir/ -part ${device}
 if {[info exists board]} {
@@ -44,17 +45,15 @@ add_files -norecurse -fileset sources_1 $inc_files
 set_property is_global_include true [get_files $inc_files]
 
 # Add files for nutshell
-lappend src_files "[file normalize "${fpga_dir}/../build/TopMain.v"]" \
-                  "[file normalize "${fpga_dir}/../build/DifftestRunaheadEvent.v"]" \
-                  "[file normalize "${fpga_dir}/../build/DifftestRunaheadRedirectEvent.v"]"
+set nutshell_rtl [glob -d ${nutshell_build_dir} *.sv or *.v]
+
+foreach src_file ${nutshell_rtl} {
+  lappend src_files [file normalize $src_file]
+}
 
 add_files -norecurse -fileset sources_1 $src_files
-
-# Mark file type of difftest files as SystemVerilog to support DPI statements
-set_property file_type SystemVerilog -objects [get_files -of_objects [get_filesets sources_1] [list \
-  "*/DifftestRunaheadRedirectEvent.v" \
-  "*/DifftestRunaheadEvent.v" \
-]]
+set_property file_type Verilog -objects [get_files -of_objects [get_filesets sources_1] *NutShell.sv] 
+# vivado do not support a system verilog file be the top of a reference design, this may be removed as reference design is not need actually
 
 if {[info exists xdc_files]} {
   add_files -norecurse -fileset constrs_1 $xdc_files
