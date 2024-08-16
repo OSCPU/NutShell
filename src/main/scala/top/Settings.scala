@@ -65,7 +65,8 @@ object Axu3cgSettings {
 object PXIeSettings {
   def apply() = Map(
     "FPGAPlatform" -> true,
-    "NrExtIntr" -> 5
+    "NrExtIntr" -> 5,
+    "EnableDebug" -> false
   )
 }
 

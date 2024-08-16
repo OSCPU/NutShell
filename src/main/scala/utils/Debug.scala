@@ -42,12 +42,14 @@ object LogUtil {
   def apply(debugLevel: LogLevel)
            (prefix: Boolean, cond: Bool, pable: Printable)
            (implicit name: String): Any = {
-    val c = control()
-    val commonInfo = p"[${c._2}] $name: "
-    when (cond && c._1) {
-      if(prefix) printf(commonInfo)
-      printf(pable)
-    }
+    if (NutCoreConfig().EnableDebug){
+      val c = control()
+      val commonInfo = p"[${c._2}] $name: "
+      when (cond && c._1) {
+        if(prefix) printf(commonInfo)
+        printf(pable)
+      }
+    } 
   }
 }
 
