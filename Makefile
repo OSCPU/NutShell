@@ -1,12 +1,13 @@
 TOP = TopMain
 SIM_TOP = SimTop
-FPGATOP = NutShellFPGATop
+FPGATOP = Top
+REAL_TOP = $(if $(subst "sim","",$(BOARD)),$(FPGATOP), $(SIM_TOP) )
 
 BUILD_DIR = $(abspath ./build)
 
 RTL_DIR = $(BUILD_DIR)/rtl
 RTL_SUFFIX ?= sv
-SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).$(RTL_SUFFIX)
+SIM_TOP_V = $(RTL_DIR)/$(REAL_TOP).$(RTL_SUFFIX) # if use FPGA, use FPGATOP
 TOP_V = $(RTL_DIR)/$(TOP).$(RTL_SUFFIX)
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
