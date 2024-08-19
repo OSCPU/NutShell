@@ -51,14 +51,16 @@ object PynqSettings {
     "MemMapBase" -> 0x0000000010000000L,
     "MemMapRegionBits" -> 28,
     "MMIOBase" -> 0x00000000e0000000L,
-    "MMIOSize" -> 0x0000000020000000L
+    "MMIOSize" -> 0x0000000020000000L,
+    "EnableDebug" -> false
   )
 }
 
 object Axu3cgSettings {
   def apply() = Map(
     "FPGAPlatform" -> true,
-    "NrExtIntr" -> 2
+    "NrExtIntr" -> 2,
+    "EnableDebug" -> false
   )
 }
 
