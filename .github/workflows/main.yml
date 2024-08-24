@@ -45,7 +45,15 @@ jobs:
             source ./env.sh
             make clean
             make verilog
-
+      - name: Generate Verilog for FPGA
+        run: |
+            cd $GITHUB_WORKSPACE/../xs-env
+            source ./env.sh
+            cd $GITHUB_WORKSPACE/../xs-env/NutShell
+            source ./env.sh
+            make clean
+            make verilog BOARD=pynq
+            
       - name: Microbench - Nutshell
         run: |
             cd $GITHUB_WORKSPACE/../xs-env
