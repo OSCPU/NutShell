@@ -1,7 +1,7 @@
 TOP = TopMain
 SIM_TOP = SimTop
 FPGATOP = Top
-REAL_TOP = $(if $(subst "sim","",$(BOARD)),$(FPGATOP), $(SIM_TOP) )
+REAL_TOP = $(if $(strip $(subst sim,,$(BOARD))),$(FPGATOP),$(SIM_TOP))
 
 BUILD_DIR = $(abspath ./build)
 
