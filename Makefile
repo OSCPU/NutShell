@@ -1,12 +1,13 @@
 TOP = TopMain
 SIM_TOP = SimTop
-FPGATOP = NutShellFPGATop
+FPGATOP = Top
+REAL_TOP = $(if $(strip $(subst sim,,$(BOARD))),$(FPGATOP),$(SIM_TOP))
 
 BUILD_DIR = $(abspath ./build)
 
 RTL_DIR = $(BUILD_DIR)/rtl
 RTL_SUFFIX ?= sv
-SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).$(RTL_SUFFIX)
+SIM_TOP_V = $(RTL_DIR)/$(REAL_TOP).$(RTL_SUFFIX) # if use FPGA, use FPGATOP
 TOP_V = $(RTL_DIR)/$(TOP).$(RTL_SUFFIX)
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
@@ -40,7 +41,9 @@ $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
 	mill -i generator.test.runMain top.$(TOP) $(MILL_ARGS_ALL) $(FPGA_ARGS)
 	@mv $(SIM_TOP_V) $(TOP_V)
-	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
+	@for file in $(RTL_DIR)/*.$(RTL_SUFFIX); do                               \
+		sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' "$$file";        \
+	done
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
 	@sed -i 's/^/\/\// ' .__head__
