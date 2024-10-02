@@ -24,6 +24,9 @@ CORE  ?= inorder  # inorder  ooo  embedded
 
 MILL_ARGS_ALL = $(MILL_ARGS)
 MILL_ARGS_ALL += -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
+ifeq ($(HIGH), 1)
+MILL_ARGS_ALL += -X high
+endif
 FPGA_ARGS =
 
 ifeq ($(MFC), 1)
@@ -46,6 +49,13 @@ endif
 EXTRACTOR = $(abspath ./scripts/extract_files.sh)
 
 .DEFAULT_GOAL = verilog
+
+BUILD_MODEL = $(BUILD_DIR)/rtl/SimTop
+
+gen:
+	circt-translate --import-firrtl $(BUILD_MODEL).fir > $(BUILD_MODEL).fir.mlir
+	circt-opt -pass-pipeline='builtin.module(firrtl.circuit(firrtl.module(firrtl-lower-chirrtl)))' $(BUILD_MODEL).fir.mlir > $(BUILD_MODEL).fir.opt.mlir
+	circt-translate --export-firrtl $(BUILD_MODEL).fir.opt.mlir > $(BUILD_MODEL).hi.fir
 
 help:
 	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) --help $(MILL_ARGS_ALL)
