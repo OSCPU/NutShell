@@ -42,9 +42,10 @@ object TopMain extends App {
     require(target != "")
     target.substring(info.length()+1)
   }
-  val board = parseArgs("BOARD", args)
-  val core = parseArgs("CORE", args)
-  
+  val newArgs = DifftestModule.parseArgs(args)
+  val board = parseArgs("BOARD", newArgs)
+  val core = parseArgs("CORE", newArgs)
+
   val s = (board match {
     case "sim"    => Nil
     case "pynq"   => PynqSettings()
@@ -64,11 +65,11 @@ object TopMain extends App {
       println(f + " = " + v)
   }
   if (board == "sim") {
-    (new ChiselStage).execute(args, Seq(
+    (new ChiselStage).execute(newArgs, Seq(
       ChiselGeneratorAnnotation(() => new SimTop))
     )
   } else {
-    (new ChiselStage).execute(args, Seq(
+    (new ChiselStage).execute(newArgs, Seq(
       ChiselGeneratorAnnotation(() => new Top))
     )
   }
