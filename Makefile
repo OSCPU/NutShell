@@ -22,7 +22,8 @@ DATAWIDTH ?= 64
 BOARD ?= sim  # sim  pynq  axu3cg
 CORE  ?= inorder  # inorder  ooo  embedded
 
-MILL_ARGS = -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
+MILL_ARGS_ALL = $(MILL_ARGS)
+MILL_ARGS_ALL += -td $(RTL_DIR) BOARD=$(BOARD) CORE=$(CORE)
 FPGA_ARGS =
 
 ifeq ($(MFC), 1)
@@ -32,14 +33,14 @@ endif
 SPLIT_VERILOG = 0
 
 ifneq (,$(filter 3%,$(CHISEL_VERSION)))
-MILL_ARGS += --output-file $(@F)
+MILL_ARGS_ALL += --output-file $(@F)
 FPGA_ARGS += --infer-rw $(FPGATOP) --repl-seq-mem -c:$(FPGATOP):-o:$(@D)/$(@F).conf
 else
 SPLIT_VERILOG = 1
 endif
 
 ifneq ($(FIRTOOL),)
-MILL_ARGS += --firtool-binary-path $(FIRTOOL)
+MILL_ARGS_ALL += --firtool-binary-path $(FIRTOOL)
 endif
 
 EXTRACTOR = $(abspath ./scripts/extract_files.sh)
@@ -47,14 +48,15 @@ EXTRACTOR = $(abspath ./scripts/extract_files.sh)
 .DEFAULT_GOAL = verilog
 
 help:
-	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) --help $(MILL_ARGS)
+	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) --help $(MILL_ARGS_ALL)
 
 $(TOP_V): $(SCALA_FILE)
 	mkdir -p $(@D)
-	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) $(MILL_ARGS) $(FPGA_ARGS)
+	mill -i generator[$(CHISEL_VERSION)].runMain top.$(TOP) $(MILL_ARGS_ALL) $(FPGA_ARGS)
 ifeq ($(SPLIT_VERILOG), 1)
 	@mv $(SIM_TOP_V) $(TOP_V)
 	@cd $(RTL_DIR) && bash $(EXTRACTOR) $(TOP_V)
+endif
 	sed -i -e 's/_\(aw\|ar\|w\|r\|b\)_\(\|bits_\)/_\1/g' $@
 	@git log -n 1 >> .__head__
 	@git diff >> .__diff__
@@ -76,11 +78,12 @@ verilog: $(TOP_V)
 
 $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) $(MILL_ARGS)
+	mill -i generator[$(CHISEL_VERSION)].test.runMain $(SIMTOP) $(MILL_ARGS_ALL)
 	@sed -i 's/$$fatal/xs_assert(`__LINE__)/g' $(SIM_TOP_V)
 ifeq ($(MFC), 1)
 	@sed -i -e "s/\$$error(/\$$fwrite(32\'h80000002, /g" $(SIM_TOP_V)
 	@cd $(RTL_DIR) && bash $(EXTRACTOR) $(SIM_TOP_V)
+endif
 
 sim-verilog: $(SIM_TOP_V)
 
