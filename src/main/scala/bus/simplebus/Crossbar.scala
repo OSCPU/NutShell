@@ -58,7 +58,7 @@ class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
   }
 
   // bind out.req channel
-  io.in.req.ready := Mux1H(outSelVec, io.out.map(_.req.ready)) || reqInvalidAddr
+  io.in.req.ready := Mux1H(outSelVec, io.out.map(_.req.ready)) && state === s_idle || reqInvalidAddr
   for (i <- 0 until io.out.length) {
     io.out(i).req.valid := outSelVec(i) && io.in.req.valid && state === s_idle
     io.out(i).req.bits := io.in.req.bits
@@ -68,7 +68,7 @@ class SimpleBusCrossbar1toN(addressSpace: List[(Long, Long)]) extends Module {
   for (i <- 0 until io.out.length) {
     io.out(i).resp.ready := outSelRespVec(i) && io.in.resp.ready && state === s_resp
   }
-  io.in.resp.valid := Mux1H(outSelRespVec, io.out.map(_.resp.valid)) || state === s_error
+  io.in.resp.valid := Mux1H(outSelRespVec, io.out.map(_.resp.valid)) && state === s_resp || state === s_error
   io.in.resp.bits := Mux1H(outSelRespVec, io.out.map(_.resp.bits))
   // io.in.resp.bits.exc.get := state === s_error
 
