@@ -41,6 +41,20 @@ class SDHelper extends BlackBox with HasBlackBoxInline {
     val addr = Input(UInt(32.W))
   }).suggestName("io")
 
+  val cppExtModule =
+    s"""
+       |void SDHelper (
+       |  uint8_t ren,
+       |  uint32_t& data,
+       |  uint8_t setAddr,
+       |  uint32_t addr
+       |) {
+       |  if (ren) sd_read(&data);
+       |  if (setAddr) sd_setaddr(addr);
+       |}
+       |""".stripMargin
+  difftest.DifftestModule.createCppExtModule("SDHelper", cppExtModule, Some("\"sdcard.h\""))
+
   setInline("SDHelper.v",
     s"""
       |import "DPI-C" function void sd_setaddr(input int addr);

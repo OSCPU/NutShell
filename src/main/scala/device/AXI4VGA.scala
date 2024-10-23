@@ -91,6 +91,19 @@ class FBHelper extends BlackBox with HasBlackBoxInline {
     val sync = Input(Bool())
   }).suggestName("io")
 
+  val cppExtModule =
+    s"""
+       |void FBHelper (
+       |  uint8_t valid,
+       |  uint32_t pixel,
+       |  uint8_t sync
+       |) {
+       |  if (valid) put_pixel(pixel);
+       |  if (sync) vmem_sync();
+       |}
+       |""".stripMargin
+  difftest.DifftestModule.createCppExtModule("FBHelper", cppExtModule, Some("\"vga.h\""))
+
   setInline("FBHelper.v",
     s"""
       |import "DPI-C" function void put_pixel(input int pixel);
