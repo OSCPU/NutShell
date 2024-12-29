@@ -38,7 +38,7 @@ object DefaultSettings {
 
     "FPGAPlatform" -> false,
     "EnableILA" -> true,
-    "EnableDebug" -> true,
+    "EnableDebug" -> false,
     "EnableRVC" -> true
   )
 }
