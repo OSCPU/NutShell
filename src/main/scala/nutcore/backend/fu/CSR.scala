@@ -787,8 +787,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   )
 
   val sequentialPerfCntList = Map(
-    "McsrInstr"   -> (0xb09, "perfCntCondMcsrInstr"  ),
-    "MloadInstr"  -> (0xb0a, "perfCntCondMloadInstr" ),
+    "McsrInstr"   -> (0xb09, "perfCntCondMcsrInstr"    ),
+    "MloadInstr"  -> (0xb0a, "perfCntCondMloadInstr"   ),
     "MrawStall"   -> (0xb31, "perfCntCondMrawStall"    ),
     "MexuBusy"    -> (0xb32, "perfCntCondMexuBusy"     ),
     "MloadStall"  -> (0xb33, "perfCntCondMloadStall"   ),
@@ -797,9 +797,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   )
 
   val outOfOrderPerfCntList = Map(
-    "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit" ),
-    "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit" ),
-    "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"),
+    "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit"   ),
+    "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit"   ),
+    "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"  ),
     "MrobFull"    -> (0xb31, "perfCntCondMrobFull"     ),
     "Malu1rsFull" -> (0xb32, "perfCntCondMalu1rsFull"  ),
     "Malu2rsFull" -> (0xb33, "perfCntCondMalu2rsFull"  ),
