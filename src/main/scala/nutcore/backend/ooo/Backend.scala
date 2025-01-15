@@ -625,19 +625,19 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
     FuType.mou -> csrrs.io.in.ready
   ))
   val dispatchConflict = bruCnt > 1.U || lsuCnt > 1.U || mduCnt > 1.U || csrCnt > 1.U
-  BoringUtils.addSource(io.in(0).valid && (hasBlockInst(0) && !pipeLineEmpty || blockReg), "perfCntCondMdp1StBlk")
-  BoringUtils.addSource(io.in(0).valid && inst1RSfull, "perfCntCondMdp1StRSf")
-  BoringUtils.addSource(io.in(0).valid && !rob.io.in(0).ready, "perfCntCondMdp1StROBf")
-  BoringUtils.addSource(dispatchConflict, "perfCntCondMdp1StConf")
-  BoringUtils.addSource(io.in(0).valid && !instCango(0), "perfCntCondMdp1StCnt")
+  BoringUtils.addSource(WireInit(io.in(0).valid && (hasBlockInst(0) && !pipeLineEmpty || blockReg)), "perfCntCondMdp1StBlk")
+  BoringUtils.addSource(WireInit(io.in(0).valid && inst1RSfull), "perfCntCondMdp1StRSf")
+  BoringUtils.addSource(WireInit(io.in(0).valid && !rob.io.in(0).ready), "perfCntCondMdp1StROBf")
+  BoringUtils.addSource(WireInit(dispatchConflict), "perfCntCondMdp1StConf")
+  BoringUtils.addSource(WireInit(io.in(0).valid && !instCango(0)), "perfCntCondMdp1StCnt")
 
-  BoringUtils.addSource(io.in(1).valid && (hasBlockInst(0) || hasBlockInst(1) || blockReg), "perfCntCondMdp2StBlk")
-  BoringUtils.addSource(io.in(1).valid && inst2RSfull, "perfCntCondMdp2StRSf")
-  BoringUtils.addSource(io.in(1).valid && !rob.io.in(1).ready, "perfCntCondMdp2StROBf")
-  BoringUtils.addSource(dispatchConflict, "perfCntCondMdp2StConf")
-  BoringUtils.addSource(io.in(1).valid && !instCango(0), "perfCntCondMdp2StSeq")
-  BoringUtils.addSource(io.in(1).valid && !instCango(1), "perfCntCondMdp2StCnt")
-  BoringUtils.addSource(!io.in(0).valid, "perfCntCondMdpNoInst")
+  BoringUtils.addSource(WireInit(io.in(1).valid && (hasBlockInst(0) || hasBlockInst(1) || blockReg)), "perfCntCondMdp2StBlk")
+  BoringUtils.addSource(WireInit(io.in(1).valid && inst2RSfull), "perfCntCondMdp2StRSf")
+  BoringUtils.addSource(WireInit(io.in(1).valid && !rob.io.in(1).ready), "perfCntCondMdp2StROBf")
+  BoringUtils.addSource(WireInit(dispatchConflict), "perfCntCondMdp2StConf")
+  BoringUtils.addSource(WireInit(io.in(1).valid && !instCango(0)), "perfCntCondMdp2StSeq")
+  BoringUtils.addSource(WireInit(io.in(1).valid && !instCango(1)), "perfCntCondMdp2StCnt")
+  BoringUtils.addSource(WireInit(!io.in(0).valid), "perfCntCondMdpNoInst")
 
   if (!p.FPGAPlatform) {
     val difftest = DifftestModule(new DiffArchIntRegState)
@@ -654,7 +654,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
     BoringUtils.addSink(instrCnt, "simInstrCnt")
     BoringUtils.addSource(nutcoretrap, "nutcoretrap")
 
-    val difftest = DifftestModule(new DiffTrapEvent)
+    val difftest = DifftestModule(new DiffTrapEvent, dontCare = true)
     difftest.coreid   := 0.U // TODO: nutshell does not support coreid auto config
     difftest.hasTrap  := nutcoretrap
     difftest.code     := csrrs.io.out.bits.decode.data.src1

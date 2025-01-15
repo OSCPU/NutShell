@@ -329,11 +329,11 @@ class RS(size: Int = 2, pipelined: Boolean = true, fifo: Boolean = false, priori
     when(io.out.fire){(0 until rsSize).map(i => priorityMask(i)(dequeueSelect) := false.B)}
     when(io.flush){(0 until rsSize).map(i => priorityMask(i) := VecInit(Seq.fill(rsSize)(false.B)))}
 
-    BoringUtils.addSource(PopCount(valid) === 0.U, "perfCntCondMbrInROB_0")
-    BoringUtils.addSource(PopCount(valid) === 1.U, "perfCntCondMbrInROB_1")
-    BoringUtils.addSource(PopCount(valid) === 2.U, "perfCntCondMbrInROB_2")
-    BoringUtils.addSource(PopCount(valid) === 3.U, "perfCntCondMbrInROB_3")
-    BoringUtils.addSource(PopCount(valid) >   3.U, "perfCntCondMbrInROB_4")
+    BoringUtils.addSource(WireInit(PopCount(valid) === 0.U), "perfCntCondMbrInROB_0")
+    BoringUtils.addSource(WireInit(PopCount(valid) === 1.U), "perfCntCondMbrInROB_1")
+    BoringUtils.addSource(WireInit(PopCount(valid) === 2.U), "perfCntCondMbrInROB_2")
+    BoringUtils.addSource(WireInit(PopCount(valid) === 3.U), "perfCntCondMbrInROB_3")
+    BoringUtils.addSource(WireInit(PopCount(valid) >   3.U), "perfCntCondMbrInROB_4")
   }
 
 }

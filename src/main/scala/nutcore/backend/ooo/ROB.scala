@@ -420,8 +420,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
     (0 until robWidth).map(j => valid(i)(j) && store(i)(j)).reduce(_ || _)
   })).asUInt)
   // TODO: use a single bit in rob misc field to save "isload"
-  BoringUtils.addSource(robLoadInstVec, "ROBLoadInstVec")
-  BoringUtils.addSource(robStoreInstVec, "ROBStoreInstVec")
+  BoringUtils.addSource(WireInit(robLoadInstVec), "ROBLoadInstVec")
+  BoringUtils.addSource(WireInit(robStoreInstVec), "ROBStoreInstVec")
 
   // reset headptr when mis-prediction recovery is triggered
   when(io.mispredictRec.valid && io.mispredictRec.redirect.valid){
@@ -492,12 +492,12 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1) && !instRedirect(0)
-  BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
-  BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
+  BoringUtils.addSource(WireInit(retireATerm), "perfCntCondMinstret")
+  BoringUtils.addSource(WireInit(retireMultiTerms), "perfCntCondMultiCommit")
 
   if (!p.FPGAPlatform) {
     for (i <- 0 until RetireWidth) {
-      val difftest_commit = DifftestModule(new DiffInstrCommit(robSize * robWidth), delay = 1)
+      val difftest_commit = DifftestModule(new DiffInstrCommit(robSize * robWidth), delay = 1, dontCare = true)
       difftest_commit.coreid   := 0.U
       difftest_commit.index    := i.U
 
@@ -532,7 +532,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   // sim pref counter
   val retireBruInst = (retireATerm && (decode(ringBufferTail)(0).ctrl.fuType === FuType.bru || decode(ringBufferTail)(1).ctrl.fuType === FuType.bru))
   val retireBruInstRedirect = retireBruInst && (redirect(ringBufferTail)(0).valid || redirect(ringBufferTail)(1).valid)
-  BoringUtils.addSource(retireBruInst, "perfCntCondMbruCmt")
-  BoringUtils.addSource(retireBruInstRedirect, "perfCntCondMbruCmtWrong")
+  BoringUtils.addSource(WireInit(retireBruInst), "perfCntCondMbruCmt")
+  BoringUtils.addSource(WireInit(retireBruInstRedirect), "perfCntCondMbruCmtWrong")
 
 }

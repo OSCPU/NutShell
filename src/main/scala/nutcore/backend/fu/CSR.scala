@@ -563,7 +563,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val dmemPagefaultAddr = Wire(UInt(VAddrBits.W))
   val dmemAddrMisalignedAddr = Wire(UInt(VAddrBits.W))
   val lsuAddr = WireInit(0.U(64.W))
-  BoringUtils.addSink(lsuAddr, "LSUADDR")
+
   if(EnableOutOfOrderExec){
     hasInstrPageFault      := valid && io.cfIn.exceptionVec(instrPageFault)
     hasLoadPageFault       := valid && io.cfIn.exceptionVec(loadPageFault)
@@ -573,6 +573,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     dmemPagefaultAddr := src1 // LSU -> wbresult -> prf -> beUop.data.src1
     dmemAddrMisalignedAddr := src1
   }else{
+    BoringUtils.addSink(lsuAddr, "LSUADDR")
     hasInstrPageFault := io.cfIn.exceptionVec(instrPageFault) && valid
     hasLoadPageFault := io.dmemMMU.loadPF
     hasStorePageFault := io.dmemMMU.storePF
@@ -764,11 +765,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     "MbruInstr"   -> (0xb06, "perfCntCondMbruInstr"  ),
     "MlsuInstr"   -> (0xb07, "perfCntCondMlsuInstr"  ),
     "MmduInstr"   -> (0xb08, "perfCntCondMmduInstr"  ),
-    "McsrInstr"   -> (0xb09, "perfCntCondMcsrInstr"  ),
-    "MloadInstr"  -> (0xb0a, "perfCntCondMloadInstr" ),
     "MmmioInstr"  -> (0xb0b, "perfCntCondMmmioInstr" ),
-    // "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit" ),
-    // "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit" ),
     "MmulInstr"   -> (0xb0e, "perfCntCondMmulInstr"  ),
     "MifuFlush"   -> (0xb0f, "perfCntCondMifuFlush"  ),
     "MbpBRight"   -> (0xb10, "MbpBRight"             ),
@@ -779,7 +776,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     "MbpIWrong"   -> (0xb15, "MbpIWrong"             ),
     "MbpRRight"   -> (0xb16, "MbpRRight"             ),
     "MbpRWrong"   -> (0xb17, "MbpRWrong"             ),
-    // "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"),
     "Custom1"     -> (0xb19, "Custom1"               ),
     "Custom2"     -> (0xb1a, "Custom2"               ),
     "Custom3"     -> (0xb1b, "Custom3"               ),
@@ -791,6 +787,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   )
 
   val sequentialPerfCntList = Map(
+    "McsrInstr"   -> (0xb09, "perfCntCondMcsrInstr"  ),
+    "MloadInstr"  -> (0xb0a, "perfCntCondMloadInstr" ),
     "MrawStall"   -> (0xb31, "perfCntCondMrawStall"    ),
     "MexuBusy"    -> (0xb32, "perfCntCondMexuBusy"     ),
     "MloadStall"  -> (0xb33, "perfCntCondMloadStall"   ),
@@ -799,6 +797,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   )
 
   val outOfOrderPerfCntList = Map(
+    "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit" ),
+    "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit" ),
+    "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"),
     "MrobFull"    -> (0xb31, "perfCntCondMrobFull"     ),
     "Malu1rsFull" -> (0xb32, "perfCntCondMalu1rsFull"  ),
     "Malu2rsFull" -> (0xb33, "perfCntCondMalu2rsFull"  ),

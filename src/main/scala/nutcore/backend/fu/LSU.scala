@@ -519,8 +519,8 @@ class LSU extends NutCoreModule with HasLSUConst {
   // For debug
   val storeTBCV = io.dmem.req.fire && io.dmem.req.bits.cmd === SimpleBusCmd.write
   val storeTBC = WireInit(storeQueue(0.U).pc)
-  BoringUtils.addSource(storeTBCV, "GSPCV")
-  BoringUtils.addSource(storeTBC, "GSPC")
+  BoringUtils.addSource(WireInit(storeTBCV), "GSPCV")
+  BoringUtils.addSource(WireInit(storeTBC), "GSPC")
 
   Debug(storeQueueEnqueue || storeQueueAMOEnqueue, "[ENSTQ] pc %x moqidx %x valid %x enqp %x head %x\n", moq(moqidxResp).pc, moqidxResp, moq(moqidxResp).valid, storeQueueEnqPtr, storeHeadPtr)
 
@@ -890,19 +890,19 @@ class LSU extends NutCoreModule with HasLSUConst {
 
   Debug(io.out.fire && io.uopOut.decode.cf.redirect.valid, "rollback at pc %x\n", moq(writebackSelect).pc)
 
-  BoringUtils.addSource(io.out.fire && io.isMMIO, "perfCntCondMmmioInstr")
-  BoringUtils.addSource(moqFull, "perfCntCondMmemqFull")
-  BoringUtils.addSource(storeQueueFull, "perfCntCondMstqFull")
-  BoringUtils.addSource(io.in.fire && MEMOpID.needLoad(memop), "perfCntCondMloadCnt")
-  BoringUtils.addSource(io.in.fire && MEMOpID.needStore(memop), "perfCntCondMstoreCnt")
-  BoringUtils.addSource(dmem.req.fire && MEMOpID.needLoad(opReq) && forwardWmask.orR, "perfCntCondMmemSBL")
-  BoringUtils.addSource(storeQueueFull, "perfCntCondMpendingLS")
-  BoringUtils.addSource(storeQueueFull, "perfCntCondMpendingSCmt")
-  BoringUtils.addSource(storeQueueFull, "perfCntCondMpendingSReq")
+  BoringUtils.addSource(WireInit(io.out.fire && io.isMMIO), "perfCntCondMmmioInstr")
+  BoringUtils.addSource(WireInit(moqFull), "perfCntCondMmemqFull")
+  BoringUtils.addSource(WireInit(storeQueueFull), "perfCntCondMstqFull")
+  BoringUtils.addSource(WireInit(io.in.fire && MEMOpID.needLoad(memop)), "perfCntCondMloadCnt")
+  BoringUtils.addSource(WireInit(io.in.fire && MEMOpID.needStore(memop)), "perfCntCondMstoreCnt")
+  BoringUtils.addSource(WireInit(dmem.req.fire && MEMOpID.needLoad(opReq) && forwardWmask.orR), "perfCntCondMmemSBL")
+  BoringUtils.addSource(WireInit(storeQueueFull), "perfCntCondMpendingLS")
+  BoringUtils.addSource(WireInit(storeQueueFull), "perfCntCondMpendingSCmt")
+  BoringUtils.addSource(WireInit(storeQueueFull), "perfCntCondMpendingSReq")
   val MOQValid = VecInit((0 until moqSize).map(i => moq(i).valid))
-  BoringUtils.addSource(PopCount(MOQValid.asUInt), "perfCntSrcMpendingLS")
-  BoringUtils.addSource(storeCmtPtr, "perfCntSrcMpendingSCmt")
-  BoringUtils.addSource(storeHeadPtr, "perfCntSrcMpendingSReq")
+  BoringUtils.addSource(WireInit(PopCount(MOQValid.asUInt)), "perfCntSrcMpendingLS")
+  BoringUtils.addSource(WireInit(storeCmtPtr), "perfCntSrcMpendingSCmt")
+  BoringUtils.addSource(WireInit(storeHeadPtr), "perfCntSrcMpendingSReq")
 
   val reqpc = Mux(storeReadygo, storeQueue(0.U).pc, Mux(havePendingDmemReq, moq(moqDmemPtr).pc, Mux(dtlbEnable, moq(dtlbRespUser.moqidx).pc, moq(dtlbRespUser.moqidx).pc)))
   Debug("[DMEM] req v %x r %x addr %x data %x op %b id %x  resp v %x r %x data %x op %b id %x\n",

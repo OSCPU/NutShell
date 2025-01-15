@@ -424,7 +424,7 @@ class LSExecUnit extends NutCoreModule {
 
   val isAMO = WireInit(false.B)
   BoringUtils.addSink(isAMO, "ISAMO2")
-  BoringUtils.addSource(addr, "LSUADDR")
+  if(!EnableOutOfOrderExec) BoringUtils.addSource(WireInit(addr), "LSUADDR")
 
   io.loadAddrMisaligned :=  valid && !isStore && !isAMO && !addrAligned
   io.storeAddrMisaligned := valid && (isStore || isAMO) && !addrAligned

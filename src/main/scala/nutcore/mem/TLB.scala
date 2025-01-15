@@ -228,7 +228,7 @@ sealed class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   val io = IO(new TLBMDIO)
 
   //val tlbmd = Reg(Vec(Ways, UInt(tlbLen.W)))
-  val tlbmd = Mem(Sets, Vec(Ways, UInt(tlbLen.W)))
+  val tlbmd = Reg(Vec(Sets, Vec(Ways, UInt(tlbLen.W))))
   io.tlbmd := tlbmd(io.rindex)
 
   //val reset = WireInit(false.B)
@@ -247,7 +247,11 @@ sealed class TLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
   val dataword = Mux(resetState, 0.U, writeData)
   val wdata = VecInit(Seq.fill(Ways)(dataword))
 
-  when (wen) { tlbmd.write(setIdx, wdata, waymask.asBools) }
+  for (((d, m), i) <- wdata.zip(waymask.asBools).zipWithIndex) {
+    when (wen && m) {
+      tlbmd(setIdx)(i) := d
+    }
+  }
 
   io.ready := !resetState
   def rready() = !resetState
