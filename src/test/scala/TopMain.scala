@@ -43,7 +43,7 @@ object TopMain extends App {
     require(target != "")
     target.substring(info.length()+1)
   }
-  val newArgs = DifftestModule.parseArgs(args)
+  val (newArgs, firtoolOptions) = DifftestModule.parseArgs(args)
   val board = parseArgs("BOARD", newArgs)
   val core = parseArgs("CORE", newArgs)
 
@@ -75,7 +75,7 @@ object TopMain extends App {
   var exe_args = newArgs.filter{
     value => value.forall(char => char!='=')
   }
-  (new ChiselStage).execute(newArgs, Seq(generator)
+  (new ChiselStage).execute(newArgs, Seq(generator) ++ firtoolOptions
     :+ CIRCTTargetAnnotation(CIRCTTarget.SystemVerilog)
     :+ FirtoolOption("--disable-annotation-unknown")
   )
