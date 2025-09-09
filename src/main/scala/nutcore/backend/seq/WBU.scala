@@ -44,7 +44,7 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
   BoringUtils.addSource(io.in.valid, "perfCntCondMinstret")
   BoringUtils.addSource(falseWire, "perfCntCondMultiCommit")
 
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     val difftest_commit = DifftestModule(new DiffInstrCommit, delay = 1, dontCare = true)
     difftest_commit.coreid := 0.U
     difftest_commit.index  := 0.U

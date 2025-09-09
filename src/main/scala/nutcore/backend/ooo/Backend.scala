@@ -639,13 +639,13 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   BoringUtils.addSource(io.in(1).valid && !instCango(1), "perfCntCondMdp2StCnt")
   BoringUtils.addSource(!io.in(0).valid, "perfCntCondMdpNoInst")
 
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     val difftest = DifftestModule(new DiffArchIntRegState)
     difftest.coreid := 0.U // TODO
     difftest.value  := VecInit((0 to NRReg-1).map(i => rf.read(i.U)))
   }
 
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     val cycleCnt = WireInit(0.U(XLEN.W))
     val instrCnt = WireInit(0.U(XLEN.W))
     val nutcoretrap = WireInit(csrrs.io.out.bits.decode.ctrl.isNutCoreTrap && csrrs.io.out.valid)

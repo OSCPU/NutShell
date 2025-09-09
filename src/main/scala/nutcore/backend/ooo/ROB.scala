@@ -495,7 +495,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
   BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
 
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     for (i <- 0 until RetireWidth) {
       val difftest_commit = DifftestModule(new DiffInstrCommit(robSize * robWidth), delay = 1)
       difftest_commit.coreid   := 0.U

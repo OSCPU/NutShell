@@ -125,7 +125,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
   
 
   // ILA
-  if (p.FPGAPlatform) {
+  if (p.FPGAPlatform && !p.FPGADifftest) {
     def BoringUtilsConnect(sink: UInt, id: String) = {
       val temp = WireInit(0.U(64.W))
       BoringUtils.addSink(temp, id)

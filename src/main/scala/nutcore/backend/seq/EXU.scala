@@ -129,7 +129,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   BoringUtils.addSource(WireInit(mdu.io.out.fire), "perfCntCondMmduInstr")
   BoringUtils.addSource(WireInit(csr.io.out.fire), "perfCntCondMcsrInstr")
 
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     val cycleCnt = WireInit(0.U(64.W))
     val instrCnt = WireInit(0.U(64.W))
     val nutcoretrap = WireInit(io.in.bits.ctrl.isNutCoreTrap && io.in.valid)

@@ -36,6 +36,17 @@ class Top extends Module {
   dontTouch(vga.io)
 }
 
+class FpgaDiffTop extends Module {
+  override lazy val desiredName: String = "SimTop"
+  lazy val config = NutCoreConfig(FPGADifftest = true)
+  val soc = Module(new NutShell()(config))
+  val io = IO(soc.io.cloneType)
+  soc.io <> io
+
+  val difftest = DifftestModule.finish("nutshell")
+  dontTouch(soc.io)
+}
+
 object TopMain extends App {
   def parseArgs(info: String, args: Array[String]): String = {
     var target = ""
@@ -51,6 +62,7 @@ object TopMain extends App {
     case "sim"    => Nil
     case "pynq"   => PynqSettings()
     case "axu3cg" => Axu3cgSettings()
+    case "fpgadiff" => FpgaDiffSettings()
     case "PXIe"   => PXIeSettings()
   } ) ++ ( core match {
     case "inorder"  => InOrderSettings()
@@ -68,6 +80,8 @@ object TopMain extends App {
 
   val generator = if (board == "sim") {
     ChiselGeneratorAnnotation(() => new SimTop)
+  } else if (board == "fpgadiff") {
+    ChiselGeneratorAnnotation(() => new FpgaDiffTop)
   }
   else {
     ChiselGeneratorAnnotation(() => new Top)
