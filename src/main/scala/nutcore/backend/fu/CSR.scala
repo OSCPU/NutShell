@@ -885,14 +885,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }}
 
   val nutcoretrap = WireInit(false.B)
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     BoringUtils.addSink(nutcoretrap, "nutcoretrap")
   } else {
     nutcoretrap := 0.U
   }
   def readWithScala(addr: Int): UInt = mapping(addr)._1
 
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     // to monitor
     BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
     BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")

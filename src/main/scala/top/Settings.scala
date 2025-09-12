@@ -64,6 +64,17 @@ object Axu3cgSettings {
   )
 }
 
+object FpgaDiffSettings {
+  def apply() = Map(
+    "FPGAPlatform" -> true,
+    "FPGADifftest" -> true,
+    "EnableILA" -> false,
+    "hasPerfCnt" -> false,
+    "NrExtIntr" -> 2,
+    "EnableDebug" -> false
+  )
+}
+
 object PXIeSettings {
   def apply() = Map(
     "FPGAPlatform" -> true,

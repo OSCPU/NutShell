@@ -98,7 +98,7 @@ class ISU(implicit val p: NutCoreConfig) extends NutCoreModule with HasRegFilePa
   BoringUtils.addSource(WireInit(io.out.valid && !io.out.fire), "perfCntCondMexuBusy")
   BoringUtils.addSource(WireInit(io.out.fire), "perfCntCondISUIssue")
 
-  if (!p.FPGAPlatform) {
+  if (!p.FPGAPlatform || p.FPGADifftest) {
     val difftest = DifftestModule(new DiffArchIntRegState)
     difftest.coreid := 0.U // TODO
     difftest.value  := VecInit((0 to NRReg-1).map(i => rf.read(i.U)))
