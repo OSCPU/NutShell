@@ -70,6 +70,8 @@ object FpgaDiffSettings {
     "FPGADifftest" -> true,
     "EnableILA" -> false,
     "hasPerfCnt" -> false,
+    "MMIOBase" -> 0x00000000310b0000L,
+    "MMIOSize" -> 0x0000000000001000L,
     "NrExtIntr" -> 2,
     "EnableDebug" -> false
   )
