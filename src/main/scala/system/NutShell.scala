@@ -78,7 +78,8 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
       l2cacheIn
     } else xbar.io.out
     val l2Empty = Wire(Bool())
-    l2cacheOut <> Cache(in = l2cacheIn, mmio = 0.U.asTypeOf(new SimpleBusUC) :: Nil, flush = "b00".U, empty = l2Empty, enable = true)(
+    val mmio = WireInit(0.U.asTypeOf(new SimpleBusUC))
+    l2cacheOut <> Cache(in = l2cacheIn, mmio = mmio :: Nil, flush = "b00".U, empty = l2Empty, enable = true)(
       CacheConfig(name = "l2cache", totalSize = 128, cacheLevel = 2))
     l2cacheOut.coh.resp.ready := true.B
     l2cacheOut.coh.req.valid := false.B
