@@ -92,5 +92,6 @@ object TopMain extends App {
   (new ChiselStage).execute(newArgs, Seq(generator) ++ firtoolOptions
     :+ CIRCTTargetAnnotation(CIRCTTarget.SystemVerilog)
     :+ FirtoolOption("--disable-annotation-unknown")
+    :+ FirtoolOption("--default-layer-specialization=enable")
   )
 }
