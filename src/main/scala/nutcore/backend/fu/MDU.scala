@@ -134,6 +134,7 @@ class MDUIO extends FunctionUnitIO {
 
 class MDU extends NutCoreModule {
   val io = IO(new MDUIO)
+  val extra_div_data = IO(ValidIO(UInt(64.W)))
 
   val (valid, src1, src2, func) = (io.in.valid, io.in.bits.src1, io.in.bits.src2, io.in.bits.func)
   def access(valid: Bool, src1: UInt, src2: UInt, func: UInt): UInt = {
@@ -177,6 +178,8 @@ class MDU extends NutCoreModule {
   val divRes = Mux(func(1) /* rem */, div.io.out.bits(2*XLEN-1,XLEN), div.io.out.bits(XLEN-1,0))
   val res = Mux(isDiv, divRes, mulRes)
   io.out.bits := Mux(isW, SignExt(res(31,0),XLEN), res)
+  extra_div_data.valid := div.io.out.valid && io.out.valid
+  extra_div_data.bits := Mux(func(1) /* rem */, div.io.out.bits(XLEN-1,0), div.io.out.bits(2*XLEN-1,XLEN))
 
   val isDivReg = Mux(io.in.fire, isDiv, RegNext(isDiv))
   io.in.ready := Mux(isDiv, div.io.in.ready, mul.io.in.ready)

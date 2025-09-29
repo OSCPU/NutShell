@@ -885,18 +885,14 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   }}
 
   val nutcoretrap = WireInit(false.B)
-  if (!p.FPGAPlatform || p.FPGADifftest) {
-    BoringUtils.addSink(nutcoretrap, "nutcoretrap")
-  } else {
-    nutcoretrap := 0.U
-  }
+  BoringUtils.addSink(nutcoretrap, "nutcoretrap")
   def readWithScala(addr: Int): UInt = mapping(addr)._1
 
-  if (!p.FPGAPlatform || p.FPGADifftest) {
-    // to monitor
-    BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
-    BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
+  // to monitor
+  BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
+  BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
 
+  if (!p.FPGAPlatform) {
     if (hasPerfCnt) {
       // display all perfcnt when nutcoretrap is executed
       val PrintPerfCntToCSV = true
@@ -915,8 +911,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
         }
       }
     }
+  } else {
+    if (p.FPGAPlatform) {
+      BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "ilaInstrCnt")
+    }
+  }
 
-    // for differential testing
+  if (p.EnableDiffTest) {
     class CSRDiffWrapper extends Module {
       val io = IO(new Bundle {
         val csrState = Input(new DiffCSRState)
@@ -961,13 +962,5 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     difftestArchEvent.exception     := Mux(raiseException && io.instrValid, exceptionNO, 0.U)
     difftestArchEvent.exceptionPC   := SignExt(io.cfIn.pc, XLEN)
     difftestArchEvent.exceptionInst := io.cfIn.instr
-
-  } else {
-    if (!p.FPGAPlatform) {
-      BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
-      BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
-    } else {
-      BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "ilaInstrCnt")
-    }
   }
 }

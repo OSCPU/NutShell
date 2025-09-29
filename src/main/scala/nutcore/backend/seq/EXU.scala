@@ -107,12 +107,16 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
     FuType.lsu -> lsu.io.out.valid,
     FuType.mdu -> mdu.io.out.valid
   ))
+  io.out.bits.data_paddr.valid := lsu.io.out.valid
+  io.out.bits.data_paddr.bits := DontCare
+  BoringUtils.addSink(io.out.bits.data_paddr.bits, "DATAPADDR")
 
   io.out.bits.commits(FuType.alu) := aluOut
   io.out.bits.commits(FuType.lsu) := lsuOut
   io.out.bits.commits(FuType.csr) := csrOut
   io.out.bits.commits(FuType.mdu) := mduOut
   io.out.bits.commits(FuType.mou) := 0.U
+  io.out.bits.div_data := mdu.extra_div_data
 
   io.in.ready := !io.in.valid || io.out.fire
 
@@ -129,15 +133,15 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   BoringUtils.addSource(WireInit(mdu.io.out.fire), "perfCntCondMmduInstr")
   BoringUtils.addSource(WireInit(csr.io.out.fire), "perfCntCondMcsrInstr")
 
+  val cycleCnt = WireInit(0.U(64.W))
+  val instrCnt = WireInit(0.U(64.W))
+  val nutcoretrap = WireInit(io.in.bits.ctrl.isNutCoreTrap && io.in.valid)
+
+  BoringUtils.addSink(cycleCnt, "simCycleCnt")
+  BoringUtils.addSink(instrCnt, "simInstrCnt")
+  BoringUtils.addSource(nutcoretrap, "nutcoretrap")
+
   if (!p.FPGAPlatform || p.FPGADifftest) {
-    val cycleCnt = WireInit(0.U(64.W))
-    val instrCnt = WireInit(0.U(64.W))
-    val nutcoretrap = WireInit(io.in.bits.ctrl.isNutCoreTrap && io.in.valid)
-
-    BoringUtils.addSink(cycleCnt, "simCycleCnt")
-    BoringUtils.addSink(instrCnt, "simInstrCnt")
-    BoringUtils.addSource(nutcoretrap, "nutcoretrap")
-
     val difftest = DifftestModule(new DiffTrapEvent)
     difftest.coreid   := 0.U // TODO: nutshell does not support coreid auto config
     difftest.hasTrap  := nutcoretrap

@@ -17,14 +17,16 @@
 package system
 
 import nutcore._
-import bus.axi4.{AXI4, AXI4Lite}
+import bus.axi4.{AXI4, AXI4Lite, AXI4Parameters}
 import bus.simplebus._
 import device.{AXI4CLINT, AXI4PLIC}
 import top.Settings
-
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
+import difftest.common.{DifftestMemReadIO, DifftestMemWriteIO, HasTopMemoryMasterPort}
+import nutcore.FuType.PAddrBits
+import utils.MaskExpand
 
 trait HasSoCParameter {
   val EnableILA = Settings.get("EnableILA")
@@ -41,7 +43,7 @@ class ILABundle extends NutCoreBundle {
   val InstrCnt = UInt(64.W)
 }
 
-class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParameter {
+class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParameter with HasTopMemoryMasterPort {
   val io = IO(new Bundle{
     val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
@@ -49,6 +51,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
     val meip = Input(UInt(Settings.getInt("NrExtIntr").W))
     val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
+  dontTouch(io)
 
   val nutcore = Module(new NutCore)
   val cohMg = Module(new CoherenceManager)
@@ -120,7 +123,7 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
 
   val plic = Module(new AXI4PLIC(nrIntr = Settings.getInt("NrExtIntr"), nrHart = 1))
   plic.io.in <> mmioXbar.io.out(1).toAXI4Lite
-  plic.io.extra.get.intrVec := RegNext(RegNext(io.meip))
+  plic.io.extra.get.intrVec := RegNext(RegNext(RegNext(RegNext(io.meip))))
   val meipSync = plic.io.extra.get.meip(0)
   BoringUtils.addSource(meipSync, "meip")
   
@@ -141,5 +144,52 @@ class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParamete
     BoringUtilsConnect(ila.WBUrfDest  ,"ilaWBUrfDest")
     BoringUtilsConnect(ila.WBUrfData  ,"ilaWBUrfData")
     BoringUtilsConnect(ila.InstrCnt   ,"ilaInstrCnt")
+    ila := 0.U.asTypeOf(ila)
+  }
+
+  override def getTopMemoryMasterRead: DifftestMemReadIO = {
+    val req_valid = RegInit(false.B)
+    val req_bits = Reg(chiselTypeOf(io.mem.ar.bits))
+    val req_beat_count = Reg(UInt(8.W))
+    assert(!io.mem.r.fire || (req_valid && io.mem.r.bits.id === req_bits.id), "data fire but req mismatch")
+    when (io.mem.ar.fire) {
+      req_valid := true.B
+      req_bits := io.mem.ar.bits
+      // wrap here for burst
+      val wrap_mask = ~(io.mem.ar.bits.len << io.mem.ar.bits.size).asTypeOf(UInt(PAddrBits.W))
+      req_bits.addr := io.mem.ar.bits.addr & wrap_mask.asUInt
+      req_beat_count := (io.mem.ar.bits.addr >> io.mem.ar.bits.size).asUInt & io.mem.ar.bits.len
+      assert(!req_valid || io.mem.r.fire && io.mem.r.bits.last, "multiple inflight not supported")
+    }.elsewhen(io.mem.r.fire) {
+      val should_wrap = req_bits.burst === AXI4Parameters.BURST_WRAP && req_beat_count === req_bits.len
+      req_beat_count := Mux(should_wrap, 0.U, req_beat_count + 1.U)
+      when (io.mem.r.bits.last) {
+        req_valid := false.B
+      }
+    }
+    val read = Wire(Output(new DifftestMemReadIO(io.mem.dataBits / 64)))
+    read.valid := io.mem.r.fire
+    read.index := (req_bits.addr >> log2Ceil(io.mem.dataBits / 8 - 1)) + req_beat_count
+    read.data := io.mem.r.bits.data.asTypeOf(read.data)
+    read
+  }
+
+  override def getTopMemoryMasterWrite: DifftestMemWriteIO = {
+    val req_bits_reg = Reg(chiselTypeOf(io.mem.aw.bits))
+    val req_bits = Mux(io.mem.aw.fire, io.mem.aw.bits, req_bits_reg)
+    when (io.mem.aw.fire) {
+      req_bits_reg := io.mem.aw.bits
+      when (io.mem.w.fire) {
+        req_bits_reg.addr := io.mem.aw.bits.addr + (io.mem.dataBits / 8).U
+      }
+    }.elsewhen(io.mem.w.fire) {
+      req_bits_reg.addr := req_bits.addr + (io.mem.dataBits / 8).U
+    }
+    val write = Wire(Output(new DifftestMemWriteIO(io.mem.dataBits / 64)))
+    write.valid := io.mem.w.fire
+    write.index := req_bits.addr >> log2Ceil(io.mem.dataBits / 8 - 1)
+    write.data := io.mem.w.bits.data.asTypeOf(write.data)
+    write.mask := MaskExpand(io.mem.w.bits.strb).asTypeOf(write.mask)
+    write
   }
 }

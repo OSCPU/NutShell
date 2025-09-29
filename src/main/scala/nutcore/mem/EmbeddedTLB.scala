@@ -20,6 +20,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 import bus.simplebus._
+import difftest.{DiffStoreEvent, DifftestModule}
 import utils._
 import top.Settings
 
@@ -150,6 +151,20 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasT
     BoringUtils.addSource(WireInit(tlbFinish), "DTLBFINISH")
     BoringUtils.addSource(WireInit(io.csrMMU.isPF()), "DTLBPF")
     BoringUtils.addSource(WireInit(vmEnable), "DTLBENABLE")
+
+    val dataPAddr = RegEnable(io.out.req.bits.addr, io.out.req.fire)
+    BoringUtils.addSource(WireInit(dataPAddr), "DATAPADDR")
+    if (Settings.get("EnableDiffTest")) {
+      val difftest = DifftestModule(new DiffStoreEvent, dontCare = true, delay = 10)
+      val is_mem_store = io.out.req.bits.isWrite() && io.out.req.bits.addr >= "h80000000".U
+      val is_mem_store_req = io.out.req.fire && is_mem_store
+      val is_mem_store_req_reg = RegEnable(is_mem_store, io.out.req.fire)
+      difftest.valid := io.out.resp.fire && is_mem_store_req_reg
+      difftest.addr := RegEnable(io.out.req.bits.addr, is_mem_store_req)
+      val masked_data = MaskExpand(io.out.req.bits.wmask) & io.out.req.bits.wdata
+      difftest.data := RegEnable(masked_data, is_mem_store_req)
+      difftest.mask := RegEnable(io.out.req.bits.wmask, is_mem_store_req)
+    }
   }
 
   // instruction page fault

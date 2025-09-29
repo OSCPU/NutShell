@@ -32,6 +32,11 @@ endif
 
 MILL_ARGS_ALL += --split-verilog
 
+# External golden core for DiffTest
+ifneq ($(DIFFTEST_GOLDEN),)
+MILL_ARGS_ALL += --difftest-config T
+endif
+
 .DEFAULT_GOAL = verilog
 
 help:

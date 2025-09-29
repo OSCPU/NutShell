@@ -2,7 +2,7 @@ import mill._, scalalib._
 import coursier.maven.MavenRepository
 
 object ivys {
-  val scala = "2.13.14"
+  val scala = "2.13.15"
   val chisel = ivy"org.chipsalliance::chisel:7.0.0"
   val chiselPlugin = ivy"org.chipsalliance:::chisel-plugin:7.0.0"
 }

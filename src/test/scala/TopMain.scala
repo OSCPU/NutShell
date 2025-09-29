@@ -19,21 +19,21 @@ package top
 import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage._
-import device.AXI4VGA
 import difftest.DifftestModule
 import nutcore.NutCoreConfig
 import sim.SimTop
 import system.NutShell
 
-class Top extends Module {
-  val io = IO(new Bundle{})
-  val nutshell = Module(new NutShell()(NutCoreConfig()))
-  val vga = Module(new AXI4VGA)
+class NutShellTop extends Module {
+  val nutshell = DifftestModule.designTop(Module(new NutShell()(NutCoreConfig())))
+  val io = IO(chiselTypeOf(nutshell.io))
+  io <> nutshell.io
+}
 
-  nutshell.io := DontCare
-  vga.io := DontCare
-  dontTouch(nutshell.io)
-  dontTouch(vga.io)
+class Top extends Module {
+  val top = Module(new NutShellTop)
+  val io = IO(chiselTypeOf(top.io))
+  io <> top.io
 }
 
 class FpgaDiffTop extends Module {
@@ -43,7 +43,7 @@ class FpgaDiffTop extends Module {
   val io = IO(soc.io.cloneType)
   soc.io <> io
 
-  val difftest = DifftestModule.finish("nutshell")
+  // val difftest = DifftestModule.finish("nutshell")
   dontTouch(soc.io)
 }
 
