@@ -20,9 +20,9 @@ import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage._
 import device.AXI4VGA
-import difftest.DifftestModule
+import difftest.{DifftestModule, DifftestTopIO, HasDiffTestInterfaces}
 import nutcore.NutCoreConfig
-import sim.SimTop
+import sim.NutShellSim
 import system.NutShell
 
 class Top extends Module {
@@ -36,15 +36,17 @@ class Top extends Module {
   dontTouch(vga.io)
 }
 
-class FpgaDiffTop extends Module {
-  override lazy val desiredName: String = "SimTop"
+class FpgaDiffTop extends Module with HasDiffTestInterfaces {
   lazy val config = NutCoreConfig(FPGADifftest = true)
   val soc = Module(new NutShell()(config))
   val io = IO(soc.io.cloneType)
   soc.io <> io
 
-  val difftest = DifftestModule.finish("nutshell")
-  dontTouch(soc.io)
+  override def cpuName: Option[String] = Some("NutShell")
+  override def connectTopIOs(difftest: DifftestTopIO): Unit = {
+    val io = IO(chiselTypeOf(this.io))
+    io <> this.io
+  }
 }
 
 object TopMain extends App {
@@ -79,9 +81,9 @@ object TopMain extends App {
   }
 
   val generator = if (board == "sim") {
-    ChiselGeneratorAnnotation(() => new SimTop)
+    ChiselGeneratorAnnotation(() => DifftestModule.top(new NutShellSim))
   } else if (board == "fpgadiff") {
-    ChiselGeneratorAnnotation(() => new FpgaDiffTop)
+    ChiselGeneratorAnnotation(() => DifftestModule.top(new FpgaDiffTop))
   }
   else {
     ChiselGeneratorAnnotation(() => new Top)
