@@ -3,8 +3,8 @@ import coursier.maven.MavenRepository
 
 object ivys {
   val scala = "2.13.14"
-  val chisel = ivy"org.chipsalliance::chisel:7.1.1"
-  val chiselPlugin = ivy"org.chipsalliance:::chisel-plugin:7.1.1"
+  val chisel = ivy"org.chipsalliance::chisel:7.3.0"
+  val chiselPlugin = ivy"org.chipsalliance:::chisel-plugin:7.3.0"
 }
 
 trait CommonModule extends ScalaModule {
