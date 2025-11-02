@@ -23,7 +23,7 @@ import difftest._
 import nutcore.NutCoreConfig
 import system._
 
-class SimTop extends Module {
+class NutShellSim extends Module with HasDiffTestInterfaces {
   lazy val config = NutCoreConfig(FPGAPlatform = false)
   val soc = Module(new NutShell()(config))
   val mem = Module(new AXI4RAM(memByte = 2L * 1024 * 1024 * 1024, useBlackBox = true))
@@ -41,6 +41,11 @@ class SimTop extends Module {
 
   soc.io.meip := mmio.io.meip
 
-  val difftest = DifftestModule.finish("nutshell")
-  difftest.uart <> mmio.io.uart
+  override def cpuName: Option[String] = Some("NutShell")
+
+  val uart = IO(new UARTIO)
+  uart <> mmio.io.uart
+  override def connectTopIOs(difftest: DifftestTopIO): Unit = {
+    difftest.uart <> uart
+  }
 }
