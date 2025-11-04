@@ -1,7 +1,12 @@
 TOP = TopMain
 SIM_TOP = SimTop
+FPGA_DIFF_TOP = FpgaDiffTop
 FPGATOP = Top
-REAL_TOP = $(if $(strip $(subst sim,,$(BOARD))),$(FPGATOP),$(SIM_TOP))
+# REAL_TOP selection:
+# - if BOARD is exactly "fpgadiff" -> use FPGA_DIFF_TOP
+# - else if BOARD starts with "sim" -> use SIM_TOP
+# - otherwise use FPGATOP
+REAL_TOP = $(if $(filter fpgadiff,$(BOARD)),$(FPGA_DIFF_TOP),$(if $(filter sim,$(BOARD)),$(SIM_TOP),$(FPGATOP)))
 
 BUILD_DIR = $(abspath ./build)
 
