@@ -36,12 +36,8 @@ class Top extends Module {
   dontTouch(vga.io)
 }
 
-class FpgaDiffTop extends Module with HasDiffTestInterfaces {
-  lazy val config = NutCoreConfig(FPGADifftest = true)
-  val soc = Module(new NutShell()(config))
-  val io = IO(soc.io.cloneType)
-  soc.io <> io
-
+class FpgaDiffTop extends NutShell()(NutCoreConfig(FPGADifftest = true)) with HasDiffTestInterfaces {
+  override def desiredName: String = "NutShell"
   override def cpuName: Option[String] = Some("NutShell")
   override def connectTopIOs(difftest: DifftestTopIO): Unit = {
     val io = IO(chiselTypeOf(this.io))
