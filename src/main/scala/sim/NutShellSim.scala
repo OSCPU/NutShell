@@ -45,7 +45,8 @@ class NutShellSim extends Module with HasDiffTestInterfaces {
 
   val uart = IO(new UARTIO)
   uart <> mmio.io.uart
-  override def connectTopIOs(difftest: DifftestTopIO): Unit = {
+  override def connectTopIOs(difftest: DifftestTopIO): Seq[Data] = {
     difftest.uart <> uart
+    Seq.empty
   }
 }
