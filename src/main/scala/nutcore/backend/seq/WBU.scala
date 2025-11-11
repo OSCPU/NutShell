@@ -1,17 +1,17 @@
 /**************************************************************************************
 * Copyright (c) 2020 Institute of Computing Technology, CAS
 * Copyright (c) 2020 University of Chinese Academy of Sciences
-* 
-* NutShell is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2. 
-* You may obtain a copy of Mulan PSL v2 at:
-*             http://license.coscl.org.cn/MulanPSL2 
-* 
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER 
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR 
-* FIT FOR A PARTICULAR PURPOSE.  
 *
-* See the Mulan PSL v2 for more details.  
+* NutShell is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
 package nutcore
@@ -57,12 +57,6 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
     difftest_commit.fpwen  := false.B
     difftest_commit.wdest  := io.wb.rfDest
     difftest_commit.wpdest := io.wb.rfDest
-
-    val difftest_wb = DifftestModule(new DiffIntWriteback, delay = 1)
-    difftest_wb.coreid  := 0.U
-    difftest_wb.valid   := io.wb.rfWen && io.wb.rfDest =/= 0.U
-    difftest_wb.address := io.wb.rfDest
-    difftest_wb.data    := io.wb.rfData
   } else {
     BoringUtils.addSource(io.in.valid, "ilaWBUvalid")
     BoringUtils.addSource(io.in.bits.decode.cf.pc, "ilaWBUpc")

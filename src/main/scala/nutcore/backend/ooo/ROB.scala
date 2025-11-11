@@ -510,12 +510,6 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       difftest_commit.fpwen    := false.B
       difftest_commit.wdest    := io.wb(i).rfDest
       difftest_commit.wpdest   := io.wb(i).rfDest
-
-      val difftest_wb = DifftestModule(new DiffIntWriteback, delay = 1)
-      difftest_wb.coreid := 0.U
-      difftest_wb.valid := io.wb(i).rfWen && io.wb(i).rfDest =/= 0.U
-      difftest_wb.address := io.wb(i).rfDest
-      difftest_wb.data := io.wb(i).rfData
     }
   } else {
     BoringUtils.addSource(retireATerm, "ilaWBUvalid")
