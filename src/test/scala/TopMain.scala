@@ -39,9 +39,8 @@ class Top extends Module {
 class FpgaDiffTop extends NutShell()(NutCoreConfig(FPGADifftest = true)) with HasDiffTestInterfaces {
   override def desiredName: String = "NutShell"
   override def cpuName: Option[String] = Some("NutShell")
-  override def connectTopIOs(difftest: DifftestTopIO): Unit = {
-    val io = IO(chiselTypeOf(this.io))
-    io <> this.io
+  override def connectTopIOs(difftest: DifftestTopIO): Seq[Data] = {
+    Seq(io)
   }
 }
 

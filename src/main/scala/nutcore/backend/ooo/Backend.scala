@@ -640,9 +640,9 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   BoringUtils.addSource(!io.in(0).valid, "perfCntCondMdpNoInst")
 
   if (!p.FPGAPlatform || p.FPGADifftest) {
-    val difftest = DifftestModule(new DiffArchIntRegState)
-    difftest.coreid := 0.U // TODO
-    difftest.value  := VecInit((0 to NRReg-1).map(i => rf.read(i.U)))
+    val difftest = DifftestModule(new DiffPhyIntRegState(NRReg)) // Size = NRREG, use as ArchIntReg
+    difftest.coreid := 0.U
+    difftest.value := VecInit(rf.read_all)
   }
 
   if (!p.FPGAPlatform || p.FPGADifftest) {
