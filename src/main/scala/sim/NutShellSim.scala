@@ -20,6 +20,7 @@ import bus.axi4._
 import chisel3._
 import device.AXI4RAM
 import difftest._
+import difftest.fpga.DifftestMemCtrl
 import nutcore.NutCoreConfig
 import system._
 
@@ -35,13 +36,14 @@ class NutShellSim extends Module with HasDiffTestInterfaces {
   soc.io.frontend <> mmio.io.dma
 
   memdelay.io.in <> soc.io.mem
-  mem.io.in <> memdelay.io.out
 
   mmio.io.rw <> soc.io.mmio
 
   soc.io.meip := mmio.io.meip
 
   override def cpuName: Option[String] = Some("NutShell")
+  val memIO = DifftestMemCtrl.exposeIO(memdelay.io.out, mem.io.in)
+  override def difftestMemIO: Option[DifftestMemIO] = Some(memIO)
 
   val uart = IO(new UARTIO)
   uart <> mmio.io.uart
