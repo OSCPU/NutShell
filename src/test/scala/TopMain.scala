@@ -20,7 +20,7 @@ import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage._
 import device.AXI4VGA
-import difftest.{DifftestModule, DifftestTopIO, HasDiffTestInterfaces}
+import difftest.{DifftestMemIO, DifftestModule, DifftestTopIO, HasDiffTestInterfaces}
 import nutcore.NutCoreConfig
 import sim.NutShellSim
 import system.NutShell
@@ -39,6 +39,7 @@ class Top extends Module {
 class FpgaDiffTop extends NutShell()(NutCoreConfig(FPGADifftest = true)) with HasDiffTestInterfaces {
   override def desiredName: String = "NutShell"
   override def cpuName: Option[String] = Some("NutShell")
+  override def difftestMemIO: Option[DifftestMemIO] = Some(DifftestMemIO(io.mem))
 }
 
 object TopMain extends App {
