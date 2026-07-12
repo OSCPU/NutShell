@@ -178,14 +178,18 @@ class AtomALU extends NutCoreModule {
 
   // src1: load result
   // src2: reg  result
-  val src1 = io.src1
-  val src2 = io.src2
+  // AMO.W compares 32-bit operands.  Normalize both inputs before selecting
+  // MIN/MAX; in particular, rs2 still contains its original 64-bit value.
+  val src1 = Mux(io.isWordOp, SignExt(io.src1(31, 0), XLEN), io.src1)
+  val src2 = Mux(io.isWordOp, SignExt(io.src2(31, 0), XLEN), io.src2)
+  val usrc1 = Mux(io.isWordOp, ZeroExt(io.src1(31, 0), XLEN), io.src1)
+  val usrc2 = Mux(io.isWordOp, ZeroExt(io.src2(31, 0), XLEN), io.src2)
   val func = io.func
   val isAdderSub = !LSUOpType.isAdd(func)
   val adderRes = (src1 +& (src2 ^ Fill(XLEN, isAdderSub))) + isAdderSub
   val xorRes = src1 ^ src2
-  val sltu = !adderRes(XLEN)
-  val slt = xorRes(XLEN-1) ^ sltu
+  val sltu = usrc1 < usrc2
+  val slt = src1.asSInt < src2.asSInt
 
   val res = LookupTreeDefault(func(5, 0), adderRes, List(
     LSUOpType.amoswap -> src2,
@@ -193,10 +197,10 @@ class AtomALU extends NutCoreModule {
     LSUOpType.amoxor  -> xorRes,
     LSUOpType.amoand  -> (src1 & src2),
     LSUOpType.amoor   -> (src1 | src2),
-    LSUOpType.amomin  -> Mux(slt(0), src1, src2),
-    LSUOpType.amomax  -> Mux(slt(0), src2, src1),
-    LSUOpType.amominu -> Mux(sltu(0), src1, src2),
-    LSUOpType.amomaxu -> Mux(sltu(0), src2, src1)
+    LSUOpType.amomin  -> Mux(slt, src1, src2),
+    LSUOpType.amomax  -> Mux(slt, src2, src1),
+    LSUOpType.amominu -> Mux(sltu, usrc1, usrc2),
+    LSUOpType.amomaxu -> Mux(sltu, usrc2, usrc1)
   ))
 
   io.result :=  Mux(io.isWordOp, SignExt(res(31,0), 64), res(XLEN-1,0))
