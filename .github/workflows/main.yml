@@ -15,10 +15,14 @@ on:
 jobs:
   test-nutshell:
     # The type of runner that the job will run on
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container: ghcr.io/openxiangshan/xs-env:ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Prepare environment
         run: |
@@ -27,7 +31,6 @@ jobs:
             git config --global url."https://".insteadOf git://
             git clone https://github.com/OpenXiangShan/xs-env
             cd $GITHUB_WORKSPACE/../xs-env
-            sudo -s ./setup-tools.sh
             source ./setup.sh
             rm -r $GITHUB_WORKSPACE/../xs-env/NutShell
             cp -r $GITHUB_WORKSPACE $GITHUB_WORKSPACE/../xs-env
@@ -45,6 +48,7 @@ jobs:
             source ./env.sh
             make clean
             make verilog
+
       - name: Generate Verilog for FPGA
         run: |
             cd $GITHUB_WORKSPACE/../xs-env
