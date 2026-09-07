@@ -407,7 +407,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
     // User Trap Handling
     // MaskedRegMap(Uscratch, uscratch),
-    // MaskedRegMap(Uepc, uepc),
+    //Ensure that the value of epc[0] is 0 at the root, rather than clearing it at the time of use
+    //MaskedRegMap(Uepc, uepc, wfn = (value: UInt) => (value & ~1.U(64.W))),
+
     // MaskedRegMap(Ucause, ucause),
     // MaskedRegMap(Utval, utval),
     // MaskedRegMap(Uip, uip),
@@ -433,7 +435,9 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
     // Supervisor Trap Handling
     MaskedRegMap(Sscratch, sscratch),
-    MaskedRegMap(Sepc, sepc),
+    //Ensure that the value of epc[0] is 0 at the root, rather than clearing it at the time of use
+    MaskedRegMap(Sepc, sepc, wfn = (value: UInt) => (value & ~1.U(64.W))),
+
     MaskedRegMap(Scause, scause),
     MaskedRegMap(Stval, stval),
     MaskedRegMap(Sip, mip.asUInt, sipMask, MaskedRegMap.Unwritable, sipMask),
@@ -458,7 +462,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
     // Machine Trap Handling
     MaskedRegMap(Mscratch, mscratch),
-    MaskedRegMap(Mepc, mepc),
+    //MaskedRegMap(Mepc, mepc),
+    //Ensure that the value of epc[0] is 0 at the root, rather than clearing it at the time of use
+    MaskedRegMap(Mepc, mepc, wfn = (value: UInt) => (value & ~1.U(64.W))),
+
     MaskedRegMap(Mcause, mcause),
     MaskedRegMap(Mtval, mtval),
     MaskedRegMap(Mip, mip.asUInt, 0.U, MaskedRegMap.Unwritable),
@@ -689,7 +696,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     mstatusNew.mpp := ModeU
     mstatus := mstatusNew.asUInt
     lr := false.B
-    retTarget := mepc(VAddrBits-1, 0)
+    retTarget := mepc
   }
 
   when (valid && isSret) {
@@ -702,7 +709,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     mstatusNew.spp := ModeU
     mstatus := mstatusNew.asUInt
     lr := false.B
-    retTarget := sepc(VAddrBits-1, 0)
+    retTarget := sepc
   }
 
   when (valid && isUret) {
@@ -713,7 +720,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     privilegeMode := ModeU
     mstatusNew.pie.u := true.B
     mstatus := mstatusNew.asUInt
-    retTarget := uepc(VAddrBits-1, 0)
+    retTarget := uepc
   }
 
   when (raiseExceptionIntr) {
@@ -971,3 +978,4 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     }
   }
 }
+
