@@ -74,16 +74,22 @@ class SRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
 
   val wordType = UInt(gen.getWidth.W)
   val array = SyncReadMem(set, Vec(way, wordType))
-  val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
+  val (resetState, resetSet) = (RegInit(false.B), WireInit(0.U))
 
   if (shouldReset) {
     val _resetState = RegInit(true.B)
-    val (_resetSet, resetFinish) = Counter(_resetState, set)
-    when (resetFinish) { _resetState := false.B }
+    val (_resetSet, resetFinish) = Counter(resetState, set)
+    when (resetFinish) { _resetState := false.B;resetState := false.B }
 
-    resetState := _resetState
     resetSet := _resetSet
+
+    withReset(reset.asBool){
+        when(!reset.asBool) {
+            resetState := _resetState
+      }
   }
+
+}
 
   val (ren, wen) = (io.r.req.valid, io.w.req.valid || resetState)
   val realRen = (if (singlePort) ren && !wen else ren)
