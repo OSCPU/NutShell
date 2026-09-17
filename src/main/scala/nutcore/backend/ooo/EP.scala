@@ -27,6 +27,7 @@ class ExecutionPipeline extends NutCoreModule {
   io.out.bits.isMMIO := false.B
   io.out.bits.intrNO := 0.U
   io.out.bits.exception := false.B
+  io.out.bits.trapped := false.B
   io.out.bits.store := false.B
 }
 

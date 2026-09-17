@@ -82,6 +82,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   val canceled = Reg(Vec(robSize, Vec(robWidth, Bool()))) // for debug
   val redirect = Reg(Vec(robSize, Vec(robWidth, new RedirectIO)))
   val exception = Reg(Vec(robSize, Vec(robWidth, Bool()))) // Backend exception
+  val trapped = Reg(Vec(robSize, Vec(robWidth, Bool()))) // CSR exception/interrupt: not retired
   val isMMIO = Reg(Vec(robSize, Vec(robWidth, Bool())))
   val intrNO = Reg(Vec(robSize, Vec(robWidth, UInt(XLEN.W))))
   val prf = Mem(robSize * robWidth, UInt(XLEN.W))
@@ -186,6 +187,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       redirect(index)(bank) := io.cdb(k).bits.decode.cf.redirect
       redirect(index)(bank).valid := io.cdb(k).bits.decode.cf.redirect.valid
       exception(index)(bank) := io.cdb(k).bits.exception
+      trapped(index)(bank) := io.cdb(k).bits.trapped
       // Update wen
       // In several cases, FU will invalidate rfWen
       store(index)(bank) := io.cdb(k).bits.store
@@ -394,6 +396,7 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       canceled(ringBufferHead)(i) := false.B
       redirect(ringBufferHead)(i).valid := false.B
       exception(ringBufferHead)(i) := false.B
+      trapped(ringBufferHead)(i) := false.B
       when(io.in(i).valid && io.in(i).bits.ctrl.rfWen && io.in(i).bits.ctrl.rfDest =/= 0.U){
         rmtMap(io.in(i).bits.ctrl.rfDest) := Cat(ringBufferHead, i.U)
         rmtValid(io.in(i).bits.ctrl.rfDest) := true.B
@@ -492,8 +495,11 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   }
 
   val retireMultiTerms = retireATerm && valid(ringBufferTail)(0) && valid(ringBufferTail)(1) && !instRedirect(0)
-  BoringUtils.addSource(retireATerm, "perfCntCondMinstret")
-  BoringUtils.addSource(retireMultiTerms, "perfCntCondMultiCommit")
+  val minstret0 = retireATerm && valid(ringBufferTail)(0) && !trapped(ringBufferTail)(0)
+  val minstret1 = Mux(valid(ringBufferTail)(0), retireMultiTerms, retireATerm) &&
+    valid(ringBufferTail)(1) && !trapped(ringBufferTail)(1)
+  BoringUtils.addSource(WireInit(minstret0 || minstret1), "perfCntCondMinstret")
+  BoringUtils.addSource(WireInit(minstret0 && minstret1), "perfCntCondMultiCommit")
 
   if (!p.FPGAPlatform || p.FPGADifftest) {
     for (i <- 0 until RetireWidth) {

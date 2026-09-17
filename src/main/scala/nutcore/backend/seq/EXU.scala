@@ -73,6 +73,7 @@ class EXU(implicit val p: NutCoreConfig) extends NutCoreModule {
   csr.io.instrValid := io.in.valid && !io.flush
   csr.io.isBackendException := false.B
   io.out.bits.intrNO := csr.io.intrNO
+  io.out.bits.exception := csr.io.raiseExceptionIntr
   csr.io.isBackendException := false.B
   csr.io.out.ready := true.B
 

@@ -330,6 +330,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   brucommit.brMask := brurs.io.out.bits.brMask
   brucommit.decode.cf.redirect := bru.io.redirect
   brucommit.exception := false.B
+  brucommit.trapped := false.B
   brucommit.store := false.B
 
   bruDelayer.io.in.bits := brucommit
@@ -391,6 +392,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   lsucommit.commits := lsuOut
   lsucommit.prfidx := lsu.io.uopOut.prfDest
   lsucommit.exception := lsu.io.exceptionVec.asUInt.orR
+  lsucommit.trapped := false.B
   lsucommit.store := lsu.io.commitStoreToCDB
   lsucommit.brMask := DontCare // FIXIT: gen lsucommit in LSU
   // fix exceptionVec
@@ -423,6 +425,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   mducommit.decode.cf.redirect.valid := false.B
   mducommit.decode.cf.redirect.rtype := DontCare
   mducommit.exception := false.B
+  mducommit.trapped := false.B
   mducommit.store := false.B
   mducommit.brMask := mdurs.io.out.bits.brMask
   mdurs.io.commit.get := mdu.io.out.valid
@@ -460,6 +463,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   csrcommit.prfidx := csrUop.prfDest
   csrcommit.decode.cf.redirect := csr.io.redirect
   csrcommit.exception := false.B
+  csrcommit.trapped := csr.io.raiseExceptionIntr
   csrcommit.store := false.B
   csrcommit.brMask := DontCare //FIXIT
   // fix wen
@@ -488,6 +492,7 @@ class Backend_ooo(implicit val p: NutCoreConfig) extends NutCoreModule with HasR
   moucommit.prfidx := csrrs.io.out.bits.prfDest
   moucommit.decode.cf.redirect := mou.io.redirect
   moucommit.exception := false.B
+  moucommit.trapped := false.B
   moucommit.store := false.B
   moucommit.brMask := DontCare //FIXIT
 
