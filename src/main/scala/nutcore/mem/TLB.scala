@@ -417,9 +417,10 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
 
   // hit permission check
   val hitCheck = hit /*&& hitFlag.v */&& !(pf.privilegeMode === ModeU && !hitFlag.u) && !(pf.privilegeMode === ModeS && hitFlag.u && (!pf.status_sum || ifecth))
-  val hitExec = hitCheck && hitFlag.x
-  val hitLoad = hitCheck && (hitFlag.r || pf.status_mxr && hitFlag.x)
-  val hitStore = hitCheck && hitFlag.w
+  val hitADCheck = if (Settings.get("FPGAPlatform")) false.B else !hitFlag.a || !hitFlag.d && req.isWrite()
+  val hitExec = hitCheck && !hitADCheck && hitFlag.x
+  val hitLoad = hitCheck && !hitADCheck && (hitFlag.r || pf.status_mxr && hitFlag.x)
+  val hitStore = hitCheck && !hitADCheck && hitFlag.w
 
   io.pf.loadPF := loadPF //RegNext(loadPF, init =false.B)
   io.pf.storePF := storePF //RegNext(storePF, init = false.B)
@@ -506,9 +507,10 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
           }
         }.elsewhen (level =/= 0.U) { //TODO: fix needFlush
           val permCheck = missflag.v && !(pf.privilegeMode === ModeU && !missflag.u) && !(pf.privilegeMode === ModeS && missflag.u && (!pf.status_sum || ifecth))
-          val permExec = permCheck && missflag.x
-          val permLoad = permCheck && (missflag.r || pf.status_mxr && missflag.x)
-          val permStore = permCheck && missflag.w
+          val permAD = if (Settings.get("FPGAPlatform")) false.B else !missflag.a || (!missflag.d && req.isWrite())
+          val permExec = permCheck && !permAD && missflag.x
+          val permLoad = permCheck && !permAD && (missflag.r || pf.status_mxr && missflag.x)
+          val permStore = permCheck && !permAD && missflag.w
           val updateAD = if (Settings.get("FPGAPlatform")) !missflag.a || (!missflag.d && req.isWrite()) else false.B
           val updateData = Cat( 0.U(56.W), req.isWrite(), 1.U(1.W), 0.U(6.W) )
           missRefillFlag := Cat(req.isWrite(), 1.U(1.W), 0.U(6.W)) | missflag.asUInt
