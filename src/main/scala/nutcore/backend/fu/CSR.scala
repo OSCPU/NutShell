@@ -584,18 +584,27 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
     val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(VAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(VAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
-    when(privilegeMode === ModeM){
-      mtval := tval
-    }.otherwise{
+    val pfCause = Mux(hasInstrPageFault, instrPageFault.U, Mux(hasLoadPageFault, loadPageFault.U, storePageFault.U))
+    val pfDelegS = medeleg(pfCause) && (privilegeMode < ModeM)
+    when(pfDelegS){
       stval := tval
+    }.otherwise{
+      mtval := tval
     }
     Debug("[PF] %d: ipf %b tval %x := addr %x pc %x privilegeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, privilegeMode)
   }
 
   when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
   {
-    mtval := SignExt(dmemAddrMisalignedAddr, XLEN)
-    Debug("[ML] %d: addr %x pc %x privilegeMode %x\n", GTimer(), SignExt(dmemAddrMisalignedAddr, XLEN), io.cfIn.pc, privilegeMode)
+    val misalignTval = SignExt(dmemAddrMisalignedAddr, XLEN)
+    val maCause = Mux(hasLoadAddrMisaligned, loadAddrMisaligned.U, storeAddrMisaligned.U)
+    val maDelegS = medeleg(maCause) && (privilegeMode < ModeM)
+    when(maDelegS){
+      stval := misalignTval
+    }.otherwise{
+      mtval := misalignTval
+    }
+    Debug("[ML] %d: addr %x pc %x privilegeMode %x\n", GTimer(), misalignTval, io.cfIn.pc, privilegeMode)
   }
 
   // Exception and Intr
