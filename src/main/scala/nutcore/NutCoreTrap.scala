@@ -25,6 +25,9 @@ object NutCoreTrap extends HasInstrType {
   def StateInvOpcode = 2.U
   def StateRunning   = 3.U
 
+  // custom-trap: opcode=1101011, funct3=000. Matches NEMU nemu_trap (e.g. 0x0005006b).
+  // DUT executes it as add (typically rd=x0). DiffTest uses a0 to tell control
+  // markers (0x100/0x101, keep running) from exit codes (0/1, stop the sim).
   def TRAP    = BitPat("b????????????_?????_000_?????_1101011")
   val table = Array(TRAP -> List(InstrI, FuType.alu, ALUOpType.add))
 }

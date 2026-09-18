@@ -51,7 +51,8 @@ class WBU(implicit val p: NutCoreConfig) extends NutCoreModule{
     difftest_commit.valid  := io.in.valid
     difftest_commit.pc     := SignExt(io.in.bits.decode.cf.pc, AddrBits)
     difftest_commit.instr  := io.in.bits.decode.cf.instr
-    difftest_commit.skip   := io.in.bits.isMMIO
+    // DiffTest still stops the sim on a0=0/1; otherwise skip comparison.
+    difftest_commit.skip   := io.in.bits.isMMIO || io.in.bits.decode.ctrl.isNutCoreTrap
     difftest_commit.isRVC  := io.in.bits.decode.cf.instr(1,0)=/="b11".U
     difftest_commit.rfwen  := io.wb.rfWen && io.wb.rfDest =/= 0.U // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
     difftest_commit.fpwen  := false.B

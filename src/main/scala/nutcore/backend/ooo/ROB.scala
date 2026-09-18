@@ -504,7 +504,8 @@ class ROB(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
       difftest_commit.valid    := (if (i == 0) retireATerm else retireMultiTerms)
       difftest_commit.pc       := SignExt(decode(ringBufferTail)(i).cf.pc, AddrBits)
       difftest_commit.instr    := decode(ringBufferTail)(i).cf.instr
-      difftest_commit.skip     := isMMIO(ringBufferTail)(i) && valid(ringBufferTail)(i)
+      // DiffTest still stops the sim on a0=0/1; otherwise skip comparison.
+      difftest_commit.skip     := (isMMIO(ringBufferTail)(i) || decode(ringBufferTail)(i).ctrl.isNutCoreTrap) && valid(ringBufferTail)(i)
       difftest_commit.isRVC    := decode(ringBufferTail)(i).cf.isRVC
       difftest_commit.rfwen    := io.wb(i).rfWen && io.wb(i).rfDest =/= 0.U // && valid(ringBufferTail)(i) && commited(ringBufferTail)(i)
       difftest_commit.fpwen    := false.B
