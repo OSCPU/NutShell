@@ -420,7 +420,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     // MaskedRegMap(Sideleg, Sideleg),
     MaskedRegMap(Sie, mie, sieMask, MaskedRegMap.NoSideEffect, sieMask),
     MaskedRegMap(Stvec, stvec),
-    MaskedRegMap(Scounteren, scounteren),
+    MaskedRegMap(Scounteren, scounteren, "h7".U(XLEN.W)),
 
     // Supervisor Trap Handling
     MaskedRegMap(Sscratch, sscratch),
@@ -445,7 +445,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Mideleg, mideleg, "h222".U(64.W)),
     MaskedRegMap(Mie, mie),
     MaskedRegMap(Mtvec, mtvec),
-    MaskedRegMap(Mcounteren, mcounteren),
+    MaskedRegMap(Mcounteren, mcounteren, "h7".U(XLEN.W)),
 
     // Machine Trap Handling
     MaskedRegMap(Mscratch, mscratch),
