@@ -683,6 +683,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // val delegS = ((deleg & (1 << (causeNO & 0xf))) != 0) && (privilegeMode < ModeM);
   val delegS = (deleg(causeNO(3,0))) && (privilegeMode < ModeM)
   val tvalWen = !(hasInstrPageFault || hasLoadPageFault || hasStorePageFault || hasLoadAddrMisaligned || hasStoreAddrMisaligned) || raiseIntr // in nutcore-riscv64, no exception will come together with PF
+  val trapXtval = Mux(!raiseIntr && raiseExceptionVec(breakPoint), SignExt(io.cfIn.pc(VAddrBits-1, 0), XLEN), 0.U)
 
   ret := isMret || isSret || isUret
   trapTarget := Mux(delegS, stvec, mtvec)(VAddrBits-1, 0)
@@ -738,7 +739,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
       mstatusNew.pie.s := mstatusOld.ie.s
       mstatusNew.ie.s := false.B
       privilegeMode := ModeS
-      when(tvalWen){stval := 0.U} // TODO: should not use =/=
+      when(tvalWen){stval := trapXtval}
       // printf("[*] mstatusNew.spp %x\n", mstatusNew.spp)
       // trapTarget := stvec(VAddrBits-1. 0)
     }.otherwise {
@@ -748,7 +749,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
       mstatusNew.pie.m := mstatusOld.ie.m
       mstatusNew.ie.m := false.B
       privilegeMode := ModeM
-      when(tvalWen){mtval := 0.U} // TODO: should not use =/=
+      when(tvalWen){mtval := trapXtval}
       // trapTarget := mtvec(VAddrBits-1. 0)
     }
     // mstatusNew.pie.m := LookupTree(privilegeMode, List(
