@@ -411,13 +411,14 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
   val hitMask = hitMeta.mask
   // hit write back pte.flag
   val hitinstrPF = WireInit(false.B)
-  val hitWB = hit && (!hitFlag.a || !hitFlag.d && req.isWrite()) && !hitinstrPF && !(loadPF || storePF || io.pf.isPF())
+  val enableUpdateAD = Settings.get("EnableUpdateAD")
+  val hitWB = if (enableUpdateAD) hit && (!hitFlag.a || !hitFlag.d && req.isWrite()) && !hitinstrPF && !(loadPF || storePF || io.pf.isPF()) else false.B
   val hitRefillFlag = Cat(req.isWrite().asUInt, 1.U(1.W), 0.U(6.W)) | hitFlag.asUInt
   val hitWBStore = RegEnable(Cat(0.U(10.W), hitData.ppn, 0.U(2.W), hitRefillFlag), hitWB)
 
   // hit permission check
   val hitCheck = hit /*&& hitFlag.v */&& !(pf.privilegeMode === ModeU && !hitFlag.u) && !(pf.privilegeMode === ModeS && hitFlag.u && (!pf.status_sum || ifecth))
-  val hitADCheck = if (Settings.get("FPGAPlatform")) false.B else !hitFlag.a || !hitFlag.d && req.isWrite()
+  val hitADCheck = if (enableUpdateAD) false.B else !hitFlag.a || !hitFlag.d && req.isWrite()
   val hitExec = hitCheck && !hitADCheck && hitFlag.x
   val hitLoad = hitCheck && !hitADCheck && (hitFlag.r || pf.status_mxr && hitFlag.x)
   val hitStore = hitCheck && !hitADCheck && hitFlag.w
@@ -507,11 +508,11 @@ sealed class TLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
           }
         }.elsewhen (level =/= 0.U) { //TODO: fix needFlush
           val permCheck = missflag.v && !(pf.privilegeMode === ModeU && !missflag.u) && !(pf.privilegeMode === ModeS && missflag.u && (!pf.status_sum || ifecth))
-          val permAD = if (Settings.get("FPGAPlatform")) false.B else !missflag.a || (!missflag.d && req.isWrite())
+          val permAD = if (enableUpdateAD) false.B else !missflag.a || (!missflag.d && req.isWrite())
           val permExec = permCheck && !permAD && missflag.x
           val permLoad = permCheck && !permAD && (missflag.r || pf.status_mxr && missflag.x)
           val permStore = permCheck && !permAD && missflag.w
-          val updateAD = if (Settings.get("FPGAPlatform")) !missflag.a || (!missflag.d && req.isWrite()) else false.B
+          val updateAD = if (enableUpdateAD) !missflag.a || (!missflag.d && req.isWrite()) else false.B
           val updateData = Cat( 0.U(56.W), req.isWrite(), 1.U(1.W), 0.U(6.W) )
           missRefillFlag := Cat(req.isWrite(), 1.U(1.W), 0.U(6.W)) | missflag.asUInt
           memRespStore := io.mem.resp.bits.rdata | updateData
