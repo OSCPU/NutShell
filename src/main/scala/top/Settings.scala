@@ -37,6 +37,7 @@ object DefaultSettings {
     "IsRV32" -> false,
 
     "FPGAPlatform" -> false,
+    "EnableUpdateAD" -> false,
     "EnableILA" -> true,
     "EnableDebug" -> false,
     "EnableRVC" -> true
