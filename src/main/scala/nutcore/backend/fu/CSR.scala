@@ -505,7 +505,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   // General CSR wen check
   val wen = (valid && func =/= CSROpType.jmp) && (addr =/= Satp.U || satpLegalMode) && !io.isBackendException
   val isIllegalMode  = privilegeMode < addr(9, 8)
-  val justRead = (func === CSROpType.set || func === CSROpType.seti) && src1 === 0.U  // csrrs and csrrsi are exceptions when their src1 is zero
+  val justRead = (func === CSROpType.set || func === CSROpType.clr ||
+    func === CSROpType.seti || func === CSROpType.clri) && io.cfIn.instr(19, 15) === 0.U
   val isIllegalWrite = wen && (addr(11, 10) === "b11".U) && !justRead  // Write a read-only CSR register
   val isIllegalAccess = isIllegalMode || isIllegalWrite
 
