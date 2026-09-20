@@ -106,8 +106,12 @@ trait HasCSRConst {
   val PmpaddrBase   = 0x3B0
 
   // Machine Counter/Timers
-  // Currently, NutCore uses perfcnt csr set instead of standard Machine Counter/Timers
-  // 0xB80 - 0x89F are also used as perfcnt csr
+  val Mcycle        = 0xb00
+  val Minstret      = 0xb02
+
+  // NutShell custom performance counters (machine read/write)
+  val CustomPerfCntBase1 = 0x7c0
+  val CustomPerfCntBase2 = 0xbc0
 
   // Machine Counter Setup (not implemented)
   // Debug/Trace Registers (shared with Debug Mode) (not implemented)
@@ -391,11 +395,15 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val privilegeMode = RegInit(UInt(2.W), ModeM)
 
   // perfcnt
+  val mcycle = RegInit(0.U(64.W))
+  val minstret = RegInit(0.U(64.W))
   val hasPerfCnt = EnablePerfCnt && !p.FPGAPlatform
-  val nrPerfCnts = if (hasPerfCnt) 0x80 else 0x3
-  val perfCnts = List.fill(nrPerfCnts)(RegInit(0.U(64.W)))
-  val perfCntsLoMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb00 + i, perfCnts(i)) }
-  val perfCntsHiMapping = (0 until nrPerfCnts).map { case i => MaskedRegMap(0xb80 + i, perfCnts(i)(63, 32)) }
+  val perfCnts = mappedPerfCntList.values.map { case (addr, _) =>
+    addr -> RegInit(0.U(64.W))
+  }.toMap
+  val perfCntMapping = perfCnts.map { case (addr, counter) =>
+    MaskedRegMap(addr, counter, 0.U, MaskedRegMap.Unwritable)
+  }.toSeq
 
   // CSR reg map
   val mapping = Map(
@@ -471,9 +479,13 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(PmpaddrBase + 0, pmpaddr0, pmpaddrWmask),
     MaskedRegMap(PmpaddrBase + 1, pmpaddr1, pmpaddrWmask),
     MaskedRegMap(PmpaddrBase + 2, pmpaddr2, pmpaddrWmask),
-    MaskedRegMap(PmpaddrBase + 3, pmpaddr3, pmpaddrWmask)
+    MaskedRegMap(PmpaddrBase + 3, pmpaddr3, pmpaddrWmask),
 
-  ) ++ perfCntsLoMapping //++ (if (XLEN == 32) perfCntsHiMapping else Nil)
+    // Machine Counter/Timers
+    MaskedRegMap(Mcycle, mcycle),
+    MaskedRegMap(Minstret, minstret)
+
+  ) ++ perfCntMapping
 
   val addr = src2(11, 0)
   val rdata = Wire(UInt(XLEN.W))
@@ -501,6 +513,21 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val isIllegalAddr = MaskedRegMap.isIllegalAddr(mapping, addr)
   val resetSatp = addr === Satp.U && wen // write to satp will cause the pipeline be flushed
   io.out.bits := rdata
+
+  val minstretCond = WireInit(false.B)
+  val multiCommitCond = WireInit(false.B)
+  val minstretInc = Mux(multiCommitCond, 2.U, Mux(minstretCond, 1.U, 0.U))
+  when (wen && !justRead && !isIllegalAccess && addr === Mcycle.U) {
+    mcycle := wdata
+  }.otherwise {
+    mcycle := mcycle + 1.U
+  }
+  when (wen && !justRead && !isIllegalAccess && addr === Minstret.U) {
+    minstret := wdata
+  }.elsewhen (minstretInc =/= 0.U) {
+    minstret := minstret + minstretInc
+  }
+  BoringUtils.addSink(minstretCond, "perfCntCondMinstret")
 
   // Fix Mip/Sip write
   val fixMapping = Map(
@@ -764,108 +791,111 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   // perfcnt
 
-  val generalPerfCntList = Map(
-    "Mcycle"      -> (0xb00, "perfCntCondMcycle"     ),
-    "Minstret"    -> (0xb02, "perfCntCondMinstret"   ),
-    "MultiCommit" -> (0xb03, "perfCntCondMultiCommit"),
-    "MimemStall"  -> (0xb04, "perfCntCondMimemStall" ),
-    "MaluInstr"   -> (0xb05, "perfCntCondMaluInstr"  ),
-    "MbruInstr"   -> (0xb06, "perfCntCondMbruInstr"  ),
-    "MlsuInstr"   -> (0xb07, "perfCntCondMlsuInstr"  ),
-    "MmduInstr"   -> (0xb08, "perfCntCondMmduInstr"  ),
-    "McsrInstr"   -> (0xb09, "perfCntCondMcsrInstr"  ),
-    "MloadInstr"  -> (0xb0a, "perfCntCondMloadInstr" ),
-    "MmmioInstr"  -> (0xb0b, "perfCntCondMmmioInstr" ),
-    // "MicacheHit"  -> (0xb0c, "perfCntCondMicacheHit" ),
-    // "MdcacheHit"  -> (0xb0d, "perfCntCondMdcacheHit" ),
-    "MmulInstr"   -> (0xb0e, "perfCntCondMmulInstr"  ),
-    "MifuFlush"   -> (0xb0f, "perfCntCondMifuFlush"  ),
-    "MbpBRight"   -> (0xb10, "MbpBRight"             ),
-    "MbpBWrong"   -> (0xb11, "MbpBWrong"             ),
-    "MbpJRight"   -> (0xb12, "MbpJRight"             ),
-    "MbpJWrong"   -> (0xb13, "MbpJWrong"             ),
-    "MbpIRight"   -> (0xb14, "MbpIRight"             ),
-    "MbpIWrong"   -> (0xb15, "MbpIWrong"             ),
-    "MbpRRight"   -> (0xb16, "MbpRRight"             ),
-    "MbpRWrong"   -> (0xb17, "MbpRWrong"             ),
-    // "Ml2cacheHit" -> (0xb18, "perfCntCondMl2cacheHit"),
-    "Custom1"     -> (0xb19, "Custom1"               ),
-    "Custom2"     -> (0xb1a, "Custom2"               ),
-    "Custom3"     -> (0xb1b, "Custom3"               ),
-    "Custom4"     -> (0xb1c, "Custom4"               ),
-    "Custom5"     -> (0xb1d, "Custom5"               ),
-    "Custom6"     -> (0xb1e, "Custom6"               ),
-    "Custom7"     -> (0xb1f, "Custom7"               ),
-    "Custom8"     -> (0xb20, "Custom8"               )
+  lazy val generalPerfCntList = Map(
+    "MultiCommit" -> (CustomPerfCntBase1 + 0x00, "perfCntCondMultiCommit"),
+    "MimemStall"  -> (CustomPerfCntBase1 + 0x01, "perfCntCondMimemStall" ),
+    "MaluInstr"   -> (CustomPerfCntBase1 + 0x02, "perfCntCondMaluInstr"  ),
+    "MbruInstr"   -> (CustomPerfCntBase1 + 0x03, "perfCntCondMbruInstr"  ),
+    "MlsuInstr"   -> (CustomPerfCntBase1 + 0x04, "perfCntCondMlsuInstr"  ),
+    "MmduInstr"   -> (CustomPerfCntBase1 + 0x05, "perfCntCondMmduInstr"  ),
+    "McsrInstr"   -> (CustomPerfCntBase1 + 0x06, "perfCntCondMcsrInstr"  ),
+    "MloadInstr"  -> (CustomPerfCntBase1 + 0x07, "perfCntCondMloadInstr" ),
+    "MmmioInstr"  -> (CustomPerfCntBase1 + 0x08, "perfCntCondMmmioInstr" ),
+    // "MicacheHit"  -> (CustomPerfCntBase1 + 0x09, "perfCntCondMicacheHit" ),
+    // "MdcacheHit"  -> (CustomPerfCntBase1 + 0x0a, "perfCntCondMdcacheHit" ),
+    "MmulInstr"   -> (CustomPerfCntBase1 + 0x0b, "perfCntCondMmulInstr"  ),
+    "MifuFlush"   -> (CustomPerfCntBase1 + 0x0c, "perfCntCondMifuFlush"  ),
+    "MbpBRight"   -> (CustomPerfCntBase1 + 0x0d, "MbpBRight"             ),
+    "MbpBWrong"   -> (CustomPerfCntBase1 + 0x0e, "MbpBWrong"             ),
+    "MbpJRight"   -> (CustomPerfCntBase1 + 0x0f, "MbpJRight"             ),
+    "MbpJWrong"   -> (CustomPerfCntBase1 + 0x10, "MbpJWrong"             ),
+    "MbpIRight"   -> (CustomPerfCntBase1 + 0x11, "MbpIRight"             ),
+    "MbpIWrong"   -> (CustomPerfCntBase1 + 0x12, "MbpIWrong"             ),
+    "MbpRRight"   -> (CustomPerfCntBase1 + 0x13, "MbpRRight"             ),
+    "MbpRWrong"   -> (CustomPerfCntBase1 + 0x14, "MbpRWrong"             ),
+    // "Ml2cacheHit" -> (CustomPerfCntBase1 + 0x15, "perfCntCondMl2cacheHit"),
+    "Custom1"     -> (CustomPerfCntBase1 + 0x16, "Custom1"               ),
+    "Custom2"     -> (CustomPerfCntBase1 + 0x17, "Custom2"               ),
+    "Custom3"     -> (CustomPerfCntBase1 + 0x18, "Custom3"               ),
+    "Custom4"     -> (CustomPerfCntBase1 + 0x19, "Custom4"               ),
+    "Custom5"     -> (CustomPerfCntBase1 + 0x1a, "Custom5"               ),
+    "Custom6"     -> (CustomPerfCntBase1 + 0x1b, "Custom6"               ),
+    "Custom7"     -> (CustomPerfCntBase1 + 0x1c, "Custom7"               ),
+    "Custom8"     -> (CustomPerfCntBase1 + 0x1d, "Custom8"               )
   )
 
-  val sequentialPerfCntList = Map(
-    "MrawStall"   -> (0xb31, "perfCntCondMrawStall"    ),
-    "MexuBusy"    -> (0xb32, "perfCntCondMexuBusy"     ),
-    "MloadStall"  -> (0xb33, "perfCntCondMloadStall"   ),
-    "MstoreStall" -> (0xb34, "perfCntCondMstoreStall"  ),
-    "ISUIssue"    -> (0xb35, "perfCntCondISUIssue"     )
+  lazy val sequentialPerfCntList = Map(
+    "MrawStall"   -> (CustomPerfCntBase2 + 0x00, "perfCntCondMrawStall"    ),
+    "MexuBusy"    -> (CustomPerfCntBase2 + 0x01, "perfCntCondMexuBusy"     ),
+    "MloadStall"  -> (CustomPerfCntBase2 + 0x02, "perfCntCondMloadStall"   ),
+    "MstoreStall" -> (CustomPerfCntBase2 + 0x03, "perfCntCondMstoreStall"  ),
+    "ISUIssue"    -> (CustomPerfCntBase2 + 0x04, "perfCntCondISUIssue"     )
   )
 
-  val outOfOrderPerfCntList = Map(
-    "MrobFull"    -> (0xb31, "perfCntCondMrobFull"     ),
-    "Malu1rsFull" -> (0xb32, "perfCntCondMalu1rsFull"  ),
-    "Malu2rsFull" -> (0xb33, "perfCntCondMalu2rsFull"  ),
-    "MbrursFull"  -> (0xb34, "perfCntCondMbrursFull"   ),
-    "MlsursFull"  -> (0xb35, "perfCntCondMlsursFull"   ),
-    "MmdursFull"  -> (0xb36, "perfCntCondMmdursFull"   ),
-    "MmemqFull"   -> (0xb37, "perfCntCondMmemqFull"    ),
-    "MrobEmpty"   -> (0xb38, "perfCntCondMrobEmpty"    ),
-    "MstqFull"    -> (0xb39, "perfCntCondMstqFull"     ),
-    "McmtCnt0"    -> (0xb40, "perfCntCondMcmtCnt0"     ),
-    "McmtCnt1"    -> (0xb41, "perfCntCondMcmtCnt1"     ),
-    "McmtCnt2"    -> (0xb42, "perfCntCondMcmtCnt2"     ),
-    "McmtStrHaz1" -> (0xb43, "perfCntCondMcmtStrHaz1"  ),
-    "McmtStrHaz2" -> (0xb44, "perfCntCondMcmtStrHaz2"  ),
-    "MaluInstr2"  -> (0xb45, "perfCntCondMaluInstr2"   ),
-    "Mdispatch0"  -> (0xb46, "perfCntCondMdispatch0"   ),
-    "Mdispatch1"  -> (0xb47, "perfCntCondMdispatch1"   ),
-    "Mdispatch2"  -> (0xb48, "perfCntCondMdispatch2"   ),
-    "MlsuIssue"   -> (0xb49, "perfCntCondMlsuIssue"    ),
-    "MmduIssue"   -> (0xb4a, "perfCntCondMmduIssue"    ),
-    "MbruCmt"     -> (0xb4b, "perfCntCondMbruCmt"       ),
-    "MbruCmtWrong"-> (0xb4c, "perfCntCondMbruCmtWrong"  ),
-    "MicacheLoss" -> (0xb4d, "perfCntCondMicacheLoss"   ),
-    "MdcacheLoss" -> (0xb4e, "perfCntCondMdcacheLoss"   ),
-    "Ml2cacheLoss"-> (0xb4f, "perfCntCondMl2cacheLoss"  ),
-    "MbrInROB_0"  -> (0xb50, "perfCntCondMbrInROB_0"   ),
-    "MbrInROB_1"  -> (0xb51, "perfCntCondMbrInROB_1"   ),
-    "MbrInROB_2"  -> (0xb52, "perfCntCondMbrInROB_2"   ),
-    "MbrInROB_3"  -> (0xb53, "perfCntCondMbrInROB_3"   ),
-    "MbrInROB_4"  -> (0xb54, "perfCntCondMbrInROB_4"   ),
-    "Mdp1StBlk"   -> (0xb55, "perfCntCondMdp1StBlk"   ),
-    "Mdp1StRSf"   -> (0xb56, "perfCntCondMdp1StRSf"   ),
-    "Mdp1StROBf"  -> (0xb57, "perfCntCondMdp1StROBf"   ),
-    "Mdp1StConf"  -> (0xb58, "perfCntCondMdp1StConf"   ),
-    "Mdp1StCnt"   -> (0xb59, "perfCntCondMdp1StCnt"   ),
-    "Mdp2StBlk"   -> (0xb5a, "perfCntCondMdp2StBlk"   ),
-    "Mdp2StRSf"   -> (0xb5b, "perfCntCondMdp2StRSf"   ),
-    "Mdp2StROBf"  -> (0xb5c, "perfCntCondMdp2StROBf"   ),
-    "Mdp2StConf"  -> (0xb5d, "perfCntCondMdp2StConf"   ),
-    "Mdp2StSeq"   -> (0xb5e, "perfCntCondMdp2StSeq"   ),
-    "Mdp2StCnt"   -> (0xb5f, "perfCntCondMdp2StCnt"   ),
-    "MloadCnt"    -> (0xb60, "perfCntCondMloadCnt"   ),
-    "MstoreCnt"   -> (0xb61, "perfCntCondMstoreCnt"   ),
-    "MmemSBL"     -> (0xb62, "perfCntCondMmemSBL"   ),
-    "MpendingLS  "-> (0xb63, "perfCntCondMpendingLS"   ),     //Maunally updated
-    "MpendingSCmt"-> (0xb64, "perfCntCondMpendingSCmt"   ), //Maunally updated
-    "MpendingSReq"-> (0xb65, "perfCntCondMpendingSReq"   ), //Maunally updated
-    "MicacheReq"  -> (0xb66, "perfCntCondMicacheReq"   ),
-    "MdcacheReq"  -> (0xb67, "perfCntCondMdcacheReq"   ),
-    "Ml2cacheReq" -> (0xb68, "perfCntCondMl2cacheReq"   ),
-    "MdpNoInst"   -> (0xb69, "perfCntCondMdpNoInst"   )
-    // "MmemLBS"  -> (0xb6a, "perfCntCondMmemLBS"   ),//TODO
+  lazy val outOfOrderPerfCntList = Map(
+    "MrobFull"    -> (CustomPerfCntBase2 + 0x00, "perfCntCondMrobFull"     ),
+    "Malu1rsFull" -> (CustomPerfCntBase2 + 0x01, "perfCntCondMalu1rsFull"  ),
+    "Malu2rsFull" -> (CustomPerfCntBase2 + 0x02, "perfCntCondMalu2rsFull"  ),
+    "MbrursFull"  -> (CustomPerfCntBase2 + 0x03, "perfCntCondMbrursFull"   ),
+    "MlsursFull"  -> (CustomPerfCntBase2 + 0x04, "perfCntCondMlsursFull"   ),
+    "MmdursFull"  -> (CustomPerfCntBase2 + 0x05, "perfCntCondMmdursFull"   ),
+    "MmemqFull"   -> (CustomPerfCntBase2 + 0x06, "perfCntCondMmemqFull"    ),
+    "MrobEmpty"   -> (CustomPerfCntBase2 + 0x07, "perfCntCondMrobEmpty"    ),
+    "MstqFull"    -> (CustomPerfCntBase2 + 0x08, "perfCntCondMstqFull"     ),
+    "McmtCnt0"    -> (CustomPerfCntBase2 + 0x0f, "perfCntCondMcmtCnt0"     ),
+    "McmtCnt1"    -> (CustomPerfCntBase2 + 0x10, "perfCntCondMcmtCnt1"     ),
+    "McmtCnt2"    -> (CustomPerfCntBase2 + 0x11, "perfCntCondMcmtCnt2"     ),
+    "McmtStrHaz1" -> (CustomPerfCntBase2 + 0x12, "perfCntCondMcmtStrHaz1"  ),
+    "McmtStrHaz2" -> (CustomPerfCntBase2 + 0x13, "perfCntCondMcmtStrHaz2"  ),
+    "MaluInstr2"  -> (CustomPerfCntBase2 + 0x14, "perfCntCondMaluInstr2"   ),
+    "Mdispatch0"  -> (CustomPerfCntBase2 + 0x15, "perfCntCondMdispatch0"   ),
+    "Mdispatch1"  -> (CustomPerfCntBase2 + 0x16, "perfCntCondMdispatch1"   ),
+    "Mdispatch2"  -> (CustomPerfCntBase2 + 0x17, "perfCntCondMdispatch2"   ),
+    "MlsuIssue"   -> (CustomPerfCntBase2 + 0x18, "perfCntCondMlsuIssue"    ),
+    "MmduIssue"   -> (CustomPerfCntBase2 + 0x19, "perfCntCondMmduIssue"    ),
+    "MbruCmt"     -> (CustomPerfCntBase2 + 0x1a, "perfCntCondMbruCmt"      ),
+    "MbruCmtWrong"-> (CustomPerfCntBase2 + 0x1b, "perfCntCondMbruCmtWrong" ),
+    "MicacheLoss" -> (CustomPerfCntBase2 + 0x1c, "perfCntCondMicacheLoss"  ),
+    "MdcacheLoss" -> (CustomPerfCntBase2 + 0x1d, "perfCntCondMdcacheLoss"  ),
+    "Ml2cacheLoss"-> (CustomPerfCntBase2 + 0x1e, "perfCntCondMl2cacheLoss" ),
+    "MbrInROB_0"  -> (CustomPerfCntBase2 + 0x1f, "perfCntCondMbrInROB_0"   ),
+    "MbrInROB_1"  -> (CustomPerfCntBase2 + 0x20, "perfCntCondMbrInROB_1"   ),
+    "MbrInROB_2"  -> (CustomPerfCntBase2 + 0x21, "perfCntCondMbrInROB_2"   ),
+    "MbrInROB_3"  -> (CustomPerfCntBase2 + 0x22, "perfCntCondMbrInROB_3"   ),
+    "MbrInROB_4"  -> (CustomPerfCntBase2 + 0x23, "perfCntCondMbrInROB_4"   ),
+    "Mdp1StBlk"   -> (CustomPerfCntBase2 + 0x24, "perfCntCondMdp1StBlk"    ),
+    "Mdp1StRSf"   -> (CustomPerfCntBase2 + 0x25, "perfCntCondMdp1StRSf"    ),
+    "Mdp1StROBf"  -> (CustomPerfCntBase2 + 0x26, "perfCntCondMdp1StROBf"   ),
+    "Mdp1StConf"  -> (CustomPerfCntBase2 + 0x27, "perfCntCondMdp1StConf"   ),
+    "Mdp1StCnt"   -> (CustomPerfCntBase2 + 0x28, "perfCntCondMdp1StCnt"    ),
+    "Mdp2StBlk"   -> (CustomPerfCntBase2 + 0x29, "perfCntCondMdp2StBlk"    ),
+    "Mdp2StRSf"   -> (CustomPerfCntBase2 + 0x2a, "perfCntCondMdp2StRSf"    ),
+    "Mdp2StROBf"  -> (CustomPerfCntBase2 + 0x2b, "perfCntCondMdp2StROBf"   ),
+    "Mdp2StConf"  -> (CustomPerfCntBase2 + 0x2c, "perfCntCondMdp2StConf"   ),
+    "Mdp2StSeq"   -> (CustomPerfCntBase2 + 0x2d, "perfCntCondMdp2StSeq"    ),
+    "Mdp2StCnt"   -> (CustomPerfCntBase2 + 0x2e, "perfCntCondMdp2StCnt"    ),
+    "MloadCnt"    -> (CustomPerfCntBase2 + 0x2f, "perfCntCondMloadCnt"     ),
+    "MstoreCnt"   -> (CustomPerfCntBase2 + 0x30, "perfCntCondMstoreCnt"    ),
+    "MmemSBL"     -> (CustomPerfCntBase2 + 0x31, "perfCntCondMmemSBL"      ),
+    "MpendingLS"   -> (CustomPerfCntBase2 + 0x32, "perfCntCondMpendingLS"  ), //Maunally updated
+    "MpendingSCmt" -> (CustomPerfCntBase2 + 0x33, "perfCntCondMpendingSCmt"), //Maunally updated
+    "MpendingSReq" -> (CustomPerfCntBase2 + 0x34, "perfCntCondMpendingSReq"), //Maunally updated
+    "MicacheReq"  -> (CustomPerfCntBase2 + 0x35, "perfCntCondMicacheReq"   ),
+    "MdcacheReq"  -> (CustomPerfCntBase2 + 0x36, "perfCntCondMdcacheReq"   ),
+    "Ml2cacheReq" -> (CustomPerfCntBase2 + 0x37, "perfCntCondMl2cacheReq"  ),
+    "MdpNoInst"   -> (CustomPerfCntBase2 + 0x38, "perfCntCondMdpNoInst"   )
+    // "MmemLBS"  -> (CustomPerfCntBase2 + 0x39, "perfCntCondMmemLBS"   ),//TODO
   )
 
-  val perfCntList = generalPerfCntList ++  (if (EnableOutOfOrderExec) outOfOrderPerfCntList else sequentialPerfCntList)
+  lazy val perfCntList = generalPerfCntList ++ (if (EnableOutOfOrderExec) outOfOrderPerfCntList else sequentialPerfCntList)
+  lazy val mappedPerfCntList = if (hasPerfCnt) perfCntList else Map.empty[String, (Int, String)]
 
-	val perfCntCond = List.fill(0x80)(WireInit(false.B))
-  (perfCnts zip perfCntCond).map { case (c, e) => { when (e) { c := c + 1.U } } }
+  val perfCntCond = perfCntList.values.map { case (addr, _) =>
+    addr -> WireInit(false.B)
+  }.toMap
+  mappedPerfCntList.values.foreach { case (addr, _) =>
+    when (perfCntCond(addr)) { perfCnts(addr) := perfCnts(addr) + 1.U }
+  }
   // Manually update perf counter
   val pendingLS = WireInit(0.U(5.W))
   val pendingSCmt = WireInit(0.U(5.W))
@@ -875,21 +905,22 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     BoringUtils.addSink(pendingSCmt, "perfCntSrcMpendingSCmt")
     BoringUtils.addSink(pendingSReq, "perfCntSrcMpendingSReq")
   }
-  when(perfCntCond(0xb03 & 0x7f)) { perfCnts(0xb02 & 0x7f) := perfCnts(0xb02 & 0x7f) + 2.U } // Minstret += 2 when MultiCommit
-  if (hasPerfCnt) {
-    when(true.B) { perfCnts(0xb63 & 0x7f) := perfCnts(0xb63 & 0x7f) + pendingLS }
-    when(true.B) { perfCnts(0xb64 & 0x7f) := perfCnts(0xb64 & 0x7f) + pendingSCmt }
-    when(true.B) { perfCnts(0xb65 & 0x7f) := perfCnts(0xb66 & 0x7f) + pendingSReq }
+  if (hasPerfCnt && EnableOutOfOrderExec) {
+    val pendingLSCsr = outOfOrderPerfCntList("MpendingLS")._1
+    val pendingSCmtCsr = outOfOrderPerfCntList("MpendingSCmt")._1
+    val pendingSReqCsr = outOfOrderPerfCntList("MpendingSReq")._1
+    when(true.B) { perfCnts(pendingLSCsr) := perfCnts(pendingLSCsr) + pendingLS }
+    when(true.B) { perfCnts(pendingSCmtCsr) := perfCnts(pendingSCmtCsr) + pendingSCmt }
+    when(true.B) { perfCnts(pendingSReqCsr) := perfCnts(pendingSReqCsr) + pendingSReq }
   }
 
-  BoringUtils.addSource(WireInit(true.B), "perfCntCondMcycle")
+  multiCommitCond := perfCntCond(perfCntList("MultiCommit")._1)
+
   perfCntList.map { case (name, (addr, boringId)) => {
-    BoringUtils.addSink(perfCntCond(addr & 0x7f), boringId)
+    BoringUtils.addSink(perfCntCond(addr), boringId)
     if (!hasPerfCnt) {
-      // do not enable perfcnts except for Mcycle and Minstret
-      if (addr != perfCntList("Mcycle")._1 && addr != perfCntList("Minstret")._1) {
-        perfCntCond(addr & 0x7f) := false.B
-      }
+      // do not enable custom perfcnts on FPGA / no-perf builds
+      perfCntCond(addr) := false.B
     }
   }}
 
@@ -903,8 +934,8 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   if (!p.FPGAPlatform || p.FPGADifftest) {
     // to monitor
-    BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
-    BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
+    BoringUtils.addSource(readWithScala(Mcycle), "simCycleCnt")
+    BoringUtils.addSource(readWithScala(Minstret), "simInstrCnt")
 
     if (hasPerfCnt) {
       // display all perfcnt when nutcoretrap is executed
@@ -973,10 +1004,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   } else {
     if (!p.FPGAPlatform) {
-      BoringUtils.addSource(readWithScala(perfCntList("Mcycle")._1), "simCycleCnt")
-      BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "simInstrCnt")
+      BoringUtils.addSource(readWithScala(Mcycle), "simCycleCnt")
+      BoringUtils.addSource(readWithScala(Minstret), "simInstrCnt")
     } else {
-      BoringUtils.addSource(readWithScala(perfCntList("Minstret")._1), "ilaInstrCnt")
+      BoringUtils.addSource(readWithScala(Minstret), "ilaInstrCnt")
     }
   }
 }
