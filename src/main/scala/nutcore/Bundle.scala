@@ -84,6 +84,7 @@ class CommitIO extends NutCoreBundle {
   val decode = new DecodeIO
   val isMMIO = Output(Bool())
   val intrNO = Output(UInt(XLEN.W))
+  val exception = Output(Bool()) // trap taken: do not retire / minstret
   val commits = Output(Vec(FuType.num, UInt(XLEN.W)))
 }
 
@@ -94,6 +95,7 @@ class OOCommitIO extends NutCoreBundle with HasBackendConst{
   val commits = Output(UInt(XLEN.W))
   val prfidx = Output(UInt(prfAddrWidth.W)) //also as robidx
   val exception = Output(Bool())
+  val trapped = Output(Bool()) // CSR took exception/interrupt: do not minstret
   val store = Output(Bool())
   val brMask = Output(UInt(checkpointSize.W))
 }
