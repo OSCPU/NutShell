@@ -65,6 +65,9 @@ trait HasCSRConst {
   val Stvec         = 0x105
   val Scounteren    = 0x106
 
+  // Supervisor Configuration
+  val Senvcfg       = 0x10A
+
   // Supervisor Trap Handling
   val Sscratch      = 0x140
   val Sepc          = 0x141
@@ -89,6 +92,9 @@ trait HasCSRConst {
   val Mie           = 0x304
   val Mtvec         = 0x305
   val Mcounteren    = 0x306
+
+  // Machine Configuration
+  val Menvcfg       = 0x30A
 
   // Machine Trap Handling
   val Mscratch      = 0x340
@@ -248,6 +254,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   val mtvec = RegInit(UInt(XLEN.W), 0.U)
   val mcounteren = RegInit(UInt(XLEN.W), 0.U)
+  val menvcfg = 0.U(XLEN.W)
   val mcause = RegInit(UInt(XLEN.W), 0.U)
   val mtval = RegInit(UInt(XLEN.W), 0.U)
   val mepc = RegInit(UInt(XLEN.W), 0.U)
@@ -349,6 +356,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
   val stval = Reg(UInt(XLEN.W))
   val sscratch = RegInit(UInt(XLEN.W), 0.U)
   val scounteren = RegInit(UInt(XLEN.W), 0.U)
+  val senvcfg = 0.U(XLEN.W)
 
   if (Settings.get("HasDTLB")) {
     BoringUtils.addSource(satp, "CSRSATP")
@@ -421,6 +429,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Sie, mie, sieMask, MaskedRegMap.NoSideEffect, sieMask),
     MaskedRegMap(Stvec, stvec),
     MaskedRegMap(Scounteren, scounteren, "h7".U(XLEN.W)),
+    MaskedRegMap(Senvcfg, senvcfg, 0.U, MaskedRegMap.Unwritable),
 
     // Supervisor Trap Handling
     MaskedRegMap(Sscratch, sscratch),
@@ -446,6 +455,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     MaskedRegMap(Mie, mie),
     MaskedRegMap(Mtvec, mtvec),
     MaskedRegMap(Mcounteren, mcounteren, "h7".U(XLEN.W)),
+    MaskedRegMap(Menvcfg, menvcfg, 0.U, MaskedRegMap.Unwritable),
 
     // Machine Trap Handling
     MaskedRegMap(Mscratch, mscratch),
