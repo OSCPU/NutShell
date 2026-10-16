@@ -30,6 +30,8 @@ class FlushableQueue[T <: Data](gen: T, val entries: Int,
   private val full = ptr_match && maybe_full
   private val do_enq = WireInit(io.enq.fire)
   private val do_deq = WireInit(io.deq.fire)
+//Unable enter quene when reset or flush
+  private val not_enq = RegInit(true.B)
 
   when (do_enq) {
     ram(enq_ptr.value) := io.enq.bits
@@ -43,7 +45,7 @@ class FlushableQueue[T <: Data](gen: T, val entries: Int,
   }
 
   io.deq.valid := !empty
-  io.enq.ready := !full
+  io.enq.ready := !full & !not_enq
   io.deq.bits := ram(deq_ptr.value)
 
   if (flow) {
@@ -65,6 +67,11 @@ class FlushableQueue[T <: Data](gen: T, val entries: Int,
       deq_ptr.value := 0.U
     }
     maybe_full := false.B
+    not_enq := true.B
+  }
+  
+  when (!io.flush){
+    not_enq := false.B //add
   }
 
   private val ptr_diff = enq_ptr.value - deq_ptr.value
