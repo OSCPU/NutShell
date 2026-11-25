@@ -593,7 +593,10 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     dmemAddrMisalignedAddr := lsuAddr
   }
 
-  when(hasInstrPageFault || hasLoadPageFault || hasStorePageFault){
+  // Only the selected trap may update a trap-value CSR. Interrupts win.
+  val raiseIntr = io.cfIn.intrVec.asUInt.orR
+
+  when(!raiseIntr && (hasInstrPageFault || hasLoadPageFault || hasStorePageFault)){
     val tval = Mux(hasInstrPageFault, Mux(io.cfIn.crossPageIPFFix, SignExt((io.cfIn.pc + 2.U)(VAddrBits-1,0), XLEN), SignExt(io.cfIn.pc(VAddrBits-1,0), XLEN)), SignExt(dmemPagefaultAddr, XLEN))
     val pfCause = Mux(hasInstrPageFault, instrPageFault.U, Mux(hasLoadPageFault, loadPageFault.U, storePageFault.U))
     val pfDelegS = medeleg(pfCause) && (privilegeMode < ModeM)
@@ -605,7 +608,7 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
     Debug("[PF] %d: ipf %b tval %x := addr %x pc %x privilegeMode %x\n", GTimer(), hasInstrPageFault, tval, SignExt(dmemPagefaultAddr, XLEN), io.cfIn.pc, privilegeMode)
   }
 
-  when(hasLoadAddrMisaligned || hasStoreAddrMisaligned)
+  when(!raiseIntr && (hasLoadAddrMisaligned || hasStoreAddrMisaligned))
   {
     val misalignTval = SignExt(dmemAddrMisalignedAddr, XLEN)
     val maCause = Mux(hasLoadAddrMisaligned, loadAddrMisaligned.U, storeAddrMisaligned.U)
@@ -650,7 +653,6 @@ class CSR(implicit val p: NutCoreConfig) extends NutCoreModule with HasCSRConst{
 
   val intrNO = IntPriority.foldRight(0.U)((i: Int, sum: UInt) => Mux(io.cfIn.intrVec(i), i.U, sum))
   // val intrNO = PriorityEncoder(io.cfIn.intrVec)
-  val raiseIntr = io.cfIn.intrVec.asUInt.orR
 
   // exceptions
 
